@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Play, Pause, RotateCcw, SkipForward, CheckCircle2, Volume2, VolumeX, X, Flame } from "lucide-react";
 import { playChime } from "../utils/audio";
+import { addPomodoroLog } from "../lib/pomodoroService";
 
 interface PomodoroArtifactProps {
   taskName: string;
@@ -75,6 +76,15 @@ export default function PomodoroArtifact({
     } catch (_) {}
 
     if (mode === "work") {
+      try {
+        addPomodoroLog({
+          taskId: taskId ?? null,
+          taskName: taskName || "Sesión de Enfoque",
+          durationMinutes: Math.round(workDuration / 60) || 25,
+          mode: "work",
+        });
+      } catch (_) {}
+
       const nextCount = completedCycles + 1;
       setCompletedCycles(nextCount);
       if (nextCount % 4 === 0) {

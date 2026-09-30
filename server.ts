@@ -6,11 +6,205 @@ import fs from "fs";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import { getApps, initializeApp, cert, applicationDefault } from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import { getMessaging } from "firebase-admin/messaging";
 
 dotenv.config();
 
+export interface FirebaseAdminStatus {
+  initialized: boolean;
+  projectId: string;
+  databaseId?: string;
+  source: "serviceAccountKey" | "env_json" | "env_path" | "applicationDefault" | "none";
+  serviceAccountEmail?: string;
+  error?: string;
+}
+
+let firebaseAdminApp: any = null;
+let adminAuth: any = null;
+let adminFirestore: any = null;
+let adminMessaging: any = null;
+let adminStatus: FirebaseAdminStatus = {
+  initialized: false,
+  projectId: "gen-lang-client-0098696571",
+  databaseId: "ai-studio-taskos-90239d7f-e919-4b74-8cf9-4bd6da226df9",
+  source: "none",
+};
+
+/**
+ * Initializes Firebase Admin SDK with Service Account Key or Application Default Credentials.
+ */
+function initFirebaseAdmin(): FirebaseAdminStatus {
+  if (getApps().length > 0 && firebaseAdminApp) {
+    return adminStatus;
+  }
+
+  const defaultProjectId = "gen-lang-client-0098696571";
+  const defaultDatabaseId = "ai-studio-taskos-90239d7f-e919-4b74-8cf9-4bd6da226df9";
+
+  try {
+    let serviceAccount: any = null;
+    let source: FirebaseAdminStatus["source"] = "none";
+
+    // 1. Check raw JSON in FIREBASE_SERVICE_ACCOUNT_KEY env
+    const envKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
+    if (envKey) {
+      const trimmed = envKey.trim();
+      if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+          serviceAccount = JSON.parse(trimmed);
+          source = "env_json";
+        } catch (e: any) {
+          console.warn("[Firebase Admin] No se pudo parsear JSON de FIREBASE_SERVICE_ACCOUNT_KEY:", e.message);
+        }
+      } else if (fs.existsSync(trimmed)) {
+        try {
+          serviceAccount = JSON.parse(fs.readFileSync(trimmed, "utf8"));
+          source = "env_path";
+        } catch (e: any) {
+          console.warn("[Firebase Admin] Error al leer archivo de FIREBASE_SERVICE_ACCOUNT_KEY:", e.message);
+        }
+      }
+    }
+
+    // 2. Check GOOGLE_APPLICATION_CREDENTIALS path
+    if (!serviceAccount && process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+      const gpath = process.env.GOOGLE_APPLICATION_CREDENTIALS.trim();
+      if (fs.existsSync(gpath)) {
+        try {
+          serviceAccount = JSON.parse(fs.readFileSync(gpath, "utf8"));
+          source = "env_path";
+        } catch (e: any) {
+          console.warn("[Firebase Admin] Error al leer GOOGLE_APPLICATION_CREDENTIALS:", e.message);
+        }
+      }
+    }
+
+    // 3. Check default local files in workspace
+    if (!serviceAccount) {
+      const candidatePaths = [
+        path.join(process.cwd(), "serviceAccountKey.json"),
+        path.join(process.cwd(), "config", "serviceAccountKey.json"),
+        path.join(process.cwd(), "data", "serviceAccountKey.json"),
+      ];
+
+      for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+          try {
+            serviceAccount = JSON.parse(fs.readFileSync(p, "utf8"));
+            source = "serviceAccountKey";
+            break;
+          } catch (e: any) {
+            console.warn(`[Firebase Admin] Archivo encontrado en ${p} pero no se pudo parsear:`, e.message);
+          }
+        }
+      }
+    }
+
+    // 4. Initialize with Service Account if loaded
+    if (serviceAccount && serviceAccount.private_key) {
+      firebaseAdminApp = initializeApp({
+        credential: cert(serviceAccount),
+        projectId: serviceAccount.project_id || defaultProjectId,
+      });
+
+      adminAuth = getAuth(firebaseAdminApp);
+      adminFirestore = getFirestore(firebaseAdminApp, defaultDatabaseId);
+      adminMessaging = getMessaging(firebaseAdminApp);
+
+      adminStatus = {
+        initialized: true,
+        projectId: serviceAccount.project_id || defaultProjectId,
+        databaseId: defaultDatabaseId,
+        source,
+        serviceAccountEmail: serviceAccount.client_email,
+      };
+
+      console.log(`[Firebase Admin] Inicializado exitosamente con cuenta de servicio (${serviceAccount.client_email}) para proyecto ${adminStatus.projectId}`);
+      return adminStatus;
+    }
+
+    // 5. Fallback: try application default credentials in GCP / Cloud Run environment
+    try {
+      firebaseAdminApp = initializeApp({
+        credential: applicationDefault(),
+        projectId: defaultProjectId,
+      });
+
+      adminAuth = getAuth(firebaseAdminApp);
+      adminFirestore = getFirestore(firebaseAdminApp, defaultDatabaseId);
+      adminMessaging = getMessaging(firebaseAdminApp);
+
+      adminStatus = {
+        initialized: true,
+        projectId: defaultProjectId,
+        databaseId: defaultDatabaseId,
+        source: "applicationDefault",
+      };
+
+      console.log(`[Firebase Admin] Inicializado con credenciales predeterminadas de aplicación (ADC) para proyecto ${defaultProjectId}`);
+      return adminStatus;
+    } catch {
+      // ADC not available in standard local dev without gcloud auth
+    }
+
+    adminStatus = {
+      initialized: false,
+      projectId: defaultProjectId,
+      databaseId: defaultDatabaseId,
+      source: "none",
+      error: "No se encontró serviceAccountKey.json ni credenciales de servicio.",
+    };
+
+    console.log("[Firebase Admin] Modo informativo: No se ha provisto serviceAccountKey.json.");
+    return adminStatus;
+  } catch (error: any) {
+    adminStatus = {
+      initialized: false,
+      projectId: defaultProjectId,
+      databaseId: defaultDatabaseId,
+      source: "none",
+      error: error.message || "Error al inicializar Firebase Admin SDK",
+    };
+    console.error("[Firebase Admin] Error en inicialización:", error);
+    return adminStatus;
+  }
+}
+
+function getAdminApp(): any {
+  if (!firebaseAdminApp) initFirebaseAdmin();
+  return firebaseAdminApp;
+}
+
+function getAdminAuth(): any {
+  if (!adminAuth) initFirebaseAdmin();
+  return adminAuth;
+}
+
+function getAdminFirestore(): any {
+  if (!adminFirestore) initFirebaseAdmin();
+  return adminFirestore;
+}
+
+function getAdminMessaging(): any {
+  if (!adminMessaging) initFirebaseAdmin();
+  return adminMessaging;
+}
+
+function getFirebaseAdminStatus(): FirebaseAdminStatus {
+  if (!firebaseAdminApp) initFirebaseAdmin();
+  return adminStatus;
+}
+
 const app = express();
 const httpServer = http.createServer(app);
+
+// Initialize Firebase Admin on startup
+initFirebaseAdmin();
+
 const args = process.argv.slice(2);
 const portIndex = args.indexOf("--port");
 const portArg = portIndex !== -1 && args[portIndex + 1] ? parseInt(args[portIndex + 1], 10) : null;
@@ -543,6 +737,17 @@ app.post("/api/notifications/register-token", (req: Request, res: Response) => {
   }
 });
 
+// 1.5 Firebase Admin SDK Status endpoint
+app.get("/api/firebase/admin-status", (_req: Request, res: Response) => {
+  const status = getFirebaseAdminStatus();
+  return res.json({
+    ...status,
+    help: status.initialized
+      ? "Firebase Admin SDK activo con credenciales de servicio."
+      : "Para activar Firebase Admin en el servidor, descarga la clave privada desde Firebase Console > Configuración del proyecto > Cuentas de servicio > Generar nueva clave privada, y colócala como serviceAccountKey.json en la raíz o en la variable FIREBASE_SERVICE_ACCOUNT_KEY.",
+  });
+});
+
 // 2. Send push notification event
 app.post("/api/notifications/send", (req: Request, res: Response) => {
   try {
@@ -569,6 +774,41 @@ app.post("/api/notifications/send", (req: Request, res: Response) => {
     saveNotificationsHistory(history);
 
     console.log(`[Push Notification Registrada/Enviada] ${title} -> ${body}`);
+
+    // If Firebase Admin Messaging is initialized, deliver via FCM
+    try {
+      const messaging = getAdminMessaging();
+      if (messaging) {
+        const tokensStore = getFCMTokens();
+        const userEmailClean = email.trim().toLowerCase();
+        const targetTokens = token
+          ? [token]
+          : tokensStore[userEmailClean]?.map((t) => t.token) || [];
+
+        if (targetTokens.length > 0) {
+          messaging
+            .sendEachForMulticast({
+              tokens: targetTokens,
+              notification: {
+                title,
+                body,
+              },
+              data: {
+                url: url || "/",
+                tag: tag || "task-os-push",
+              },
+            })
+            .then((resp: any) => {
+              console.log(`[FCM Admin] Despachado a ${resp.successCount} dispositivos (${resp.failureCount} fallos)`);
+            })
+            .catch((e: any) => {
+              console.warn("[FCM Admin] Aviso al despachar multicast:", e.message);
+            });
+        }
+      }
+    } catch (e: any) {
+      console.warn("[FCM Admin] Error de entrega FCM:", e.message);
+    }
 
     return res.json({
       success: true,

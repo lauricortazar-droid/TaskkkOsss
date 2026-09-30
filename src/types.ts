@@ -55,6 +55,7 @@ export interface TaskItem {
   googleCalendarHtmlLink?: string; // Enlace web directo al evento de Google Calendar
   googleSyncStatus?: "synced" | "pending" | "conflict";
   lastGoogleSync?: string; // Marca de tiempo ISO del último sincronizado
+  fechaCompletado?: string; // ISO timestamp when status changed to Completado
 }
 
 export interface GlobalResource {
@@ -169,7 +170,7 @@ export type DomainType =
   | "Lonas"
   | "Finanzas";
 
-export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro";
+export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro" | "analytics";
 
 /* =========================================================
    PRINT STATION & VOUCHER TYPES (🖨️ Comprobantes, Tickets y Recibos)
@@ -235,9 +236,9 @@ export interface CloudSyncPayload {
 }
 
 /* =========================================================
-   MUSIC & PLAYLIST PLAYER TYPES (Spotify, YouTube Music, Google Drive, Local Folder)
+   MUSIC & PLAYLIST PLAYER TYPES (Spotify, YouTube Music, Suno, Google Drive, Local Folder, Web)
 ========================================================= */
-export type MusicPlatform = "spotify" | "youtube" | "gdrive" | "local";
+export type MusicPlatform = "spotify" | "youtube" | "suno" | "gdrive" | "local" | "web";
 
 export interface WorkPlaylist {
   id: string;
@@ -247,6 +248,20 @@ export interface WorkPlaylist {
   embedUrl: string;
   description: string;
   isCustom?: boolean;
+}
+
+/* =========================================================
+   POMODORO LOGS & PERFORMANCE TYPES (Módulo de Rendimiento Semanal)
+========================================================= */
+export interface PomodoroLogEntry {
+  id: string;
+  taskId?: number | null;
+  taskName: string;
+  durationMinutes: number;
+  completedAt: string; // ISO string
+  date: string; // YYYY-MM-DD
+  mode: "work" | "shortBreak" | "longBreak";
+  category?: string;
 }
 
 /* =========================================================

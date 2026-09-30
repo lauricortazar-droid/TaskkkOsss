@@ -26,6 +26,7 @@ interface HeaderProps {
   onResetLedger: () => void;
   syncStatus: SyncStatus;
   onOpenSync: () => void;
+  onOpenConnectionMenu?: () => void;
   onOpenWorkspaceModal?: () => void;
   onOpenUniversalSearch?: () => void;
   onOpenExportImport?: () => void;
@@ -45,6 +46,7 @@ export default function Header({
   onResetLedger,
   syncStatus,
   onOpenSync,
+  onOpenConnectionMenu,
   onOpenWorkspaceModal,
   onOpenUniversalSearch,
   onOpenExportImport,
@@ -55,6 +57,7 @@ export default function Header({
   unreadSolicitudesCount = 0,
 }: HeaderProps) {
   const emailShort = syncStatus.email ? syncStatus.email.split("@")[0] : "Nube";
+  const handleOpenSyncMenu = onOpenConnectionMenu || onOpenSync;
 
   return (
     <header className="border-b border-stone-200 dark:border-stone-800 bg-white/85 dark:bg-stone-900/85 backdrop-blur-md sticky top-0 z-30">
@@ -112,16 +115,18 @@ export default function Header({
             </button>
           )}
 
-          {/* Cloud Sync Button (Phone ↔ PC) */}
+          {/* Cloud Sync & Connection Menu Button (Phone ↔ PC & Workspace) */}
           <button
             id="header-cloud-sync-btn"
-            onClick={onOpenSync}
-            className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] ${
+            onClick={handleOpenSyncMenu}
+            className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] active:scale-95 ${
               syncStatus.isSyncing
                 ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200"
+                : unreadSolicitudesCount > 0
+                ? "border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-900 dark:text-rose-200"
                 : "border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200/80 dark:bg-stone-800 dark:hover:bg-stone-700/80 text-stone-800 dark:text-stone-200"
             }`}
-            title={`Sincronizado con correo: ${syncStatus.email}. Clic para ver código QR para tu celular y opciones de sincronización.`}
+            title={`Sincronizado con correo: ${syncStatus.email}. Clic para abrir Menú de Conexión & Sincronización.`}
           >
             <div className="relative">
               <Cloud
@@ -132,22 +137,26 @@ export default function Header({
                     : "text-emerald-600 dark:text-emerald-400"
                 }
               />
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-stone-900" />
+              {unreadSolicitudesCount > 0 ? (
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 ring-1 ring-white dark:ring-stone-900 animate-pulse" />
+              ) : (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-1 ring-white dark:ring-stone-900" />
+              )}
             </div>
             <span className="hidden md:inline text-xs font-semibold">
               {syncStatus.email}
             </span>
-            <span className="md:hidden text-xs font-semibold">
-              {emailShort}
+            <span className="inline md:hidden text-xs font-bold text-amber-600 dark:text-amber-400">
+              Sincronizar
             </span>
           </button>
 
-          {/* FCM Push Notifications & Centro de Solicitudes Bell Button */}
+          {/* FCM Push Notifications & Centro de Solicitudes Bell Button (Desktop only, mobile has it in Sync Menu) */}
           {onOpenNotifications && (
             <button
               id="header-notifications-btn"
               onClick={onOpenNotifications}
-              className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] relative active:scale-95 ${
+              className={`hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] relative active:scale-95 ${
                 unreadSolicitudesCount > 0
                   ? "border-rose-400 dark:border-rose-700 bg-rose-50 dark:bg-rose-950/40 text-rose-900 dark:text-rose-100 shadow-sm shadow-rose-500/20"
                   : isPushActive
@@ -192,12 +201,12 @@ export default function Header({
             </button>
           )}
 
-          {/* Google Workspace & Firebase Hub button */}
+          {/* Google Workspace & Firebase Hub button (Desktop only, mobile has it in Sync Menu) */}
           {onOpenWorkspaceModal && (
             <button
               id="header-workspace-btn"
               onClick={onOpenWorkspaceModal}
-              className="flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 hover:border-amber-400 dark:hover:border-amber-500 text-stone-800 dark:text-stone-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px]"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 hover:border-amber-400 dark:hover:border-amber-500 text-stone-800 dark:text-stone-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px]"
               title="Google Workspace & Firebase Hub (Contacts, Calendar, Tasks, Sheets, Keep, Firestore)"
             >
               <div className="w-5 h-5 rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-blue-500 p-0.5 flex items-center justify-center shrink-0">
@@ -205,8 +214,7 @@ export default function Header({
                   G
                 </div>
               </div>
-              <span className="hidden sm:inline">Workspace & Cloud</span>
-              <span className="sm:hidden text-xs font-bold">Google</span>
+              <span>Workspace & Cloud</span>
             </button>
           )}
 
@@ -214,7 +222,7 @@ export default function Header({
             <button
               id="header-tags-btn"
               onClick={onOpenTags}
-              className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px]"
+              className="hidden sm:flex items-center gap-1.5 px-2.5 py-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200/80 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px]"
               title="Gestionar Etiquetas (Prioridad, Zona, Área)"
             >
               <TagIcon size={14} />
@@ -252,7 +260,7 @@ export default function Header({
           <button
             id="header-reset-ledger-btn"
             onClick={onResetLedger}
-            className="p-2.5 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+            className="hidden sm:flex p-2.5 rounded-xl text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors min-h-[44px] min-w-[44px] items-center justify-center"
             title="Reiniciar con tareas demo iniciales"
           >
             <RotateCcw size={15} />

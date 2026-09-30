@@ -7,8 +7,10 @@ import LedgerTable from "./components/LedgerTable";
 import ContactsModal from "./components/ContactsModal";
 import TagsModal, { DEFAULT_TAGS } from "./components/TagsModal";
 import SyncModal from "./components/SyncModal";
+import ConnectionSyncMenuModal from "./components/ConnectionSyncMenuModal";
 import GoogleWorkspaceModal from "./components/GoogleWorkspaceModal";
 import MobileNavBar from "./components/MobileNavBar";
+import WeeklyPerformanceDashboard from "./components/WeeklyPerformanceDashboard";
 import WorkMusicPlayer from "./components/WorkMusicPlayer";
 import LonasOS, { STORAGE_KEY_LONAS, INITIAL_LONAS_ORDERS } from "./components/LonasOS";
 import SaludFinancieraOS from "./components/SaludFinancieraOS";
@@ -287,6 +289,7 @@ export default function App() {
   const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
   const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isConnectionMenuOpen, setIsConnectionMenuOpen] = useState(false);
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isPushActive, setIsPushActive] = useState(false);
@@ -1400,7 +1403,14 @@ export default function App() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === id) {
-          const updated = { ...t, estado: newStatus };
+          const updated = {
+            ...t,
+            estado: newStatus,
+            fechaCompletado:
+              newStatus === "Completado"
+                ? t.fechaCompletado || new Date().toISOString()
+                : undefined,
+          };
           if (auth.currentUser) {
             saveTaskToFirestore(auth.currentUser.uid, updated);
           }
@@ -1709,6 +1719,7 @@ export default function App() {
         onResetLedger={handleResetLedger}
         syncStatus={syncStatus}
         onOpenSync={() => setIsSyncModalOpen(true)}
+        onOpenConnectionMenu={() => setIsConnectionMenuOpen(true)}
         onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
         onOpenUniversalSearch={() => setIsUniversalSearchOpen(true)}
         onOpenExportImport={() => setIsExportImportOpen(true)}
@@ -1831,6 +1842,22 @@ export default function App() {
             >
               <span>⏱️</span>
             </button>
+
+            {/* Rendimiento Semanal: 📊 */}
+            <button
+              type="button"
+              id="ws-tab-analytics"
+              onClick={() => setCurrentWorkspace("analytics")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "analytics"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Rendimiento Semanal: 📊"
+              aria-label="Rendimiento Semanal: 📊"
+            >
+              <span>📊</span>
+            </button>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -1903,12 +1930,21 @@ export default function App() {
                   Protección contra interrupciones, temporizador con alarma automática y sincronización de música
                 </p>
               </div>
-              <button
-                onClick={() => setCurrentWorkspace("task-os")}
-                className="px-4 py-2 rounded-2xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs"
-              >
-                Volver a Task-OS
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentWorkspace("analytics")}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-xs transition-transform active:scale-95"
+                >
+                  <span>📊 Ver Rendimiento Semanal</span>
+                </button>
+                <button
+                  onClick={() => setCurrentWorkspace("task-os")}
+                  className="px-4 py-2 rounded-2xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs"
+                >
+                  Volver a Task-OS
+                </button>
+              </div>
             </div>
             <PomodoroArtifact
               taskName={pomodoroTaskName}
@@ -1918,6 +1954,22 @@ export default function App() {
               onClose={() => setCurrentWorkspace("task-os")}
             />
           </div>
+        ) : currentWorkspace === "analytics" ? (
+          <WeeklyPerformanceDashboard
+            tasks={tasks}
+            onOpenPomodoro={() => {
+              setCurrentWorkspace("pomodoro");
+              setIsPomodoroActive(true);
+            }}
+            onSelectTask={(id) => {
+              setCurrentWorkspace("task-os");
+              setTimeout(() => {
+                const el = document.getElementById(`task-row-${id}`);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }, 100);
+            }}
+            onClose={() => setCurrentWorkspace("task-os")}
+          />
         ) : (
           <>
             {/* Action feedback bar if present */}
@@ -2053,8 +2105,15 @@ export default function App() {
         )}
       </main>
 
-      {/* Floating Work Music Player (Google Drive, YouTube Music, Spotify) */}
-      <WorkMusicPlayer />
+      {/* Persistent Focus Music Player Engine (Plays continuously across all portal tabs) */}
+      <WorkMusicPlayer
+        isPomodoroActive={isPomodoroActive}
+        currentWorkspace={currentWorkspace}
+        onNavigateToPomodoro={() => {
+          setCurrentWorkspace("pomodoro");
+          setIsPomodoroActive(true);
+        }}
+      />
 
       {/* Google Workspace & Firebase Hub Modal */}
       <GoogleWorkspaceModal
@@ -2193,6 +2252,7 @@ export default function App() {
           setIsPomodoroActive(!isPomodoroActive);
         }}
         onOpenSync={() => setIsSyncModalOpen(true)}
+        onOpenConnectionMenu={() => setIsConnectionMenuOpen(true)}
         onOpenContacts={() => setIsContactsModalOpen(true)}
         onOpenNotifications={() => setIsNotificationsModalOpen(true)}
         unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
@@ -2205,6 +2265,24 @@ export default function App() {
             }
           }, 50);
         }}
+      />
+
+      {/* Unified Connection & Sync Menu Modal (Mobile-first iPhone 16 Pro Max & Desktop Hub) */}
+      <ConnectionSyncMenuModal
+        isOpen={isConnectionMenuOpen}
+        onClose={() => setIsConnectionMenuOpen(false)}
+        syncStatus={syncStatus}
+        isPushActive={isPushActive}
+        unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+        onForceSync={handleForceSync}
+        onOpenQRAndCloudSync={() => setIsSyncModalOpen(true)}
+        onOpenGoogleWorkspace={() => setIsWorkspaceModalOpen(true)}
+        onOpenNotifications={() => setIsNotificationsModalOpen(true)}
+        onOpenExportImport={() => setIsExportImportOpen(true)}
+        onOpenContacts={() => setIsContactsModalOpen(true)}
+        onOpenTags={() => setIsTagsModalOpen(true)}
+        onNavigateToWorkspace={(ws) => setCurrentWorkspace(ws)}
+        onResetLedger={handleResetLedger}
       />
 
       {/* Footer */}
