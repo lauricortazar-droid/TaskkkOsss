@@ -224,6 +224,24 @@ export default function ConnectionSyncMenuModal({
     setTimeout(() => setJustSynced(false), 2000);
   };
 
+  // Safe JSON Fetch helper inside modal
+  const safeFetchJsonModal = async (input: RequestInfo | URL, init?: RequestInit): Promise<any> => {
+    const res = await fetch(input, {
+      ...init,
+      headers: {
+        Accept: "application/json",
+        ...(init?.headers || {}),
+      },
+    });
+    const contentType = res.headers.get("content-type") || "";
+    if (!contentType.includes("application/json")) {
+      await res.text().catch(() => "");
+      throw new Error(`El servidor devolvió una respuesta no válida (${res.status})`);
+    }
+    const data = await res.json();
+    return { ok: res.ok, status: res.status, data };
+  };
+
   // Test Cloud Connection with latency measurement
   const handleTestCloudConnection = async () => {
     setIsTestingConnection(true);
@@ -231,11 +249,10 @@ export default function ConnectionSyncMenuModal({
     const start = performance.now();
     try {
       const emailToTest = syncStatus.email || "laurcortazar@gmail.com";
-      const res = await fetch(`/api/sync/health?email=${encodeURIComponent(emailToTest)}`);
+      const { ok, data } = await safeFetchJsonModal(`/api/sync/health?email=${encodeURIComponent(emailToTest)}`);
       const latency = Math.round(performance.now() - start);
-      const data = await res.json();
 
-      if (res.ok && data.success) {
+      if (ok && data.success) {
         setConnectionTestResult({
           success: true,
           latencyMs: latency,
@@ -264,9 +281,8 @@ export default function ConnectionSyncMenuModal({
     setIsTestingMcp(true);
     setMcpTestResult(null);
     try {
-      const res = await fetch("/mcp?format=json");
-      const data = await res.json();
-      if (res.ok && data.tools) {
+      const { ok, data } = await safeFetchJsonModal("/mcp?format=json");
+      if (ok && data.tools) {
         setMcpTestResult({
           success: true,
           toolsCount: data.tools.length,
@@ -294,12 +310,11 @@ export default function ConnectionSyncMenuModal({
     setPinFeedback(null);
     try {
       const targetEmail = syncStatus.email || "laurcortazar@gmail.com";
-      const res = await fetch("/api/sync/pair-code/generate", {
+      const { data } = await safeFetchJsonModal("/api/sync/pair-code/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: targetEmail }),
       });
-      const data = await res.json();
       if (data.success && data.code) {
         setPairingPinCode(data.code);
         playChime("success", { volume: notifConfig.soundVolume });
@@ -322,12 +337,11 @@ export default function ConnectionSyncMenuModal({
     setIsVerifyingPin(true);
     setPinFeedback(null);
     try {
-      const res = await fetch("/api/sync/pair-code/verify", {
+      const { data } = await safeFetchJsonModal("/api/sync/pair-code/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ code: pinInput.trim() }),
       });
-      const data = await res.json();
       if (data.success && data.email) {
         setPinFeedback({
           success: true,

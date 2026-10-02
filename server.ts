@@ -497,7 +497,7 @@ app.post("/api/sync/push", (req: Request, res: Response) => {
 
     const cleanEmail = (email || "").trim().toLowerCase();
     if (!cleanEmail) {
-      return res.status(400).json({ error: "Email is required for synchronization" });
+      return res.status(400).json({ success: false, error: "Email is required for synchronization" });
     }
 
     const store = getSyncStore();
@@ -534,7 +534,7 @@ app.post("/api/sync/push", (req: Request, res: Response) => {
     });
   } catch (err: any) {
     console.error("Error pushing sync data:", err);
-    return res.status(500).json({ error: err.message || "Failed to push cloud sync data" });
+    return res.status(500).json({ success: false, error: err.message || "Failed to push cloud sync data" });
   }
 });
 
@@ -2407,6 +2407,23 @@ function processLocally(
 async function startServer() {
   const distPath = path.join(process.cwd(), "dist");
   const isProdWithDist = process.env.NODE_ENV === "production" && fs.existsSync(path.join(distPath, "index.html"));
+
+  // Explicit JSON 404 handler for any /api route so it NEVER falls through to Vite/SPA HTML
+  app.all("/api/*", (req: Request, res: Response) => {
+    res.status(404).json({
+      success: false,
+      error: `Endpoint API no encontrado: ${req.method} ${req.path}`,
+    });
+  });
+
+  // Explicit JSON error handler for /api
+  app.use("/api", (err: any, _req: Request, res: Response, _next: any) => {
+    console.error("API error handler caught:", err);
+    res.status(500).json({
+      success: false,
+      error: err?.message || "Internal API error",
+    });
+  });
 
   if (!isProdWithDist) {
     const vite = await createViteServer({

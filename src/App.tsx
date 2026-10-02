@@ -607,6 +607,58 @@ export default function App() {
   }, [tasks, activeTaskId]);
 
   // Helper to push state to cloud
+  // Safe HTTP JSON fetcher that handles offline states, non-JSON HTML error pages (502/503), and network hiccups without throwing
+  const safeFetchJson = async <T = any,>(
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<{ ok: boolean; status: number; data: T | null; error?: string }> => {
+    try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return {
+          ok: false,
+          status: 0,
+          data: null,
+          error: "Dispositivo sin conexión a internet",
+        };
+      }
+
+      const res = await fetch(input, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init?.headers || {}),
+        },
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        await res.text().catch(() => "");
+        return {
+          ok: false,
+          status: res.status,
+          data: null,
+          error: `Servidor devolvió respuesta no-JSON (${res.status} ${res.statusText})`,
+        };
+      }
+
+      const json = await res.json();
+      return {
+        ok: res.ok && json?.success !== false,
+        status: res.status,
+        data: json,
+        error: json?.error || (!res.ok ? `HTTP ${res.status}` : undefined),
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        error: err?.message || "Error de red al conectar con el servidor",
+      };
+    }
+  };
+
+  // Helper to push state to cloud
   const pushCloudState = async (
     email: string,
     curTasks: TaskItem[],
@@ -617,8 +669,11 @@ export default function App() {
     curEsencial: number | null,
     curSecundarias: number[]
   ) => {
+    if (!email || !email.trim()) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
     try {
-      const res = await fetch("/api/sync/push", {
+      const pushResult = await safeFetchJson<any>("/api/sync/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -632,8 +687,9 @@ export default function App() {
           secundariasTaskIds: curSecundarias,
         }),
       });
-      const data = await res.json();
-      if (data.success) {
+
+      if (pushResult.ok && pushResult.data) {
+        const data = pushResult.data;
         setSyncStatus((prev) => ({
           ...prev,
           email,
@@ -641,9 +697,15 @@ export default function App() {
           lastSyncedAt: data.updatedAt || data.data?.updatedAt || new Date().toISOString(),
           error: null,
         }));
+      } else if (!pushResult.ok) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: pushResult.error || null,
+        }));
       }
     } catch (err: any) {
-      console.warn("Cloud sync push error:", err);
+      console.warn("Cloud sync push notice:", err?.message || err);
       setSyncStatus((prev) => ({
         ...prev,
         isSyncing: false,
@@ -658,13 +720,28 @@ export default function App() {
 
     async function pullCloudState() {
       if (!syncEmail) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        isInitialSyncCompletedRef.current = true;
+        return;
+      }
       setSyncStatus((prev) => ({ ...prev, email: syncEmail, isSyncing: true, error: null }));
 
       try {
-        const res = await fetch(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
-        const data = await res.json();
+        const pullResult = await safeFetchJson<any>(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
+        if (!pullResult.ok || !pullResult.data) {
+          isInitialSyncCompletedRef.current = true;
+          if (isMounted) {
+            setSyncStatus((prev) => ({
+              ...prev,
+              email: syncEmail,
+              isSyncing: false,
+              error: pullResult.error || null,
+            }));
+          }
+          return;
+        }
 
+        const data = pullResult.data;
         if (isMounted) {
           if (data.exists && data.data) {
             const cloud = data.data as CloudSyncPayload & {
@@ -758,12 +835,36 @@ export default function App() {
   };
 
   const handleForceSync = async (isBackground = false) => {
-    if (!isBackground) {
-      setSyncStatus((prev) => ({ ...prev, isSyncing: true }));
+    if (!syncEmail || !syncEmail.trim()) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (!isBackground) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: "Sin conexión a internet",
+        }));
+      }
+      return;
     }
+
+    if (!isBackground) {
+      setSyncStatus((prev) => ({ ...prev, isSyncing: true, error: null }));
+    }
+
     try {
-      const res = await fetch(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
-      const data = await res.json();
+      const pullResult = await safeFetchJson<any>(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
+      if (!pullResult.ok || !pullResult.data) {
+        if (!isBackground) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            isSyncing: false,
+            error: pullResult.error || "No se pudo sincronizar con la nube",
+          }));
+        }
+        return;
+      }
+
+      const data = pullResult.data;
       let currentTasksState = tasks;
       if (data.exists && data.data) {
         const cloud = data.data as CloudSyncPayload & {
@@ -781,6 +882,7 @@ export default function App() {
         if (typeof cloud.esencialTaskId === "number") setEsencialTaskId(cloud.esencialTaskId);
         if (Array.isArray(cloud.secundariasTaskIds)) setSecundariasTaskIds(cloud.secundariasTaskIds);
       }
+
       await pushCloudState(syncEmail, currentTasksState, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds);
       const now = new Date();
       setLastSyncTime(now);
@@ -796,7 +898,14 @@ export default function App() {
         setLastActionSummary(`Sincronización manual completada con ${syncEmail}`);
       }
     } catch (err: any) {
-      console.error("Force sync failed:", err);
+      console.warn("Force sync notice (handled):", err?.message || err);
+      if (!isBackground) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: err?.message || "Error al sincronizar",
+        }));
+      }
     }
   };
 
@@ -1438,7 +1547,20 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error ${response.status}`);
+        let errDetail = `HTTP ${response.status}`;
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const errJson = await response.json();
+            if (errJson?.error) errDetail = errJson.error;
+          }
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+
+      const ct = response.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        throw new Error("El servidor devolvió una respuesta no válida");
       }
 
       const data: TaskOSResponse = await response.json();

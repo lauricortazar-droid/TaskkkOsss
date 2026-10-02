@@ -304,7 +304,7 @@ export default function SyncModal({
     try {
       const res = await fetch("/api/sync/email-summary", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           email: emailInput.trim(),
           tasks,
@@ -312,6 +312,11 @@ export default function SyncModal({
           secundariasTaskIds,
         }),
       });
+
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("Respuesta no válida del servidor");
+      }
 
       const data = await res.json();
       if (data.success) {
