@@ -1,0 +1,112 @@
+{
+  "default": [
+    {
+      "id": "sol-1790965990589-awak",
+      "folio": "REQ-5161",
+      "solicitante": "Dr. Morales",
+      "area": "Universidad FGDLL",
+      "categoria": "diplomado",
+      "titulo": "Revisión de Módulo 3 de Liderazgo",
+      "descripcion": "Revisión de contenido y constancias de graduación",
+      "especificaciones": {},
+      "canal": "WhatsApp",
+      "prioridad": "Media",
+      "estado": "Nueva",
+      "estadoTracking": "espera",
+      "fechaIngreso": "2026-10-02T18:33:10.589Z",
+      "leida": false
+    },
+    {
+      "id": "sol-101",
+      "solicitante": "Laura",
+      "telefono": "+52 55 1234 5678",
+      "email": "laura@universidad-fgdll.org",
+      "titulo": "Revisar lista de diplomas y reconocimientos de graduación",
+      "descripcion": "Por favor verificar los nombres de los 45 graduados antes de imprimir los reconocimientos oficiales.",
+      "canal": "WhatsApp",
+      "prioridad": "Alta",
+      "estado": "Nueva",
+      "fechaIngreso": "2026-10-02T18:18:01.901Z",
+      "leida": false
+    },
+    {
+      "id": "sol-102",
+      "solicitante": "Líder Zona Tiburón",
+      "telefono": "+52 55 9876 5432",
+      "titulo": "Diseño y cotización de lona 3x2m para evento del sábado",
+      "descripcion": "Requerimos lona en material front brillante con ojillos cada 50cm para el acceso principal.",
+      "canal": "WhatsApp",
+      "prioridad": "Alta",
+      "estado": "Nueva",
+      "fechaIngreso": "2026-10-02T17:48:01.901Z",
+      "leida": false
+    },
+    {
+      "id": "sol-103",
+      "solicitante": "Taller Impresión",
+      "telefono": "+52 55 4567 8901",
+      "titulo": "Validación de perfil de color en archivo Figma",
+      "descripcion": "El archivo enviado está en RGB, requerimos confirmación si lo convertimos a CMYK Fogra39.",
+      "canal": "Web",
+      "prioridad": "Media",
+      "estado": "Atendida",
+      "fechaIngreso": "2026-10-02T15:33:01.901Z",
+      "leida": true
+    }
+  ],
+  "laurcortazar@gmail.com": [
+    {
+      "id": "sol-1790965990589-awak",
+      "folio": "REQ-5161",
+      "solicitante": "Dr. Morales",
+      "area": "Universidad FGDLL",
+      "categoria": "diplomado",
+      "titulo": "Revisión de Módulo 3 de Liderazgo",
+      "descripcion": "Revisión de contenido y constancias de graduación",
+      "especificaciones": {},
+      "canal": "WhatsApp",
+      "prioridad": "Media",
+      "estado": "Nueva",
+      "estadoTracking": "espera",
+      "fechaIngreso": "2026-10-02T18:33:10.589Z",
+      "leida": false
+    },
+    {
+      "id": "sol-101",
+      "solicitante": "Laura",
+      "telefono": "+52 55 1234 5678",
+      "email": "laura@universidad-fgdll.org",
+      "titulo": "Revisar lista de diplomas y reconocimientos de graduación",
+      "descripcion": "Por favor verificar los nombres de los 45 graduados antes de imprimir los reconocimientos oficiales.",
+      "canal": "WhatsApp",
+      "prioridad": "Alta",
+      "estado": "Nueva",
+      "fechaIngreso": "2026-10-02T18:18:01.901Z",
+      "leida": false
+    },
+    {
+      "id": "sol-102",
+      "solicitante": "Líder Zona Tiburón",
+      "telefono": "+52 55 9876 5432",
+      "titulo": "Diseño y cotización de lona 3x2m para evento del sábado",
+      "descripcion": "Requerimos lona en material front brillante con ojillos cada 50cm para el acceso principal.",
+      "canal": "WhatsApp",
+      "prioridad": "Alta",
+      "estado": "Nueva",
+      "fechaIngreso": "2026-10-02T17:48:01.901Z",
+      "leida": false
+    },
+    {
+      "id": "sol-103",
+      "solicitante": "Taller Impresión",
+      "telefono": "+52 55 4567 8901",
+      "titulo": "Validación de perfil de color en archivo Figma",
+      "descripcion": "El archivo enviado está en RGB, requerimos confirmación si lo convertimos a CMYK Fogra39.",
+      "canal": "Web",
+      "prioridad": "Media",
+      "estado": "Atendida",
+      "fechaIngreso": "2026-10-02T15:33:01.901Z",
+      "leida": true
+    }
+  ]
+}

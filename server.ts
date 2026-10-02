@@ -689,15 +689,22 @@ const SOLICITUDES_FILE = path.join(DATA_DIR, "solicitudes.json");
 
 interface ServerSolicitudItem {
   id: string;
+  folio?: string;
   solicitante: string;
   telefono?: string;
   email?: string;
+  area?: string;
+  categoria?: string;
   titulo: string;
   descripcion: string;
+  especificaciones?: any;
   canal: "WhatsApp" | "ExecutiveInput" | "Web" | "Email" | "Sistema";
   prioridad: "Alta" | "Media" | "Baja";
   estado: "Nueva" | "Atendida" | "ConvertidaEnTarea" | "Descartada";
+  estadoTracking?: "espera" | "aceptado" | "proceso" | "completado" | "cancelado";
   fechaIngreso: string;
+  fechaAceptado?: string;
+  fechaCompletado?: string;
   leida: boolean;
   tareaIdAsociada?: number;
 }
@@ -1013,16 +1020,29 @@ app.post("/api/solicitudes/crear", (req: Request, res: Response) => {
     const store = getSolicitudesStore();
     const userSolicitudes = store[cleanUserEmail] || store["default"] || [...INITIAL_SOLICITUDES];
 
+    const randomFolio = `REQ-${Math.floor(1000 + Math.random() * 9000)}`;
+    const {
+      area = "FGDLL",
+      categoria = "otro",
+      especificaciones = {},
+      folio = randomFolio,
+    } = req.body;
+
     const newSolicitud: ServerSolicitudItem = {
       id: `sol-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      folio,
       solicitante: solicitante.trim(),
       telefono: telefono ? telefono.trim() : undefined,
       email: contactEmail ? contactEmail.trim() : undefined,
+      area: (area || "FGDLL").trim(),
+      categoria,
       titulo: (titulo || descripcion.slice(0, 60)).trim(),
       descripcion: descripcion.trim(),
+      especificaciones,
       canal,
       prioridad,
       estado: "Nueva",
+      estadoTracking: "espera",
       fechaIngreso: new Date().toISOString(),
       leida: false,
     };
@@ -1090,7 +1110,15 @@ app.post("/api/solicitudes/crear", (req: Request, res: Response) => {
 app.put("/api/solicitudes/:id", (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { estado, leida, tareaIdAsociada, targetUserEmail } = req.body;
+    const {
+      estado,
+      leida,
+      tareaIdAsociada,
+      targetUserEmail,
+      estadoTracking,
+      fechaAceptado,
+      fechaCompletado,
+    } = req.body;
     const email = (targetUserEmail || "laurcortazar@gmail.com").trim().toLowerCase();
     const store = getSolicitudesStore();
     const list = store[email] || store["default"] || [];
@@ -1103,6 +1131,9 @@ app.put("/api/solicitudes/:id", (req: Request, res: Response) => {
     if (estado !== undefined) list[idx].estado = estado;
     if (leida !== undefined) list[idx].leida = leida;
     if (tareaIdAsociada !== undefined) list[idx].tareaIdAsociada = tareaIdAsociada;
+    if (estadoTracking !== undefined) list[idx].estadoTracking = estadoTracking;
+    if (fechaAceptado !== undefined) list[idx].fechaAceptado = fechaAceptado;
+    if (fechaCompletado !== undefined) list[idx].fechaCompletado = fechaCompletado;
 
     store[email] = list;
     saveSolicitudesStore(store);
@@ -1110,6 +1141,37 @@ app.put("/api/solicitudes/:id", (req: Request, res: Response) => {
     return res.json({ success: true, solicitud: list[idx] });
   } catch (err: any) {
     return res.status(500).json({ error: err.message });
+  }
+});
+
+// 3.1 Public Ticket Tracking Search (by folio, id, or phone number)
+app.get("/api/solicitudes/ticket/:query", (req: Request, res: Response) => {
+  try {
+    const rawQuery = (req.params.query || "").trim().toLowerCase();
+    if (!rawQuery) {
+      return res.status(400).json({ success: false, error: "Ingresa un número de ticket, folio o celular." });
+    }
+
+    const store = getSolicitudesStore();
+    const all = Object.values(store).flat();
+
+    const matches = all.filter((s) => {
+      const matchFolio = s.folio && s.folio.toLowerCase().includes(rawQuery);
+      const matchId = s.id && s.id.toLowerCase() === rawQuery;
+      const cleanPhone = (s.telefono || "").replace(/\D/g, "");
+      const cleanQueryPhone = rawQuery.replace(/\D/g, "");
+      const matchPhone = cleanPhone && cleanQueryPhone.length >= 6 && cleanPhone.includes(cleanQueryPhone);
+      const matchEmail = s.email && s.email.toLowerCase() === rawQuery;
+      return matchFolio || matchId || matchPhone || matchEmail;
+    });
+
+    return res.json({
+      success: true,
+      found: matches.length > 0,
+      solicitudes: matches,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

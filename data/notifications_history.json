@@ -1,0 +1,18 @@
+[
+  {
+    "id": "notif-1790965990589-fp9c",
+    "title": "🚨 Nueva Solicitud: Dr. Morales",
+    "body": "Revisión de Módulo 3 de Liderazgo — Revisión de contenido y constancias de graduación",
+    "icon": "/icon-192.svg",
+    "tag": "solicitud_nueva",
+    "url": "/",
+    "email": "laurcortazar@gmail.com",
+    "type": "solicitud_nueva",
+    "data": {
+      "solicitudId": "sol-1790965990589-awak",
+      "solicitante": "Dr. Morales"
+    },
+    "timestamp": "2026-10-02T18:33:10.589Z",
+    "delivered": true
+  }
+]

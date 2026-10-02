@@ -618,12 +618,22 @@ export default function NotificationsModal({
                               <span className="font-bold text-stone-900 dark:text-stone-100 text-sm">
                                 {s.solicitante}
                               </span>
+                              {s.folio && (
+                                <span className="px-1.5 py-0.5 rounded-md font-mono text-[10px] font-black bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                                  {s.folio}
+                                </span>
+                              )}
+                              {s.area && (
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-stone-200 dark:bg-stone-700 text-stone-800 dark:text-stone-200">
+                                  🏛️ {s.area}
+                                </span>
+                              )}
                               {s.prioridad === "Alta" && (
                                 <span className="px-1.5 py-0.5 rounded-full text-[9px] font-black bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300">
                                   ⚡ Alta
                                 </span>
                               )}
-                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300">
+                              <span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400">
                                 {s.canal}
                               </span>
                               <span
@@ -649,7 +659,7 @@ export default function NotificationsModal({
                               {s.descripcion}
                             </p>
 
-                            <div className="flex items-center gap-3 text-[10px] text-stone-400 pt-1">
+                            <div className="flex flex-wrap items-center gap-3 text-[10px] text-stone-400 pt-1">
                               <span className="flex items-center gap-1">
                                 <Clock size={11} />
                                 {new Date(s.fechaIngreso).toLocaleString([], {
@@ -660,6 +670,11 @@ export default function NotificationsModal({
                               {s.telefono && (
                                 <span className="flex items-center gap-1 font-mono">
                                   📞 {s.telefono}
+                                </span>
+                              )}
+                              {s.email && (
+                                <span className="flex items-center gap-1">
+                                  ✉️ {s.email}
                                 </span>
                               )}
                             </div>
@@ -692,34 +707,77 @@ export default function NotificationsModal({
                             <button
                               onClick={() => {
                                 onConvertSolicitudToTask(s);
-                                setActionFeedback(`¡Solicitud de ${s.solicitante} convertida en tarea del Ledger!`);
+                                setActionFeedback(`¡Solicitud convertida en tarea del Ledger con etiqueta "${s.area || "FGDLL"}"!`);
                                 playChime("success");
                                 setTimeout(() => setActionFeedback(null), 4000);
                               }}
                               className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-[11px] flex items-center gap-1.5 shadow-2xs"
                             >
                               <ArrowRight size={13} />
-                              <span>Convertir a Tarea del Ledger</span>
+                              <span>Convertir a Tarea</span>
                             </button>
                           ) : (
                             <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-1">
                               <CheckCircle2 size={13} />
-                              <span>Vinculada en el Ledger de Pepe</span>
+                              <span>En Ledger de Pepe</span>
                             </span>
                           )}
 
-                          {s.telefono && (
-                            <a
-                              href={`https://wa.me/${s.telefono.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                                `Hola ${s.solicitante}, ya recibí tu solicitud de "${s.titulo}". Te mantengo al tanto.`
-                              )}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-2.5 py-1.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-emerald-50 hover:border-emerald-300 hover:text-emerald-700 text-stone-700 dark:text-stone-300 text-[11px] font-semibold flex items-center gap-1.5 shadow-2xs"
+                          {/* Aceptar y Avisar por WhatsApp */}
+                          {s.estadoTracking !== "proceso" && s.estadoTracking !== "completado" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateSolicitud(s.id, {
+                                  estadoTracking: "proceso",
+                                  fechaAceptado: new Date().toISOString(),
+                                  leida: true,
+                                });
+                                playChime("success");
+                                if (s.telefono) {
+                                  window.open(
+                                    `https://wa.me/${s.telefono.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                                      `Hola ${s.solicitante}, he recibido y aceptado tu solicitud de "${s.titulo}" (${s.folio || s.id}). Ya está en mi lista de trabajo activa. Te mantendré al tanto del avance.`
+                                    )}`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-[11px] font-bold flex items-center gap-1.5 shadow-2xs"
+                              title="Aceptar requerimiento y avisar al solicitante por WhatsApp"
                             >
-                              <MessageSquare size={13} className="text-emerald-500" />
-                              <span>WhatsApp</span>
-                            </a>
+                              <MessageSquare size={13} className="text-emerald-600" />
+                              <span>{s.telefono ? "Aceptar y WhatsApp" : "Aceptar Pedido"}</span>
+                            </button>
+                          )}
+
+                          {/* Avisar Entrega / Terminado */}
+                          {s.estadoTracking !== "completado" && s.estado !== "Atendida" && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onUpdateSolicitud(s.id, {
+                                  estado: "Atendida",
+                                  estadoTracking: "completado",
+                                  fechaCompletado: new Date().toISOString(),
+                                  leida: true,
+                                });
+                                playChime("success");
+                                if (s.telefono) {
+                                  window.open(
+                                    `https://wa.me/${s.telefono.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                                      `Hola ${s.solicitante}, te aviso que tu requerimiento de "${s.titulo}" (${s.folio || s.id}) ha quedado COMPLETADO y listo para entrega. ¡Quedo a la orden!`
+                                    )}`,
+                                    "_blank"
+                                  );
+                                }
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 hover:bg-stone-100 text-stone-700 dark:text-stone-300 text-[11px] font-semibold flex items-center gap-1.5 shadow-2xs"
+                              title="Enviar aviso de entrega completada"
+                            >
+                              <CheckCircle2 size={13} className="text-emerald-500" />
+                              <span>{s.telefono ? "Concluir y WhatsApp" : "Marcar Concluido"}</span>
+                            </button>
                           )}
 
                           <button
@@ -728,14 +786,14 @@ export default function NotificationsModal({
                             title="Enviar correo de alerta o notificación"
                           >
                             <Mail size={13} className="text-amber-500" />
-                            <span>Enviar Email</span>
+                            <span>Email</span>
                           </button>
                         </div>
 
                         {s.estado === "Nueva" && (
                           <button
                             onClick={() => {
-                              onUpdateSolicitud(s.id, { estado: "Atendida", leida: true });
+                              onUpdateSolicitud(s.id, { estado: "Atendida", estadoTracking: "completado", leida: true });
                               playChime("tick");
                             }}
                             className="text-[10px] text-stone-500 hover:text-stone-800 dark:hover:text-stone-200 underline"

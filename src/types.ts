@@ -170,7 +170,7 @@ export type DomainType =
   | "Lonas"
   | "Finanzas";
 
-export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro" | "analytics";
+export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro" | "analytics" | "portal";
 
 /* =========================================================
    PRINT STATION & VOUCHER TYPES (🖨️ Comprobantes, Tickets y Recibos)
@@ -407,17 +407,31 @@ export interface EcosystemSyncPayload {
 
 export interface SolicitudItem {
   id: string;
+  folio?: string; // e.g. "REQ-8492"
   solicitante: string;
   telefono?: string;
   email?: string;
+  area?: string; // e.g. "FGDLL", "Universidad FGDLL", "Tecnología", "Diseño", "Psicología", "Administrativo"
+  categoria?: "lonas" | "playeras" | "diplomado" | "tecnologia" | "revision" | "otro";
   titulo: string;
   descripcion: string;
+  especificaciones?: {
+    medidas?: string; // para lonas (ej. 3x2m)
+    tallas?: string; // para playeras (ej. 2 M, 1 L)
+    modulo?: string; // para diplomado
+    fechaEvento?: string; // fecha requerida
+    detallesExtras?: string;
+  };
   canal: "WhatsApp" | "ExecutiveInput" | "Web" | "Email" | "Sistema";
   prioridad: "Alta" | "Media" | "Baja";
   estado: "Nueva" | "Atendida" | "ConvertidaEnTarea" | "Descartada";
+  estadoTracking?: "espera" | "aceptado" | "proceso" | "completado" | "cancelado";
   fechaIngreso: string;
+  fechaAceptado?: string;
+  fechaCompletado?: string;
   leida: boolean;
   tareaIdAsociada?: number;
+  adjuntoUrl?: string;
 }
 
 export interface NotificationCenterItem {

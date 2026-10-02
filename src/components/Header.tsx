@@ -14,6 +14,8 @@ import {
   Bookmark,
   Bell,
   BellRing,
+  Globe,
+  Lock,
 } from "lucide-react";
 import { SyncStatus } from "../types";
 
@@ -35,6 +37,9 @@ interface HeaderProps {
   onOpenNotifications?: () => void;
   isPushActive?: boolean;
   unreadSolicitudesCount?: number;
+  onOpenPortal?: () => void;
+  isPortalActive?: boolean;
+  onLogoutAdmin?: () => void;
 }
 
 export default function Header({
@@ -55,6 +60,9 @@ export default function Header({
   onOpenNotifications,
   isPushActive = false,
   unreadSolicitudesCount = 0,
+  onOpenPortal,
+  isPortalActive = false,
+  onLogoutAdmin,
 }: HeaderProps) {
   const emailShort = syncStatus.email ? syncStatus.email.split("@")[0] : "Nube";
   const handleOpenSyncMenu = onOpenConnectionMenu || onOpenSync;
@@ -84,6 +92,28 @@ export default function Header({
 
         {/* Quick action buttons */}
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* Public Request Portal Shortcut */}
+          {onOpenPortal && (
+            <button
+              id="header-portal-btn"
+              onClick={onOpenPortal}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] active:scale-95 ${
+                isPortalActive
+                  ? "bg-[#042f66] text-white border-[#042f66] ring-2 ring-[#042f66]/20 font-bold"
+                  : "border-stone-200 dark:border-stone-700 bg-white hover:bg-stone-50 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200"
+              }`}
+              title="Portal Público de Solicitudes y Requerimientos (l.fgdll.org)"
+            >
+              <Globe size={15} className="text-amber-500" />
+              <span className="hidden md:inline">Portal Público</span>
+              {unreadSolicitudesCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold">
+                  {unreadSolicitudesCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Universal Search Header Shortcut */}
           {onOpenUniversalSearch && (
             <button
@@ -265,6 +295,17 @@ export default function Header({
           >
             <RotateCcw size={15} />
           </button>
+
+          {onLogoutAdmin && (
+            <button
+              id="header-logout-admin-btn"
+              onClick={onLogoutAdmin}
+              className="p-2.5 rounded-xl text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+              title="Cerrar sesión de Administradora (Volver a portal público de requerimientos)"
+            >
+              <Lock size={15} className="text-amber-500" />
+            </button>
+          )}
         </div>
       </div>
     </header>

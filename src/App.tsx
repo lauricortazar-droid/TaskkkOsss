@@ -22,6 +22,7 @@ import UndoToast, { UndoActionPayload } from "./components/UndoToast";
 import UrlLibraryOS, { INITIAL_URL_LIBRARY } from "./components/UrlLibraryOS";
 import PrintOS from "./components/PrintOS";
 import NotificationsModal from "./components/NotificationsModal";
+import PublicRequestPortal from "./components/PublicRequestPortal";
 import {
   notifyTaskCompleted,
   notifyClientMessageReceived,
@@ -293,7 +294,40 @@ export default function App() {
   const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
   const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
   const [isPushActive, setIsPushActive] = useState(false);
-  const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceTab>("task-os");
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("admin") === "true") return true;
+        if (params.get("portal") === "true") return false;
+        const saved = localStorage.getItem("taskos_is_admin_active");
+        if (saved === "true") return true;
+      }
+    } catch (_) {}
+    return false;
+  });
+
+  const handleLogoutAdmin = () => {
+    setIsAdminAuthenticated(false);
+    try {
+      localStorage.removeItem("taskos_is_admin_active");
+    } catch (_) {}
+    setCurrentWorkspace("portal");
+    playChime("tick");
+  };
+
+  const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceTab>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("admin") === "true") return "task-os";
+        if (params.get("portal") === "true") return "portal";
+        const saved = localStorage.getItem("taskos_is_admin_active");
+        if (saved === "true") return "task-os";
+      }
+    } catch (_) {}
+    return "portal";
+  });
   const [currentPrintItem, setCurrentPrintItem] = useState<PrintItem | null>(null);
 
   // Cloud Sync state (Email synchronization for Phone ↔ PC)
@@ -997,6 +1031,20 @@ export default function App() {
     else if (solLower.includes("universidad") || solLower.includes("diploma")) taskDominio = "Universidad";
     else if (solLower.includes("impresión") || solLower.includes("diseño")) taskDominio = "Diseño";
 
+    const customTags = ["Solicitud"];
+    if (solicitud.prioridad === "Alta") customTags.push("Urgente");
+    if (solicitud.area) customTags.push(solicitud.area);
+    if (solicitud.categoria) {
+      const catLabels: Record<string, string> = {
+        lonas: "Lonas",
+        playeras: "Playeras",
+        diplomado: "Diplomado",
+        tecnologia: "Tecnología",
+        revision: "Revisión",
+      };
+      if (catLabels[solicitud.categoria]) customTags.push(catLabels[solicitud.categoria]);
+    }
+
     const newTask: TaskItem = {
       id: nextId,
       solicitante: solicitud.solicitante,
@@ -1008,11 +1056,8 @@ export default function App() {
         nombre: solicitud.solicitante,
         telefono: solicitud.telefono,
       },
-      notas: solicitud.descripcion,
-      etiquetas:
-        solicitud.prioridad === "Alta"
-          ? ["Urgente", "Solicitud"]
-          : ["Solicitud"],
+      notas: `${solicitud.descripcion}${solicitud.folio ? `\n[Ticket: ${solicitud.folio}]` : ""}`,
+      etiquetas: Array.from(new Set(customTags)),
     };
 
     const updatedTasks = [newTask, ...tasks];
@@ -1995,6 +2040,34 @@ export default function App() {
 
   const essentialTask = tasks.find((t) => t.id === esencialTaskId);
 
+  // If visitor is not authenticated as admin, show dedicated public request portal directly
+  if (!isAdminAuthenticated) {
+    return (
+      <PublicRequestPortal
+        onAdminLoginClick={() => {
+          setIsAdminAuthenticated(true);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+          } catch (_) {}
+          setCurrentWorkspace("task-os");
+          playChime("tick");
+        }}
+        onRequestCreated={(newSol) => {
+          handleCreateSolicitud(newSol);
+        }}
+        existingSolicitudes={solicitudes}
+        isAdminLoggedIn={false}
+        onGoToAdminDashboard={() => {
+          setIsAdminAuthenticated(true);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+          } catch (_) {}
+          setCurrentWorkspace("task-os");
+        }}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans selection:bg-amber-200 selection:text-stone-900">
       {/* Global Header */}
@@ -2023,12 +2096,39 @@ export default function App() {
         onOpenNotifications={() => setIsNotificationsModalOpen(true)}
         isPushActive={isPushActive}
         unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+        onOpenPortal={() => {
+          setCurrentWorkspace((prev) => (prev === "portal" ? "task-os" : "portal"));
+          playChime("tick");
+        }}
+        isPortalActive={currentWorkspace === "portal"}
+        onLogoutAdmin={handleLogoutAdmin}
       />
 
-      {/* Ecosystem Navigation Bar (🔥 • 💻 • 🤑 • 🔗 • 🖨️ • ⏱️) */}
+      {/* Ecosystem Navigation Bar (🌐 • 🔥 • 💻 • 🤑 • 🔗 • 🖨️ • ⏱️) */}
       <div className="border-b border-stone-200 dark:border-stone-800 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md sticky top-16 z-20">
         <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
           <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Portal Público de Requerimientos: 🌐 */}
+            <button
+              type="button"
+              id="ws-tab-portal"
+              onClick={() => setCurrentWorkspace("portal")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "portal"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20 font-bold"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Portal Público de Requerimientos (l.fgdll.org): 🌐"
+              aria-label="Portal Público: 🌐"
+            >
+              <span>🌐</span>
+              {solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-black leading-tight shadow-xs">
+                  {solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+                </span>
+              )}
+            </button>
+
             {/* Task: 🔥 */}
             <button
               type="button"
@@ -2167,7 +2267,38 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-6 pb-28 md:pb-12">
         {/* Render Workspace based on tab selection */}
-        {currentWorkspace === "urls" ? (
+        {currentWorkspace === "portal" ? (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
+              <span className="font-bold flex items-center gap-2">
+                👑 Modo Administradora Activo — Estás visualizando el portal público tal como lo ven tus clientes y solicitantes.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentWorkspace("task-os")}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs"
+                >
+                  Volver a Task-OS
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogoutAdmin}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs"
+                >
+                  Cerrar Sesión Administradora
+                </button>
+              </div>
+            </div>
+            <PublicRequestPortal
+              onAdminLoginClick={() => setCurrentWorkspace("task-os")}
+              onRequestCreated={(newSol) => handleCreateSolicitud(newSol)}
+              existingSolicitudes={solicitudes}
+              isAdminLoggedIn={true}
+              onGoToAdminDashboard={() => setCurrentWorkspace("task-os")}
+            />
+          </div>
+        ) : currentWorkspace === "urls" ? (
           <UrlLibraryOS
             urls={urlLibrary}
             activeTaskId={activeTaskId}
