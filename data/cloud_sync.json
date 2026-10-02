@@ -75,6 +75,18 @@
     ],
     "globalResources": [
       {
+        "id": "res-1790801519260-ld8na",
+        "url": "https://console.firebase.google.com/u/0/project/esparta-d60c1/overview",
+        "title": "console.firebase.google.com • u 0 project esparta d60c1 overview",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "savedAt": "2026-09-30T20:51:59.260Z"
+      },
+      {
         "id": "res-1790717482547-zketv",
         "url": "https://aistudio.google.com/apps/90239d7f-e919-4b74-8cf9-4bd6da226df9?showPreview=true&showAssistant=true",
         "title": "Sign in - Google Accounts",
@@ -144,6 +156,23 @@
         "updatedAt": "2026-09-29T21:05:55.208Z"
       },
       {
+        "id": "url-1790801906773-d6w6m",
+        "url": "https://console.firebase.google.com/u/0/project/esparta-d60c1/authentication/users",
+        "title": "console.firebase.google.com • u 0 project esparta d60c1 authentication users",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=console.firebase.google.com&sz=64",
+        "isFavorite": true,
+        "clicks": 1,
+        "createdAt": "2026-09-30T20:58:26.773Z",
+        "updatedAt": "2026-09-30T20:58:26.773Z"
+      },
+      {
         "id": "url-1790590385521-sazhl",
         "url": "https://github.com/settings/apps",
         "title": "DEVELOPER GIT",
@@ -183,12 +212,12 @@
       },
       {
         "id": "url-1790702550424-uq4i5",
-        "url": "https://github.com",
-        "title": "GitHub",
+        "url": "https://github",
+        "title": "token",
         "categoria": "Herramientas & Web",
-        "descripcion": "Repositorio y control de versiones en GitHub",
-        "keywords": ["github", "git", "repositorio"],
-        "icon": "https://www.google.com/s2/favicons?domain=github.com&sz=64",
+        "descripcion": "token_redacted",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=github&sz=64",
         "isFavorite": false,
         "clicks": 0,
         "createdAt": "2026-09-29T17:22:30.424Z",
@@ -316,7 +345,7 @@
     "secundariasTaskIds": [
       2
     ],
-    "updatedAt": "2026-09-30T06:51:01.627Z",
+    "updatedAt": "2026-10-01T08:53:39.642Z",
     "deviceName": "Navegador Web"
   }
 }

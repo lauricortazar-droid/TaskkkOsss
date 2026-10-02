@@ -210,6 +210,18 @@ const portIndex = args.indexOf("--port");
 const portArg = portIndex !== -1 && args[portIndex + 1] ? parseInt(args[portIndex + 1], 10) : null;
 const PORT = portArg || (process.env.PORT ? parseInt(process.env.PORT, 10) : 3000);
 
+// Global CORS Middleware (Handles Google Gemini, Claude, Web Clients and Preflight requests)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH, HEAD");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, x-session-id, mcp-session-id, Range");
+  res.setHeader("Access-Control-Expose-Headers", "*");
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
+  next();
+});
+
 app.use(express.json({ limit: "25mb" }));
 
 // Cloud sync persistent store directory
@@ -251,7 +263,8 @@ function saveSyncStore(store: Record<string, CloudSyncRecord>) {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(SYNC_FILE, JSON.stringify(store, null, 2), "utf8");
+    const sanitizedJson = JSON.stringify(store, null, 2).replace(/github_pat_[a-zA-Z0-9_]+/g, "token_redacted");
+    fs.writeFileSync(SYNC_FILE, sanitizedJson, "utf8");
   } catch (err) {
     console.error("Error saving sync store:", err);
   }
@@ -290,6 +303,7 @@ export interface TaskItem {
   tarea: string;
   estado: "Pendiente" | "En Proceso" | "Completado";
   fechaIngreso: string;
+  fechaCompletado?: string;
   dominio?: string;
   imagenReferencia?: string;
   contacto?: {
@@ -336,7 +350,7 @@ app.get("/api/sync/pull", (req: Request, res: Response) => {
     const rawEmail = (req.query.email as string) || "";
     const cleanEmail = rawEmail.trim().toLowerCase();
     if (!cleanEmail) {
-      return res.status(400).json({ error: "Email is required for synchronization" });
+      return res.status(400).json({ success: false, error: "Email is required for synchronization" });
     }
 
     const store = getSyncStore();
@@ -344,19 +358,126 @@ app.get("/api/sync/pull", (req: Request, res: Response) => {
 
     if (record) {
       return res.json({
+        success: true,
         exists: true,
         data: record,
       });
     }
 
     return res.json({
+      success: true,
       exists: false,
       data: null,
       message: "No cloud sync data found for this email yet.",
     });
   } catch (err: any) {
     console.error("Error pulling sync data:", err);
-    return res.status(500).json({ error: err.message || "Failed to pull cloud sync data" });
+    return res.status(500).json({ success: false, error: err.message || "Failed to pull cloud sync data" });
+  }
+});
+
+// Device PIN Pairing store (6-digit codes for quick mobile pairing, expires in 15 mins)
+interface DevicePairingCodeRecord {
+  code: string;
+  email: string;
+  createdAt: number;
+}
+const activePairingCodes = new Map<string, DevicePairingCodeRecord>();
+
+// Generate 6-digit Device Pairing Code
+app.post("/api/sync/pair-code/generate", (req: Request, res: Response) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = (email || "").trim().toLowerCase();
+    if (!cleanEmail) {
+      return res.status(400).json({ success: false, error: "Email requerido para generar código de enlace móvil." });
+    }
+
+    // Clean up expired codes (> 15 minutes)
+    const now = Date.now();
+    for (const [code, item] of activePairingCodes.entries()) {
+      if (now - item.createdAt > 15 * 60 * 1000) {
+        activePairingCodes.delete(code);
+      }
+    }
+
+    const rawCode = Math.floor(100000 + Math.random() * 900000).toString();
+    activePairingCodes.set(rawCode, {
+      code: rawCode,
+      email: cleanEmail,
+      createdAt: now,
+    });
+
+    return res.json({
+      success: true,
+      code: `${rawCode.slice(0, 3)}-${rawCode.slice(3)}`,
+      rawCode,
+      email: cleanEmail,
+      expiresInSeconds: 900,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Verify 6-digit Device Pairing Code
+app.post("/api/sync/pair-code/verify", (req: Request, res: Response) => {
+  try {
+    const { code } = req.body;
+    const cleanCode = (code || "").toString().replace(/\D/g, "");
+    if (!cleanCode || cleanCode.length !== 6) {
+      return res.status(400).json({ success: false, error: "Ingresa un código de enlace válido de 6 dígitos." });
+    }
+
+    const item = activePairingCodes.get(cleanCode);
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        error: "Código de enlace no encontrado o expirado. Genera uno nuevo en tu computadora o dispositivo principal.",
+      });
+    }
+
+    if (Date.now() - item.createdAt > 15 * 60 * 1000) {
+      activePairingCodes.delete(cleanCode);
+      return res.status(410).json({
+        success: false,
+        error: "El código de enlace ha expirado. Por favor genera un nuevo código.",
+      });
+    }
+
+    const store = getSyncStore();
+    const record = store[item.email] || null;
+
+    return res.json({
+      success: true,
+      email: item.email,
+      data: record,
+      message: `¡Dispositivo vinculado con éxito a ${item.email}!`,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Health check and connection test endpoint for Cloud Sync
+app.get("/api/sync/health", (req: Request, res: Response) => {
+  try {
+    const store = getSyncStore();
+    const queryEmail = (req.query.email as string || "").trim().toLowerCase();
+    const userRecord = queryEmail ? store[queryEmail] : null;
+
+    return res.json({
+      success: true,
+      status: "online",
+      serverTimestamp: new Date().toISOString(),
+      email: queryEmail || undefined,
+      isAccountFound: !!userRecord,
+      tasksCount: userRecord?.tasks?.length || 0,
+      lastSyncedAt: userRecord?.updatedAt || null,
+      totalRegisteredAccounts: Object.keys(store).length,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -382,11 +503,18 @@ app.post("/api/sync/push", (req: Request, res: Response) => {
     const store = getSyncStore();
     const now = new Date().toISOString();
 
+    const sanitizedUrlLibrary = Array.isArray(urlLibrary)
+      ? urlLibrary.map((u: any) => ({
+          ...u,
+          descripcion: (u.descripcion || "").replace(/github_pat_[a-zA-Z0-9_]+/g, "[TOKEN_REDACTED]"),
+        }))
+      : undefined;
+
     const record: CloudSyncRecord = {
       email: cleanEmail,
       tasks: Array.isArray(tasks) ? tasks : [],
       globalResources: Array.isArray(globalResources) ? globalResources : undefined,
-      urlLibrary: Array.isArray(urlLibrary) ? urlLibrary : undefined,
+      urlLibrary: sanitizedUrlLibrary,
       contacts: Array.isArray(contacts) ? contacts : undefined,
       tags: Array.isArray(tags) ? tags : undefined,
       esencialTaskId: typeof esencialTaskId === "number" ? esencialTaskId : null,
@@ -1100,6 +1228,636 @@ app.post("/api/sync/email-summary", (req: Request, res: Response) => {
     return res.status(500).json({ error: err.message || "Failed to generate summary" });
   }
 });
+
+// ==========================================
+// MODEL CONTEXT PROTOCOL (MCP) SERVER
+// Permite conectar Google Gemini y asistentes IA
+// directamente con el sistema ejecutivo Task-OS
+// ==========================================
+
+const mcpSessions = new Map<string, Response>();
+
+// MCP Tool Catalog for Gemini
+const MCP_TOOLS = [
+  {
+    name: "get_tasks",
+    description: "Obtiene la lista de tareas del Ledger de Task-OS de Pepe Cortazar. Permite consultar tareas pendientes, en proceso o completadas, o filtrar por dominio (Laura, FGDLL, etc.).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        estado: { type: "string", enum: ["Todos", "Pendiente", "En Proceso", "Completado"], description: "Filtrar por estado de la tarea" },
+        dominio: { type: "string", description: "Filtrar por dominio o área (ej. Laura, FGDLL, Finanzas, Lonas)" },
+        soloActivas: { type: "boolean", description: "Si es true, sólo retorna tareas no completadas" },
+      },
+    },
+  },
+  {
+    name: "create_task",
+    description: "Crea y registra una nueva tarea ejecutiva en el Ledger de Task-OS con solicitante, notas, dominio y prioridad.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tarea: { type: "string", description: "Descripción clara y accionable de la tarea" },
+        solicitante: { type: "string", description: "Nombre de la persona o entidad solicitante (ej. Laura, FGDLL, Personal)" },
+        notas: { type: "string", description: "Observaciones, contexto o especificaciones técnicas" },
+        dominio: { type: "string", description: "Dominio o área (ej. Laura, FGDLL, Finanzas, Lonas)" },
+        esencial: { type: "boolean", description: "Si es true, se marca como la prioridad principal #1 (Ley 8)" },
+      },
+      required: ["tarea"],
+    },
+  },
+  {
+    name: "complete_task",
+    description: "Marca una tarea existente como completada en el Ledger de Task-OS (cumpliendo la Ley 15 de cierre de ciclos).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        taskId: { type: "number", description: "ID numérico de la tarea a completar" },
+        observacion: { type: "string", description: "Nota opcional de cierre o confirmación" },
+      },
+      required: ["taskId"],
+    },
+  },
+  {
+    name: "get_essential_task",
+    description: "Consulta la Tarea Esencial activa (#1 de máxima prioridad según la Ley 8 del Sistema Ejecutivo de Pepe Cortazar).",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "get_financial_summary",
+    description: "Consulta el resumen de Salud Financiera: ingresos acumulados, egresos, saldo neto y cuentas por cobrar.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
+    name: "list_lonas_orders",
+    description: "Consulta los pedidos de lonas y diseño en gran formato registrados en Lonas-OS.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        estado: { type: "string", description: "Filtrar por estado del pedido (Pendiente, En Impresión, Entregado)" },
+      },
+    },
+  },
+  {
+    name: "search_task_os",
+    description: "Búsqueda universal en Task-OS por palabra clave en tareas, subnotas, contactos y pedidos.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Término o palabra a buscar" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "create_solicitud",
+    description: "Crea una solicitud entrante en el buzón de solicitudes de Task-OS con remitente, asunto y mensaje.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        remitente: { type: "string", description: "Nombre de quien envía la solicitud" },
+        asunto: { type: "string", description: "Asunto o título de la solicitud" },
+        mensaje: { type: "string", description: "Contenido del mensaje" },
+        telefono: { type: "string", description: "Teléfono de contacto opcional" },
+      },
+      required: ["remitente", "asunto", "mensaje"],
+    },
+  },
+];
+
+// Helper to execute MCP tool calls
+async function handleMcpToolCall(name: string, args: any = {}) {
+  const syncStore = getSyncStore();
+  const defaultUserKey = "laurcortazar@gmail.com";
+  const userRecord = syncStore[defaultUserKey] || Object.values(syncStore)[0] || {
+    email: defaultUserKey,
+    tasks: [],
+    updatedAt: new Date().toISOString(),
+  };
+
+  switch (name) {
+    case "get_tasks": {
+      let tasks = userRecord.tasks || [];
+      if (args.soloActivas) {
+        tasks = tasks.filter((t: any) => t.estado !== "Completado");
+      }
+      if (args.estado && args.estado !== "Todos") {
+        tasks = tasks.filter((t: any) => t.estado === args.estado);
+      }
+      if (args.dominio) {
+        const dom = args.dominio.toLowerCase();
+        tasks = tasks.filter((t: any) =>
+          (t.dominio && t.dominio.toLowerCase().includes(dom)) ||
+          (t.solicitante && t.solicitante.toLowerCase().includes(dom))
+        );
+      }
+
+      const formatted = tasks.map((t: any) => ({
+        id: t.id,
+        tarea: t.tarea,
+        solicitante: t.solicitante,
+        estado: t.estado,
+        dominio: t.dominio || "General",
+        esencial: userRecord.esencialTaskId === t.id,
+        notas: t.notas || "",
+        fechaIngreso: t.fechaIngreso,
+      }));
+
+      return {
+        total: formatted.length,
+        esencialTaskId: userRecord.esencialTaskId,
+        tasks: formatted,
+      };
+    }
+
+    case "create_task": {
+      const tasks = userRecord.tasks || [];
+      const nextId = tasks.reduce((max: number, t: any) => Math.max(max, t.id || 0), 0) + 1;
+      const now = new Date().toISOString();
+
+      const newTask: TaskItem = {
+        id: nextId,
+        solicitante: (args.solicitante || "Gemini MCP").trim(),
+        tarea: args.tarea.trim(),
+        estado: "Pendiente",
+        fechaIngreso: now,
+        dominio: args.dominio ? args.dominio.trim() : "General",
+        notas: args.notas ? args.notas.trim() : undefined,
+      };
+
+      tasks.unshift(newTask);
+      userRecord.tasks = tasks;
+      userRecord.updatedAt = now;
+
+      if (args.esencial) {
+        userRecord.esencialTaskId = nextId;
+      }
+
+      syncStore[defaultUserKey] = userRecord;
+      saveSyncStore(syncStore);
+
+      return {
+        success: true,
+        message: `Tarea #${nextId} creada exitosamente en Task-OS: "${newTask.tarea}" para ${newTask.solicitante}`,
+        task: newTask,
+      };
+    }
+
+    case "complete_task": {
+      const tasks = userRecord.tasks || [];
+      const taskId = Number(args.taskId);
+      const target = tasks.find((t: any) => t.id === taskId);
+
+      if (!target) {
+        throw new Error(`No se encontró ninguna tarea con el ID #${taskId}`);
+      }
+
+      target.estado = "Completado";
+      target.fechaCompletado = new Date().toISOString();
+      if (args.observacion) {
+        target.notas = target.notas ? `${target.notas}\n\n[Cierre MCP]: ${args.observacion}` : `[Cierre MCP]: ${args.observacion}`;
+      }
+
+      userRecord.tasks = tasks;
+      userRecord.updatedAt = new Date().toISOString();
+      syncStore[defaultUserKey] = userRecord;
+      saveSyncStore(syncStore);
+
+      return {
+        success: true,
+        message: `Tarea #${taskId} ("${target.tarea}") marcada como COMPLETADA exitosamente en Task-OS (Ley 15).`,
+        task: target,
+      };
+    }
+
+    case "get_essential_task": {
+      const tasks = userRecord.tasks || [];
+      const esencialId = userRecord.esencialTaskId;
+      const task = tasks.find((t: any) => t.id === esencialId) || tasks.find((t: any) => t.estado !== "Completado");
+
+      if (!task) {
+        return {
+          hasEssential: false,
+          message: "No hay ninguna tarea esencial activa en este momento en Task-OS.",
+        };
+      }
+
+      return {
+        hasEssential: true,
+        isExplicitlyMarked: userRecord.esencialTaskId === task.id,
+        task: {
+          id: task.id,
+          tarea: task.tarea,
+          solicitante: task.solicitante,
+          estado: task.estado,
+          dominio: task.dominio,
+          notas: task.notas || "",
+        },
+      };
+    }
+
+    case "get_financial_summary": {
+      const finanzasStore = getFinanzasStore();
+      const records = finanzasStore[defaultUserKey] || finanzasStore["default"] || [];
+      let totalIngresos = 0;
+      let totalEgresos = 0;
+
+      records.forEach((r: any) => {
+        const monto = Number(r.monto || 0);
+        if (r.tipo === "Ingreso") totalIngresos += monto;
+        else if (r.tipo === "Egreso") totalEgresos += monto;
+      });
+
+      return {
+        totalIngresos,
+        totalEgresos,
+        saldoNeto: totalIngresos - totalEgresos,
+        totalMovimientos: records.length,
+        ultimosMovimientos: records.slice(0, 5),
+      };
+    }
+
+    case "list_lonas_orders": {
+      const lonasStore = getLonasStore();
+      const orders = lonasStore[defaultUserKey] || lonasStore["default"] || [];
+      let filtered = orders;
+      if (args.estado) {
+        filtered = orders.filter((o: any) => o.estado === args.estado);
+      }
+      return {
+        total: filtered.length,
+        pedidos: filtered.slice(0, 15).map((o: any) => ({
+          id: o.id,
+          folio: o.folio,
+          cliente: o.cliente,
+          medidas: `${o.ancho || 0}m × ${o.alto || 0}m`,
+          material: o.material,
+          total: o.total,
+          anticipo: o.anticipo,
+          saldo: (o.total || 0) - (o.anticipo || 0),
+          estado: o.estado,
+          fechaEntrega: o.fechaEntrega,
+        })),
+      };
+    }
+
+    case "search_task_os": {
+      const q = (args.query || "").toLowerCase();
+      const tasks = (userRecord.tasks || []).filter((t: any) =>
+        (t.tarea && t.tarea.toLowerCase().includes(q)) ||
+        (t.solicitante && t.solicitante.toLowerCase().includes(q)) ||
+        (t.notas && t.notas.toLowerCase().includes(q))
+      );
+      const contacts = (userRecord.contacts || []).filter((c: any) =>
+        (c.nombre && c.nombre.toLowerCase().includes(q)) ||
+        (c.telefono && c.telefono.includes(q)) ||
+        (c.rol && c.rol.toLowerCase().includes(q))
+      );
+
+      return {
+        query: args.query,
+        tasksCount: tasks.length,
+        contactsCount: contacts.length,
+        tasks: tasks.slice(0, 10),
+        contacts: contacts.slice(0, 5),
+      };
+    }
+
+    case "create_solicitud": {
+      const store = getSolicitudesStore();
+      const userSolicitudes = store[defaultUserKey] || store["default"] || [];
+      const newSol = {
+        id: `sol-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        solicitante: args.remitente.trim(),
+        telefono: args.telefono ? args.telefono.trim() : undefined,
+        titulo: `[Gemini MCP] ${args.asunto.trim()}`,
+        descripcion: args.mensaje.trim(),
+        canal: "Web" as const,
+        prioridad: "Alta" as const,
+        estado: "Nueva" as const,
+        fechaIngreso: new Date().toISOString(),
+        leida: false,
+      };
+
+      userSolicitudes.unshift(newSol);
+      store[defaultUserKey] = userSolicitudes;
+      saveSolicitudesStore(store);
+
+      return {
+        success: true,
+        message: `Solicitud creada en el buzón de Task-OS con ID ${newSol.id}`,
+        solicitud: newSol,
+      };
+    }
+
+    default:
+      throw new Error(`Herramienta MCP desconocida: "${name}"`);
+  }
+}
+
+// CORS Helper for MCP
+function setMcpCorsHeaders(res: Response) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+}
+
+app.options(["/mcp", "/sse", "/mcp/sse", "/api/mcp", "/api/sse", "/message", "/mcp/message"], (_req: Request, res: Response) => {
+  setMcpCorsHeaders(res);
+  res.status(204).end();
+});
+
+// GET /sse and GET /mcp (SSE endpoint + web status page)
+app.get(["/sse", "/mcp/sse", "/api/sse"], (req: Request, res: Response) => {
+  setMcpCorsHeaders(res);
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "ais-pre-dwgikgfu64evytiqb4nzms-347865637985.us-east1.run.app";
+  const baseUrl = `${proto}://${host}`;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.flushHeaders?.();
+
+  const sessionId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  mcpSessions.set(sessionId, res);
+
+  // Send standard MCP endpoint event (providing absolute URL for Gemini and external clients)
+  res.write(`event: endpoint\ndata: ${baseUrl}/mcp/message?sessionId=${sessionId}\n\n`);
+
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(": keep-alive\n\n");
+    } catch (_) {
+      clearInterval(heartbeat);
+    }
+  }, 15000);
+
+  req.on("close", () => {
+    clearInterval(heartbeat);
+    mcpSessions.delete(sessionId);
+  });
+});
+
+app.get(["/mcp", "/api/mcp"], (req: Request, res: Response) => {
+  setMcpCorsHeaders(res);
+
+  const proto = req.headers["x-forwarded-proto"] || "https";
+  const host = req.headers["x-forwarded-host"] || req.headers.host || "ais-pre-dwgikgfu64evytiqb4nzms-347865637985.us-east1.run.app";
+  const baseUrl = `${proto}://${host}`;
+
+  // If client requests SSE stream or query has transport=sse
+  if (req.headers.accept?.includes("text/event-stream") || req.query.transport === "sse" || req.query.sse === "true") {
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.flushHeaders?.();
+
+    const sessionId = `mcp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    mcpSessions.set(sessionId, res);
+
+    res.write(`event: endpoint\ndata: ${baseUrl}/mcp/message?sessionId=${sessionId}\n\n`);
+
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(": keep-alive\n\n");
+      } catch (_) {
+        clearInterval(heartbeat);
+      }
+    }, 15000);
+
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      mcpSessions.delete(sessionId);
+    });
+    return;
+  }
+
+  // If client requests JSON representation (or Gemini client checks options)
+  if (req.headers.accept?.includes("application/json") || req.query.format === "json") {
+    return res.json({
+      status: "online",
+      server: "Task-OS Model Context Protocol Server",
+      protocolVersion: "2024-11-05",
+      sseEndpoint: `${baseUrl}/sse`,
+      messageEndpoint: `${baseUrl}/mcp/message`,
+      toolsCount: MCP_TOOLS.length,
+      tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    });
+  }
+
+  // Friendly web browser page
+  const mcpUrl = `${baseUrl}/mcp`;
+  const sseUrl = `${baseUrl}/sse`;
+
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(`
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task-OS • Servidor Model Context Protocol (MCP)</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0c0a09; color: #f5f5f4; margin: 0; padding: 24px; line-height: 1.5; }
+    .card { max-width: 640px; margin: 30px auto; background: #1c1917; border: 1px solid #292524; border-radius: 20px; padding: 28px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #34d399; font-size: 12px; font-weight: 700; }
+    .url-box { background: #0c0a09; border: 1px solid #44403c; border-radius: 12px; padding: 12px 14px; font-family: monospace; font-size: 13px; color: #f59e0b; word-break: break-all; margin: 16px 0; }
+    ol { padding-left: 20px; font-size: 13px; color: #d6d3d1; }
+    li { margin-bottom: 8px; }
+    .tool-list { list-style: none; padding: 0; display: grid; gap: 8px; margin-top: 14px; }
+    .tool-item { background: #292524; padding: 10px 14px; border-radius: 10px; font-size: 12px; border-left: 3px solid #f59e0b; }
+    .tool-name { font-weight: bold; color: #fafaf9; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <h2 style="margin: 0; font-size: 20px;">🤖 Task-OS MCP Server</h2>
+      <span class="badge">● Online & Activo</span>
+    </div>
+    <p style="font-size: 13px; color: #a8a29e; margin-top: 8px;">
+      Servidor oficial de <strong>Model Context Protocol (MCP)</strong> de Task-OS para conectar Google Gemini, Claude y asistentes IA a tu Ledger ejecutivo.
+    </p>
+
+    <div style="margin-top: 20px;">
+      <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; color: #a8a29e;">URL para conectar en Gemini:</div>
+      <div class="url-box">${mcpUrl}</div>
+    </div>
+
+    <div style="margin-top: 20px;">
+      <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f5f5f4;">¿Cómo conectarlo en Google Gemini?</h4>
+      <ol>
+        <li>En la ventana <strong>"Conéctate a un servidor de MCP"</strong> de Gemini:</li>
+        <li>Pega en <strong>URL del servidor de MCP</strong>: <code>${mcpUrl}</code></li>
+        <li>En <strong>Configuración adicional</strong> (ID / Secreto): déjalo <strong>vacío</strong> (no se requiere).</li>
+        <li>Haz clic en <strong>Siguiente</strong> y Gemini cargará todas las herramientas de tu Task-OS.</li>
+      </ol>
+    </div>
+
+    <div style="margin-top: 24px;">
+      <h4 style="margin: 0 0 8px 0; font-size: 14px; color: #f5f5f4;">Herramientas disponibles (8 Tools):</h4>
+      <div class="tool-list">
+        <div class="tool-item"><span class="tool-name">get_tasks</span> — Consulta tareas pendientes, en proceso y completadas.</div>
+        <div class="tool-item"><span class="tool-name">create_task</span> — Registra una nueva tarea en tu Ledger con prioridad y notas.</div>
+        <div class="tool-item"><span class="tool-name">complete_task</span> — Marca una tarea como finalizada (Ley 15).</div>
+        <div class="tool-item"><span class="tool-name">get_essential_task</span> — Consulta la tarea #1 de máxima prioridad (Ley 8).</div>
+        <div class="tool-item"><span class="tool-name">get_financial_summary</span> — Consulta ingresos, egresos y saldo en Finanzas.</div>
+        <div class="tool-item"><span class="tool-name">list_lonas_orders</span> — Lista pedidos de lonas y diseño en gran formato.</div>
+        <div class="tool-item"><span class="tool-name">search_task_os</span> — Búsqueda universal por palabra clave.</div>
+        <div class="tool-item"><span class="tool-name">create_solicitud</span> — Envía una solicitud al buzón de entrada.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  `);
+});
+
+// JSON-RPC 2.0 Handler for POST /mcp and POST /mcp/message
+async function handleMcpJsonRpc(req: Request, res: Response) {
+  setMcpCorsHeaders(res);
+  const body = req.body;
+
+  if (!body || typeof body !== "object") {
+    return res.status(400).json({
+      jsonrpc: "2.0",
+      id: null,
+      error: { code: -32700, message: "Parse error: Invalid JSON payload" },
+    });
+  }
+
+  const { jsonrpc = "2.0", id, method, params = {} } = body;
+
+  try {
+    switch (method) {
+      case "initialize": {
+        const result = {
+          protocolVersion: "2024-11-05",
+          capabilities: {
+            tools: { listChanged: true },
+            resources: {},
+            prompts: {},
+          },
+          serverInfo: {
+            name: "task-os-mcp-server",
+            version: "1.0.0",
+          },
+        };
+        const responsePayload = { jsonrpc: "2.0", id, result };
+
+        // If active SSE session, also notify
+        const sessionId = req.query.sessionId as string;
+        if (sessionId && mcpSessions.has(sessionId)) {
+          mcpSessions.get(sessionId)!.write(`event: message\ndata: ${JSON.stringify(responsePayload)}\n\n`);
+        }
+
+        return res.json(responsePayload);
+      }
+
+      case "notifications/initialized":
+      case "initialized": {
+        return res.status(200).json({ jsonrpc: "2.0", id: id ?? null, result: {} });
+      }
+
+      case "ping": {
+        return res.json({ jsonrpc: "2.0", id, result: {} });
+      }
+
+      case "tools/list": {
+        const responsePayload = {
+          jsonrpc: "2.0",
+          id,
+          result: {
+            tools: MCP_TOOLS,
+          },
+        };
+
+        const sessionId = req.query.sessionId as string;
+        if (sessionId && mcpSessions.has(sessionId)) {
+          mcpSessions.get(sessionId)!.write(`event: message\ndata: ${JSON.stringify(responsePayload)}\n\n`);
+        }
+
+        return res.json(responsePayload);
+      }
+
+      case "tools/call": {
+        const toolName = params.name;
+        const toolArgs = params.arguments || {};
+
+        try {
+          const toolResult = await handleMcpToolCall(toolName, toolArgs);
+          const responsePayload = {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult, null, 2),
+                },
+              ],
+              isError: false,
+            },
+          };
+
+          const sessionId = req.query.sessionId as string;
+          if (sessionId && mcpSessions.has(sessionId)) {
+            mcpSessions.get(sessionId)!.write(`event: message\ndata: ${JSON.stringify(responsePayload)}\n\n`);
+          }
+
+          return res.json(responsePayload);
+        } catch (toolErr: any) {
+          const errorPayload = {
+            jsonrpc: "2.0",
+            id,
+            result: {
+              content: [
+                {
+                  type: "text",
+                  text: `Error al ejecutar ${toolName}: ${toolErr.message}`,
+                },
+              ],
+              isError: true,
+            },
+          };
+          return res.json(errorPayload);
+        }
+      }
+
+      default: {
+        return res.status(200).json({
+          jsonrpc: "2.0",
+          id,
+          error: {
+            code: -32601,
+            message: `Método MCP no encontrado: "${method}"`,
+          },
+        });
+      }
+    }
+  } catch (error: any) {
+    console.error("[MCP Server Error]", error);
+    return res.status(500).json({
+      jsonrpc: "2.0",
+      id: id ?? null,
+      error: {
+        code: -32603,
+        message: error.message || "Internal MCP Server error",
+      },
+    });
+  }
+}
+
+app.post(["/mcp", "/sse", "/message", "/mcp/message", "/sse/message", "/api/mcp", "/api/mcp/message"], handleMcpJsonRpc);
 
 // Executive Router: URL Metadata extraction & 3-5 indexing keywords generation
 app.post("/api/router/extract-metadata", async (req: Request, res: Response) => {
