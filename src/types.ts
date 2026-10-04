@@ -89,6 +89,18 @@ export interface UrlLibraryItem {
 
 export type UrlViewMode = "grid" | "list" | "categories" | "daily";
 
+export interface QuickResponseMessage {
+  id: string;
+  titulo: string;
+  categoria: string;
+  mensaje: string;
+  etiquetas: string[];
+  fecha: string;
+  copiasCount?: number;
+  urlId?: string;
+  urlEnlace?: string;
+}
+
 export type RouterAction = "ROUTE_RESOURCE" | "CREATE_TASK" | "UNIVERSAL_SEARCH" | "SAVE_URL_LIBRARY";
 
 export interface RouterDestination {
@@ -135,9 +147,41 @@ export interface TaskOSExportData {
   tasks: TaskItem[];
   globalResources: GlobalResource[];
   urlLibrary?: UrlLibraryItem[];
+  quickResponses?: QuickResponseMessage[];
   contacts?: Contact[];
   tags?: TagItem[];
   esencialTaskId?: number | null;
+}
+
+export interface GoogleDriveBackupConfig {
+  enabled: boolean;
+  frequency: "daily" | "weekly";
+  preferredDayOfWeek?: number; // 0 = Domingo, 1 = Lunes, etc. (para semanal)
+  preferredHour?: number; // 0 - 23 (hora del día para respaldo)
+  lastBackupAt?: string;
+  nextScheduledBackupAt?: string;
+  lastBackupFileId?: string;
+  lastBackupFileName?: string;
+  lastBackupWebViewLink?: string;
+  lastBackupSizeBytes?: number;
+  lastBackupStatus?: "success" | "error" | "pending";
+  lastBackupError?: string;
+  totalBackupsRun?: number;
+}
+
+export interface GoogleDriveBackupRecord {
+  id: string;
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  createdAt: string;
+  webViewLink?: string;
+  status: "success" | "failed";
+  frequency?: "daily" | "weekly" | "manual";
+  tasksCount: number;
+  resourcesCount: number;
+  urlsCount: number;
+  quickResponsesCount?: number;
 }
 
 export interface TaskOSResponse {

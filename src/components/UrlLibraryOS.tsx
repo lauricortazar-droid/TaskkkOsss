@@ -26,8 +26,13 @@ import {
   Paperclip,
   TrendingUp,
   FolderOpen,
+  MessageSquare,
+  MessageCircle,
+  Calendar,
+  Hash,
+  Send,
 } from "lucide-react";
-import { UrlLibraryItem, UrlViewMode, TaskItem, LonasOrder, PrintItem } from "../types";
+import { UrlLibraryItem, UrlViewMode, TaskItem, LonasOrder, PrintItem, QuickResponseMessage } from "../types";
 import { fetchUrlMetadata } from "../lib/executiveRouter";
 import { playChime } from "../utils/audio";
 
@@ -43,7 +48,79 @@ interface UrlLibraryOSProps {
   onSendToProcessor?: (text: string) => void;
   onNavigateToLonas?: (orderFolio?: number) => void;
   onNavigateToPrint?: (printItem: PrintItem) => void;
+  quickResponses?: QuickResponseMessage[];
+  onAddQuickResponse?: (item: Omit<QuickResponseMessage, "id">) => void;
+  onUpdateQuickResponse?: (item: QuickResponseMessage) => void;
+  onDeleteQuickResponse?: (id: string) => void;
 }
+
+export const PRESET_RESPONSE_CATEGORIES = [
+  "Atención a Clientes",
+  "Finanzas & Bancos",
+  "Diseño & Creatividad",
+  "Producción & Entrega",
+  "Diplomado FGDLL",
+  "Tecnología & Soporte",
+  "Lonas & Playeras",
+  "General",
+];
+
+export const INITIAL_QUICK_RESPONSES: QuickResponseMessage[] = [
+  {
+    id: "qr-solicitud-recibida",
+    titulo: "Confirmación de Recepción de Solicitud / Folio",
+    categoria: "Atención a Clientes",
+    mensaje: "¡Hola! 👋 Confirmamos la recepción de tu solicitud. Ya fue registrada con éxito en nuestro sistema y comenzaremos a revisarla de inmediato. Te mantendremos informado por aquí del avance.",
+    etiquetas: ["#whatsapp", "#clientes", "#recepcion", "#solicitud"],
+    fecha: "2026-10-04",
+    copiasCount: 14,
+  },
+  {
+    id: "qr-cotizacion-anticipo",
+    titulo: "Cotización & Datos Bancarios para Anticipo",
+    categoria: "Finanzas & Bancos",
+    mensaje: "¡Hola! Te compartimos el resumen de tu pedido. Para arrancar la producción de lonas/playeras requerimos el 50% de anticipo. Datos bancarios:\n🏦 BBVA Bancomer\nCuenta: 0123456789\nCLABE: 012180001234567891\nBeneficiario: Grupo Cortazar\nPor favor envíanos tu comprobante en cuanto quede listo. ¡Muchas gracias!",
+    etiquetas: ["#cotizacion", "#anticipo", "#bancos", "#lonas", "#playeras"],
+    fecha: "2026-10-04",
+    copiasCount: 22,
+  },
+  {
+    id: "qr-visto-bueno-diseno",
+    titulo: "Visto Bueno de Diseño en Google Drive",
+    categoria: "Diseño & Creatividad",
+    mensaje: "¡Hola! Tu diseño ya está listo en alta resolución para revisión. Por favor revísalo con calma (ortografía, teléfonos, medidas y acabados) para darnos tu visto bueno final y proceder a imprimirlo:\n📁 Enlace a Google Drive: {link}",
+    etiquetas: ["#diseno", "#drive", "#visto-bueno", "#revision"],
+    fecha: "2026-10-04",
+    copiasCount: 19,
+  },
+  {
+    id: "qr-pedido-listo",
+    titulo: "Pedido Concluido y Listo para Entrega",
+    categoria: "Producción & Entrega",
+    mensaje: "¡Excelentes noticias! 🌟 Tu trabajo ya está impreso, terminado con ojillos/refuerzos y con control de calidad listo. Puedes pasar a recogerlo en nuestro taller o confirmarnos si prefieres entrega programada. ¡Quedó impecable!",
+    etiquetas: ["#entrega", "#listo", "#produccion", "#lonas"],
+    fecha: "2026-10-04",
+    copiasCount: 16,
+  },
+  {
+    id: "qr-diplomado-fgdll",
+    titulo: "Bienvenida & Materiales Diplomado de Liderazgo FGDLL",
+    categoria: "Diplomado FGDLL",
+    mensaje: "Estimado/a participante: Te damos la más cordial bienvenida al Diplomado de Liderazgo de la Fundación Grupo de los Diez Líderes. Las sesiones se llevan a cabo los días sábados. Puedes consultar el calendario, temarios y lecturas en https://fgdll.org/diplomado. ¡Un honor caminar juntos!",
+    etiquetas: ["#diplomado", "#liderazgo", "#fgdll", "#bienvenida"],
+    fecha: "2026-10-04",
+    copiasCount: 11,
+  },
+  {
+    id: "qr-soporte-fgdll",
+    titulo: "Soporte Técnico y Cuentas de Acceso FGDLL",
+    categoria: "Tecnología & Soporte",
+    mensaje: "Hola. Para el restablecimiento de contraseñas, accesos a la plataforma o sincronización de cuentas institucionales FGDLL, por favor compártenos tu nombre completo y correo registrado. Validaremos tus credenciales de inmediato.",
+    etiquetas: ["#soporte", "#tecnologia", "#cuentas", "#fgdll"],
+    fecha: "2026-10-04",
+    copiasCount: 8,
+  },
+];
 
 export const PRESET_URL_CATEGORIES = [
   "Música & Audio",
@@ -201,7 +278,45 @@ export default function UrlLibraryOS({
   onSendToProcessor,
   onNavigateToLonas,
   onNavigateToPrint,
+  quickResponses,
+  onAddQuickResponse,
+  onUpdateQuickResponse,
+  onDeleteQuickResponse,
 }: UrlLibraryOSProps) {
+  // Main Section Tab: URLs vs Respuestas Rápidas
+  const [activeMainSection, setActiveMainSection] = useState<"urls" | "respuestas">("urls");
+
+  // Fallback state if quickResponses is not passed from root
+  const [localResponses, setLocalResponses] = useState<QuickResponseMessage[]>(() => {
+    try {
+      const s = localStorage.getItem("task_os_quick_responses_v1");
+      if (s) {
+        const p = JSON.parse(s);
+        if (Array.isArray(p) && p.length > 0) return p;
+      }
+    } catch (_) {}
+    return INITIAL_QUICK_RESPONSES;
+  });
+
+  const currentResponses = quickResponses && quickResponses.length > 0 ? quickResponses : localResponses;
+
+  // Quick Responses UI and Search State
+  const [responseSearchQuery, setResponseSearchQuery] = useState("");
+  const [selectedResponseCategory, setSelectedResponseCategory] = useState<string>("Todas");
+  const [selectedResponseTag, setSelectedResponseTag] = useState<string | null>(null);
+  const [responseSortBy, setResponseSortBy] = useState<"copias" | "recent" | "alpha">("copias");
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+
+  // Quick Response Modal State
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+  const [editingResponse, setEditingResponse] = useState<QuickResponseMessage | null>(null);
+  const [respFormTitulo, setRespFormTitulo] = useState("");
+  const [respFormCategoria, setRespFormCategoria] = useState("Atención a Clientes");
+  const [respFormMensaje, setRespFormMensaje] = useState("");
+  const [respFormEtiquetas, setRespFormEtiquetas] = useState("");
+  const [respFormFecha, setRespFormFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [respFormUrlEnlace, setRespFormUrlEnlace] = useState("");
+
   const [viewMode, setViewMode] = useState<UrlViewMode>("grid");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("Todas");
@@ -291,6 +406,189 @@ export default function UrlLibraryOS({
 
     return result;
   }, [urls, searchQuery, selectedCategory, onlyFavorites, filterOnlyDesigns, sortBy, viewMode]);
+
+  // Distinct Tags from Quick Responses
+  const availableResponseTags = useMemo(() => {
+    const set = new Set<string>();
+    currentResponses.forEach((qr) => {
+      (qr.etiquetas || []).forEach((t) => {
+        const clean = t.trim().toLowerCase();
+        if (clean) set.add(clean.startsWith("#") ? clean : `#${clean}`);
+      });
+    });
+    return Array.from(set);
+  }, [currentResponses]);
+
+  // Filter & Sort Quick Responses
+  const filteredResponses = useMemo(() => {
+    let result = [...currentResponses];
+
+    if (selectedResponseCategory !== "Todas") {
+      result = result.filter(
+        (r) => (r.categoria || "General").toLowerCase() === selectedResponseCategory.toLowerCase()
+      );
+    }
+
+    if (selectedResponseTag) {
+      const cleanTag = selectedResponseTag.toLowerCase();
+      result = result.filter((r) =>
+        (r.etiquetas || []).some((t) => (t.startsWith("#") ? t.toLowerCase() : `#${t.toLowerCase()}`) === cleanTag)
+      );
+    }
+
+    if (responseSearchQuery.trim()) {
+      const q = responseSearchQuery.toLowerCase().trim();
+      result = result.filter((r) => {
+        const titleMatch = r.titulo.toLowerCase().includes(q);
+        const msgMatch = r.mensaje.toLowerCase().includes(q);
+        const catMatch = r.categoria.toLowerCase().includes(q);
+        const tagMatch = (r.etiquetas || []).some((t) => t.toLowerCase().includes(q));
+        return titleMatch || msgMatch || catMatch || tagMatch;
+      });
+    }
+
+    result.sort((a, b) => {
+      if (responseSortBy === "copias") {
+        return (b.copiasCount || 0) - (a.copiasCount || 0);
+      }
+      if (responseSortBy === "recent") {
+        return (b.fecha || "").localeCompare(a.fecha || "");
+      }
+      if (responseSortBy === "alpha") {
+        return a.titulo.localeCompare(b.titulo);
+      }
+      return 0;
+    });
+
+    return result;
+  }, [currentResponses, selectedResponseCategory, selectedResponseTag, responseSearchQuery, responseSortBy]);
+
+  // Response Modals and Handlers
+  const handleOpenAddResponseModal = () => {
+    setEditingResponse(null);
+    setRespFormTitulo("");
+    setRespFormCategoria("Atención a Clientes");
+    setRespFormMensaje("");
+    setRespFormEtiquetas("#whatsapp, #clientes");
+    setRespFormFecha(new Date().toISOString().slice(0, 10));
+    setRespFormUrlEnlace("");
+    setIsResponseModalOpen(true);
+  };
+
+  const handleOpenEditResponseModal = (item: QuickResponseMessage) => {
+    setEditingResponse(item);
+    setRespFormTitulo(item.titulo);
+    setRespFormCategoria(item.categoria || "Atención a Clientes");
+    setRespFormMensaje(item.mensaje);
+    setRespFormEtiquetas((item.etiquetas || []).join(", "));
+    setRespFormFecha(item.fecha || new Date().toISOString().slice(0, 10));
+    setRespFormUrlEnlace(item.urlEnlace || "");
+    setIsResponseModalOpen(true);
+  };
+
+  const handleSaveResponseModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!respFormTitulo.trim() || !respFormMensaje.trim()) return;
+
+    const tagsArray = respFormEtiquetas
+      .split(/[,;\s]+/)
+      .map((t) => t.trim().toLowerCase())
+      .filter((t) => t.length > 0)
+      .map((t) => (t.startsWith("#") ? t : `#${t}`));
+
+    if (editingResponse) {
+      const updated: QuickResponseMessage = {
+        ...editingResponse,
+        titulo: respFormTitulo.trim(),
+        categoria: respFormCategoria,
+        mensaje: respFormMensaje.trim(),
+        etiquetas: tagsArray,
+        fecha: respFormFecha || new Date().toISOString().slice(0, 10),
+        urlEnlace: respFormUrlEnlace.trim() || undefined,
+      };
+      if (onUpdateQuickResponse) {
+        onUpdateQuickResponse(updated);
+      } else {
+        const next = currentResponses.map((r) => (r.id === updated.id ? updated : r));
+        setLocalResponses(next);
+        try {
+          localStorage.setItem("task_os_quick_responses_v1", JSON.stringify(next));
+        } catch (_) {}
+      }
+    } else {
+      const newItem: Omit<QuickResponseMessage, "id"> = {
+        titulo: respFormTitulo.trim(),
+        categoria: respFormCategoria,
+        mensaje: respFormMensaje.trim(),
+        etiquetas: tagsArray,
+        fecha: respFormFecha || new Date().toISOString().slice(0, 10),
+        copiasCount: 0,
+        urlEnlace: respFormUrlEnlace.trim() || undefined,
+      };
+      if (onAddQuickResponse) {
+        onAddQuickResponse(newItem);
+      } else {
+        const complete: QuickResponseMessage = {
+          ...newItem,
+          id: `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        };
+        const next = [complete, ...currentResponses];
+        setLocalResponses(next);
+        try {
+          localStorage.setItem("task_os_quick_responses_v1", JSON.stringify(next));
+        } catch (_) {}
+      }
+    }
+    setIsResponseModalOpen(false);
+    playChime("success");
+  };
+
+  const handleDeleteResponse = (id: string) => {
+    if (window.confirm("¿Seguro que deseas eliminar esta respuesta rápida?")) {
+      if (onDeleteQuickResponse) {
+        onDeleteQuickResponse(id);
+      } else {
+        const next = currentResponses.filter((r) => r.id !== id);
+        setLocalResponses(next);
+        try {
+          localStorage.setItem("task_os_quick_responses_v1", JSON.stringify(next));
+        } catch (_) {}
+      }
+      playChime("tick");
+    }
+  };
+
+  const handleCopyQuickResponse = async (item: QuickResponseMessage) => {
+    try {
+      await navigator.clipboard.writeText(item.mensaje);
+      setCopiedMessageId(item.id);
+      playChime("success");
+      const updatedItem = {
+        ...item,
+        copiasCount: (item.copiasCount || 0) + 1,
+      };
+      if (onUpdateQuickResponse) {
+        onUpdateQuickResponse(updatedItem);
+      } else {
+        const next = currentResponses.map((r) => (r.id === item.id ? updatedItem : r));
+        setLocalResponses(next);
+        try {
+          const updated = currentResponses.map((r) => (r.id === item.id ? updatedItem : r));
+          localStorage.setItem("task_os_quick_responses_v1", JSON.stringify(updated));
+        } catch (_) {}
+      }
+      setTimeout(() => {
+        setCopiedMessageId((prev) => (prev === item.id ? null : prev));
+      }, 2500);
+    } catch (err) {
+      console.error("Failed to copy quick response message", err);
+    }
+  };
+
+  const handleSendViaWhatsApp = (item: QuickResponseMessage) => {
+    const encoded = encodeURIComponent(item.mensaje);
+    window.open(`https://wa.me/?text=${encoded}`, "_blank", "noopener,noreferrer");
+  };
 
   // Distinct categories available in library
   const availableCategories = useMemo(() => {
@@ -597,21 +895,69 @@ export default function UrlLibraryOS({
 
   return (
     <div id="url-library-os-container" className="space-y-4">
-      {/* Top Banner & Control Deck */}
-      <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-4 sm:p-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-amber-500 text-stone-950 font-bold shadow-xs">
-                <Bookmark size={18} />
-              </span>
+      {/* Primary Section Switcher: URLs vs Respuestas Rápidas */}
+      <div className="flex items-center gap-2 p-1.5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs">
+        <button
+          type="button"
+          id="btn-tab-urls"
+          onClick={() => setActiveMainSection("urls")}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            activeMainSection === "urls"
+              ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 shadow-sm"
+              : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+          }`}
+        >
+          <Bookmark size={15} className={activeMainSection === "urls" ? "text-amber-400 dark:text-amber-600" : ""} />
+          <span>Biblioteca de Enlaces & URLs</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+            activeMainSection === "urls"
+              ? "bg-amber-500 text-stone-950"
+              : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
+          }`}>
+            {urls.length}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          id="btn-tab-respuestas-rapidas"
+          onClick={() => setActiveMainSection("respuestas")}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+            activeMainSection === "respuestas"
+              ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 shadow-sm"
+              : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+          }`}
+        >
+          <MessageSquare size={15} className={activeMainSection === "respuestas" ? "text-amber-400 dark:text-amber-600" : ""} />
+          <span>Respuestas Rápidas (Copiar Mensajes)</span>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${
+            activeMainSection === "respuestas"
+              ? "bg-emerald-500 text-white"
+              : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300"
+          }`}>
+            {currentResponses.length}
+          </span>
+        </button>
+      </div>
+
+      {/* SECTION 1: URLS LIBRARY */}
+      {activeMainSection === "urls" && (
+        <div className="space-y-4">
+          {/* Top Banner & Control Deck */}
+          <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 tracking-tight flex items-center gap-2">
-                  Biblioteca de URLs del Día a Día
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                    {urls.length} enlaces
+                <div className="flex items-center gap-2">
+                  <span className="p-2 rounded-xl bg-amber-500 text-stone-950 font-bold shadow-xs">
+                    <Bookmark size={18} />
                   </span>
-                </h2>
+                  <div>
+                    <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 tracking-tight flex items-center gap-2">
+                      Biblioteca de URLs del Día a Día
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                        {urls.length} enlaces
+                      </span>
+                    </h2>
                 <p className="text-xs text-stone-500 dark:text-stone-400">
                   Herramientas, estudios de IA (Suno, ChatGPT, Canva) y recursos esenciales listos para lanzar, editar y sincronizar.
                 </p>
@@ -1022,22 +1368,32 @@ export default function UrlLibraryOS({
                   type="button"
                   onClick={() => handleLaunchUrl(item)}
                   className="flex-1 py-1.5 px-2.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-xs flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-2xs"
-                  title="Abrir enlace en pestaña nueva"
+                  title="Abrir pestaña en un enlace nuevo"
                 >
                   <ExternalLink size={13} className="text-amber-400 dark:text-amber-600" />
-                  <span>Abrir</span>
+                  <span>Abrir enlace</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => handleCopyUrl(item)}
-                  className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300 transition-colors"
-                  title="Copiar URL al portapapeles"
+                  className={`py-1.5 px-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1 transition-all active:scale-95 border ${
+                    copiedId === item.id
+                      ? "bg-emerald-600 text-white border-emerald-600"
+                      : "border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300"
+                  }`}
+                  title="Copiar link al portapapeles"
                 >
                   {copiedId === item.id ? (
-                    <Check size={14} className="text-emerald-500" />
+                    <>
+                      <Check size={13} className="text-white" />
+                      <span>¡Copiado!</span>
+                    </>
                   ) : (
-                    <Copy size={14} />
+                    <>
+                      <Copy size={13} />
+                      <span>Copiar link</span>
+                    </>
                   )}
                 </button>
 
@@ -1176,27 +1532,37 @@ export default function UrlLibraryOS({
                     </td>
 
                     <td className="py-2.5 px-3 text-right whitespace-nowrap">
-                      <div className="inline-flex items-center gap-1">
+                      <div className="inline-flex items-center gap-1.5">
                         <button
                           type="button"
                           onClick={() => handleLaunchUrl(item)}
-                          className="px-2 py-1 rounded-lg bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
-                          title="Abrir enlace"
+                          className="px-2.5 py-1 rounded-lg bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 font-bold text-[11px] inline-flex items-center gap-1 shadow-2xs"
+                          title="Abrir pestaña en un enlace"
                         >
                           <ExternalLink size={11} className="text-amber-400 dark:text-amber-600" />
-                          <span>Abrir</span>
+                          <span>Abrir enlace</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => handleCopyUrl(item)}
-                          className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors"
-                          title="Copiar URL"
+                          className={`px-2 py-1 rounded-lg border font-bold text-[11px] inline-flex items-center gap-1 transition-colors ${
+                            copiedId === item.id
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300"
+                          }`}
+                          title="Copiar link al portapapeles"
                         >
                           {copiedId === item.id ? (
-                            <Check size={13} className="text-emerald-500" />
+                            <>
+                              <Check size={11} className="text-white" />
+                              <span>¡Copiado!</span>
+                            </>
                           ) : (
-                            <Copy size={13} />
+                            <>
+                              <Copy size={11} />
+                              <span>Copiar link</span>
+                            </>
                           )}
                         </button>
 
@@ -1287,27 +1653,38 @@ export default function UrlLibraryOS({
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between pt-2 border-t border-stone-200/50 dark:border-stone-700/50 text-xs">
+                    <div className="flex items-center justify-between pt-2 border-t border-stone-200/50 dark:border-stone-700/50 text-xs gap-1.5">
                       <button
                         type="button"
                         onClick={() => handleLaunchUrl(item)}
-                        className="font-bold text-[11px] text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1"
+                        className="font-bold text-[11px] py-1 px-2 rounded-lg bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 hover:bg-stone-800 flex items-center gap-1 shadow-2xs"
+                        title="Abrir pestaña en un enlace"
                       >
-                        <ExternalLink size={12} />
-                        Lanzar
+                        <ExternalLink size={12} className="text-amber-400 dark:text-amber-600" />
+                        <span>Abrir enlace</span>
                       </button>
 
                       <div className="flex items-center gap-1">
                         <button
                           type="button"
                           onClick={() => handleCopyUrl(item)}
-                          className="p-1 rounded text-stone-400 hover:text-stone-700"
-                          title="Copiar"
+                          className={`py-1 px-2 rounded-lg border font-bold text-[11px] flex items-center gap-1 transition-colors ${
+                            copiedId === item.id
+                              ? "bg-emerald-600 text-white border-emerald-600"
+                              : "border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300"
+                          }`}
+                          title="Copiar link al portapapeles"
                         >
                           {copiedId === item.id ? (
-                            <Check size={12} className="text-emerald-500" />
+                            <>
+                              <Check size={11} className="text-white" />
+                              <span>¡Copiado!</span>
+                            </>
                           ) : (
-                            <Copy size={12} />
+                            <>
+                              <Copy size={11} />
+                              <span>Copiar link</span>
+                            </>
                           )}
                         </button>
                         <button
@@ -1343,37 +1720,373 @@ export default function UrlLibraryOS({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
             {filteredUrls.map((item) => (
               <div
                 key={item.id}
-                onClick={() => handleLaunchUrl(item)}
-                className="p-3.5 rounded-2xl border border-stone-200 dark:border-stone-700/80 bg-white dark:bg-stone-800/80 hover:border-amber-500 hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group active:scale-95 min-h-[105px]"
+                className="p-3.5 rounded-2xl border border-stone-200 dark:border-stone-700/80 bg-white dark:bg-stone-800/80 hover:border-amber-500 hover:shadow-md transition-all flex flex-col justify-between group min-h-[120px]"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="w-10 h-10 rounded-xl bg-stone-50 dark:bg-stone-900 p-1.5 flex items-center justify-center border border-stone-200 dark:border-stone-700 shrink-0">
-                    {item.icon ? (
-                      <img src={item.icon} alt="" className="w-full h-full object-contain" />
-                    ) : (
-                      <Globe size={18} className="text-stone-400" />
-                    )}
+                <div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="w-10 h-10 rounded-xl bg-stone-50 dark:bg-stone-900 p-1.5 flex items-center justify-center border border-stone-200 dark:border-stone-700 shrink-0">
+                      {item.icon ? (
+                        <img src={item.icon} alt="" className="w-full h-full object-contain" />
+                      ) : (
+                        <Globe size={18} className="text-stone-400" />
+                      )}
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
+                      {item.clicks || 0} 🔥
+                    </span>
                   </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-full font-bold bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300">
-                    {item.clicks || 0} 🔥
-                  </span>
+
+                  <div className="mt-2 min-w-0">
+                    <h4
+                      onClick={() => handleLaunchUrl(item)}
+                      className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate group-hover:text-amber-600 transition-colors cursor-pointer"
+                      title={item.title}
+                    >
+                      {item.title}
+                    </h4>
+                    <span className="text-[10px] text-stone-400 truncate block font-mono">
+                      {item.url.replace(/^https?:\/\//i, "")}
+                    </span>
+                  </div>
                 </div>
 
-                <div className="mt-2 min-w-0">
-                  <h4 className="text-xs font-bold text-stone-900 dark:text-stone-100 truncate group-hover:text-amber-600 transition-colors">
-                    {item.title}
-                  </h4>
-                  <span className="text-[10px] text-stone-400 truncate block font-mono">
-                    {item.url.replace(/^https?:\/\//i, "")}
-                  </span>
+                {/* Quick actions: Abrir enlace & Copiar link */}
+                <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-stone-700/70 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleLaunchUrl(item)}
+                    className="flex-1 py-1 px-2 rounded-lg bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-95 shadow-2xs"
+                    title="Abrir pestaña en un enlace nuevo"
+                  >
+                    <ExternalLink size={11} className="text-amber-400 dark:text-amber-600" />
+                    <span>Abrir enlace</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyUrl(item)}
+                    className={`py-1 px-2 rounded-lg font-bold text-[11px] flex items-center justify-center gap-1 transition-all active:scale-95 border ${
+                      copiedId === item.id
+                        ? "bg-emerald-600 text-white border-emerald-600"
+                        : "border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300"
+                    }`}
+                    title="Copiar link al portapapeles"
+                  >
+                    {copiedId === item.id ? (
+                      <>
+                        <Check size={11} className="text-white" />
+                        <span>¡Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={11} className="text-stone-500 dark:text-stone-400" />
+                        <span>Copiar link</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
             ))}
           </div>
+        </div>
+      )}
+        </div>
+      )}
+
+      {/* SECTION 2: RESPUESTAS RÁPIDAS (PLANTILLAS Y COPIAR MENSAJES) */}
+      {activeMainSection === "respuestas" && (
+        <div className="space-y-4">
+          {/* Header & Controls for Quick Responses */}
+          <div className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm p-4 sm:p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-emerald-500 text-white font-bold shadow-xs">
+                  <MessageSquare size={18} />
+                </span>
+                <div>
+                  <h2 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 tracking-tight flex items-center gap-2">
+                    Respuestas Rápidas & Plantillas
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+                      {currentResponses.length} plantillas
+                    </span>
+                  </h2>
+                  <p className="text-xs text-stone-500 dark:text-stone-400">
+                    Copia mensajes pre-redactados al portapapeles con un solo toque para WhatsApp, correo o seguimiento de solicitudes.
+                  </p>
+                </div>
+              </div>
+
+              {/* Add New Quick Response Button */}
+              <button
+                type="button"
+                id="btn-nueva-respuesta-rapida"
+                onClick={handleOpenAddResponseModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 text-xs sm:text-sm font-bold shadow-sm transition-all active:scale-95 shrink-0"
+              >
+                <Plus size={16} className="text-amber-400 dark:text-amber-600" />
+                <span>+ Nueva Respuesta Rápida</span>
+              </button>
+            </div>
+
+            {/* Search & Sort Bar */}
+            <div className="mt-4 pt-3 border-t border-stone-100 dark:border-stone-800/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              {/* Search Bar */}
+              <div className="relative flex-1">
+                <Search
+                  size={15}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  value={responseSearchQuery}
+                  onChange={(e) => setResponseSearchQuery(e.target.value)}
+                  placeholder="Buscar en respuestas por título, mensaje o #etiquetas (ej: anticipo, lonas, diplomado)..."
+                  className="w-full pl-9 pr-8 py-2 rounded-xl text-xs sm:text-sm bg-stone-50 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+                {responseSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setResponseSearchQuery("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Sort Selector */}
+              <div className="flex items-center gap-1.5 text-xs text-stone-500 shrink-0">
+                <ArrowUpDown size={13} className="text-stone-400" />
+                <select
+                  value={responseSortBy}
+                  onChange={(e) => setResponseSortBy(e.target.value as any)}
+                  className="py-1.5 px-2 rounded-lg bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-700 dark:text-stone-300 text-xs font-semibold focus:outline-none cursor-pointer"
+                >
+                  <option value="copias">Más Usadas / Copiadas 🔥</option>
+                  <option value="recent">Fecha Reciente 📅</option>
+                  <option value="alpha">A-Z 🔤</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Category Filter Pills */}
+            <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-xs">
+              {["Todas", ...PRESET_RESPONSE_CATEGORIES].map((cat) => {
+                const count = cat === "Todas"
+                  ? currentResponses.length
+                  : currentResponses.filter((r) => (r.categoria || "General").toLowerCase() === cat.toLowerCase()).length;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => {
+                      setSelectedResponseCategory(cat);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-all ${
+                      selectedResponseCategory.toLowerCase() === cat.toLowerCase()
+                        ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 font-bold"
+                        : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
+                    }`}
+                  >
+                    {cat} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tag Filter Chips (Etiquetas) */}
+            {availableResponseTags.length > 0 && (
+              <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-800/80 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none text-[11px]">
+                <span className="font-bold text-stone-400 dark:text-stone-500 uppercase tracking-wider text-[10px] shrink-0 mr-1 flex items-center gap-1">
+                  <Hash size={12} />
+                  Etiquetas:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedResponseTag(null)}
+                  className={`px-2 py-0.5 rounded-md font-medium whitespace-nowrap transition-all ${
+                    selectedResponseTag === null
+                      ? "bg-amber-500 text-stone-950 font-bold"
+                      : "bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-800"
+                  }`}
+                >
+                  #todas
+                </button>
+                {availableResponseTags.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setSelectedResponseTag(selectedResponseTag === tag ? null : tag)}
+                    className={`px-2 py-0.5 rounded-md font-medium whitespace-nowrap transition-all ${
+                      selectedResponseTag === tag
+                        ? "bg-amber-500 text-stone-950 font-bold ring-1 ring-amber-600"
+                        : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Quick Responses Cards Grid */}
+          {filteredResponses.length === 0 ? (
+            <div className="p-8 text-center rounded-2xl border border-dashed border-stone-300 dark:border-stone-700 bg-white/50 dark:bg-stone-900/50">
+              <MessageSquare size={32} className="mx-auto text-stone-400 mb-2 opacity-50" />
+              <p className="text-sm font-bold text-stone-600 dark:text-stone-400">
+                No se encontraron respuestas con esos filtros.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setResponseSearchQuery("");
+                  setSelectedResponseCategory("Todas");
+                  setSelectedResponseTag(null);
+                }}
+                className="mt-2 text-xs font-bold text-amber-600 hover:underline"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {filteredResponses.map((item) => (
+                <div
+                  key={item.id}
+                  className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 p-4 sm:p-5 shadow-sm hover:border-amber-400 dark:hover:border-amber-600 transition-all flex flex-col justify-between space-y-3"
+                >
+                  <div className="space-y-2.5">
+                    {/* Header: Category Badge, Date, Usage count */}
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${getCategoryColor(item.categoria)}`}>
+                          {item.categoria || "Atención"}
+                        </span>
+                        {item.fecha && (
+                          <span className="text-[10px] font-semibold text-stone-400 flex items-center gap-1">
+                            <Calendar size={11} />
+                            {item.fecha}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-500 flex items-center gap-1">
+                          <MessageCircle size={10} className="text-emerald-500" />
+                          {item.copiasCount || 0} copias
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Title */}
+                    <h3 className="text-sm font-black text-stone-900 dark:text-stone-100 leading-snug">
+                      {item.titulo}
+                    </h3>
+
+                    {/* Tags */}
+                    {item.etiquetas && item.etiquetas.length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {item.etiquetas.map((tag) => (
+                          <span
+                            key={tag}
+                            onClick={() => setSelectedResponseTag(tag.startsWith("#") ? tag.toLowerCase() : `#${tag.toLowerCase()}`)}
+                            className="text-[10px] font-mono px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-amber-100 hover:text-amber-800 cursor-pointer transition-colors"
+                            title="Filtrar por esta etiqueta"
+                          >
+                            {tag.startsWith("#") ? tag : `#${tag}`}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Message Box */}
+                    <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200/70 dark:border-stone-700/60 text-xs sm:text-sm text-stone-800 dark:text-stone-200 font-sans whitespace-pre-wrap leading-relaxed select-all">
+                      {item.mensaje}
+                    </div>
+
+                    {/* Linked URL pill if exists */}
+                    {item.urlEnlace && (
+                      <div className="flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 truncate">
+                        <Link2 size={12} className="shrink-0" />
+                        <span className="font-semibold shrink-0">Enlace adjunto:</span>
+                        <a
+                          href={item.urlEnlace}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="truncate hover:underline font-mono text-[11px]"
+                        >
+                          {item.urlEnlace}
+                        </a>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Actions Footer */}
+                  <div className="pt-3 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
+                    {/* PRIMARY ACTION BUTTON: COPIAR MENSAJE */}
+                    <button
+                      type="button"
+                      onClick={() => handleCopyQuickResponse(item)}
+                      className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm ${
+                        copiedMessageId === item.id
+                          ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-600/30 ring-2 ring-emerald-500"
+                          : "bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950"
+                      }`}
+                      title="Copiar mensaje al portapapeles para enviar en WhatsApp o correo"
+                    >
+                      {copiedMessageId === item.id ? (
+                        <>
+                          <Check size={15} className="text-white" />
+                          <span>¡Mensaje Copiado!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={15} className="text-amber-400 dark:text-amber-600" />
+                          <span>Copiar Mensaje</span>
+                        </>
+                      )}
+                    </button>
+
+                    {/* Direct WhatsApp Share */}
+                    <button
+                      type="button"
+                      onClick={() => handleSendViaWhatsApp(item)}
+                      className="py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all active:scale-95"
+                      title="Abrir WhatsApp con este mensaje listo para enviar"
+                    >
+                      <MessageCircle size={14} />
+                      <span className="hidden sm:inline">WhatsApp</span>
+                    </button>
+
+                    {/* Edit button */}
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditResponseModal(item)}
+                      className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-stone-100 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-600 dark:text-stone-300 transition-colors"
+                      title="Editar respuesta rápida"
+                    >
+                      <Edit2 size={14} />
+                    </button>
+
+                    {/* Delete button */}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteResponse(item.id)}
+                      className="p-2 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50 hover:bg-rose-50 dark:bg-stone-800 dark:hover:bg-rose-950/40 text-stone-400 hover:text-rose-600 transition-colors"
+                      title="Eliminar respuesta rápida"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1637,6 +2350,148 @@ export default function UrlLibraryOS({
                   className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-xs shadow-sm transition-all"
                 >
                   {editingItem ? "Guardar Cambios" : "Guardar en Biblioteca"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Nueva / Editar Respuesta Rápida */}
+      {isResponseModalOpen && (
+        <div className="fixed inset-0 z-50 bg-stone-950/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-stone-900 rounded-2xl border border-stone-200 dark:border-stone-800 shadow-2xl max-w-lg w-full overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between bg-stone-50/70 dark:bg-stone-800/40">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-emerald-500 text-white font-bold">
+                  <MessageSquare size={16} />
+                </span>
+                <h3 className="text-sm sm:text-base font-black text-stone-900 dark:text-stone-100">
+                  {editingResponse ? "Editar Respuesta Rápida" : "Nueva Respuesta Rápida"}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsResponseModalOpen(false)}
+                className="text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 text-xs p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleSaveResponseModal} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  Título / Asunto de la Respuesta *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={respFormTitulo}
+                  onChange={(e) => setRespFormTitulo(e.target.value)}
+                  placeholder="ej: Confirmación de Anticipo Lonas o Bienvenida Diplomado"
+                  className="w-full px-3 py-2 rounded-xl text-xs sm:text-sm bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    Categoría
+                  </label>
+                  <select
+                    value={respFormCategoria}
+                    onChange={(e) => setRespFormCategoria(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none cursor-pointer"
+                  >
+                    {PRESET_RESPONSE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                    Fecha (para control y registro)
+                  </label>
+                  <input
+                    type="date"
+                    value={respFormFecha}
+                    onChange={(e) => setRespFormFecha(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  Mensaje Completo (Listo para copiar) *
+                </label>
+                <textarea
+                  required
+                  rows={5}
+                  value={respFormMensaje}
+                  onChange={(e) => setRespFormMensaje(e.target.value)}
+                  placeholder="Redacta el mensaje tal como se enviará por WhatsApp o correo..."
+                  className="w-full px-3 py-2 rounded-xl text-xs sm:text-sm bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-sans leading-relaxed focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+                <p className="text-[10px] text-stone-400 mt-1">
+                  Caracteres: {respFormMensaje.length} • Puedes usar variables como &#123;nombre&#125;, &#123;folio&#125;, &#123;link&#125;.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  Etiquetas (separadas por coma o espacio)
+                </label>
+                <div className="relative">
+                  <Hash size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                  <input
+                    type="text"
+                    value={respFormEtiquetas}
+                    onChange={(e) => setRespFormEtiquetas(e.target.value)}
+                    placeholder="whatsapp, clientes, anticipo, cotizacion, urgente"
+                    className="w-full pl-8 pr-3 py-2 rounded-xl text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 dark:text-stone-300 mb-1">
+                  Vincular con un Enlace de la Biblioteca (Opcional)
+                </label>
+                <select
+                  value={respFormUrlEnlace}
+                  onChange={(e) => setRespFormUrlEnlace(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl text-xs bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-none cursor-pointer"
+                >
+                  <option value="">-- Sin enlace vinculado --</option>
+                  {urls.map((u) => (
+                    <option key={u.id} value={u.url}>
+                      {u.title} ({u.url.slice(0, 40)}...)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Footer */}
+              <div className="pt-3 border-t border-stone-200 dark:border-stone-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsResponseModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-xs font-semibold text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-xs shadow-sm transition-all"
+                >
+                  {editingResponse ? "Guardar Cambios" : "Crear Respuesta"}
                 </button>
               </div>
             </form>

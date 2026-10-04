@@ -103,9 +103,9 @@ export default function ConnectionSyncMenuModal({
   onResetLedger,
   autoSyncEnabled = true,
   onToggleAutoSync,
-  autoSyncInterval = 30,
+  autoSyncInterval = 60,
   onChangeAutoSyncInterval,
-  secondsUntilSync = 30,
+  secondsUntilSync = 60,
   lastSyncTime = new Date(),
   syncHistory = [],
   notifConfig = {
@@ -997,9 +997,9 @@ export default function ConnectionSyncMenuModal({
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
+                    { label: "1 Minuto", val: 60, recommended: true, note: "Recomendado (Google Sync)" },
+                    { label: "30 Segundos", val: 30, note: "Rápido" },
                     { label: "10 Segundos", val: 10, note: "En Tiempo Real" },
-                    { label: "30 Segundos", val: 30, recommended: true, note: "Recomendado" },
-                    { label: "1 Minuto", val: 60, note: "Estándar" },
                     { label: "5 Minutos", val: 300, note: "Bajo Consumo" },
                   ].map((opt) => (
                     <button

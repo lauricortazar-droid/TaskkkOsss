@@ -16,6 +16,7 @@ import {
   BellRing,
   Globe,
   Lock,
+  Plane,
 } from "lucide-react";
 import { SyncStatus } from "../types";
 
@@ -300,10 +301,11 @@ export default function Header({
             <button
               id="header-logout-admin-btn"
               onClick={onLogoutAdmin}
-              className="p-2.5 rounded-xl text-stone-400 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
-              title="Cerrar sesión de Administradora (Volver a portal público de requerimientos)"
+              className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/20 transition-colors flex items-center gap-1.5 text-xs font-bold"
+              title="Avión de Admin Activo (laurcortazar@gmail.com / jaguarcortazar@gmail.com). Clic para cerrar sesión y volver al portal público."
             >
-              <Lock size={15} className="text-amber-500" />
+              <Plane size={14} className="text-amber-500" />
+              <span className="hidden sm:inline">Avión de Admin</span>
             </button>
           )}
         </div>

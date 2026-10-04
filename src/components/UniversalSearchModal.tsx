@@ -10,6 +10,8 @@ import {
   ArrowRight,
   Flame,
   CheckCircle2,
+  Copy,
+  Check,
 } from "lucide-react";
 import { TaskItem, GlobalResource, UrlLibraryItem, UniversalSearchResult } from "../types";
 import { executeUniversalSearch } from "../lib/executiveRouter";
@@ -35,7 +37,18 @@ export default function UniversalSearchModal({
 }: UniversalSearchModalProps) {
   const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<UniversalSearchResult[]>([]);
+  const [copiedUrlId, setCopiedUrlId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleCopyLink = async (id: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrlId(id);
+      setTimeout(() => setCopiedUrlId(null), 2000);
+    } catch (e) {
+      console.error("Failed to copy link", e);
+    }
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -229,15 +242,41 @@ export default function UniversalSearchModal({
                 {/* Actions */}
                 <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
                   {item.url && (
-                    <a
-                      href={item.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 text-xs font-semibold transition-colors min-h-[36px]"
-                    >
-                      <span>Abrir</span>
-                      <ExternalLink size={13} />
-                    </a>
+                    <>
+                      <a
+                        href={item.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 hover:bg-stone-800 text-xs font-bold transition-colors min-h-[36px] shadow-2xs"
+                        title="Abrir pestaña en un enlace nuevo"
+                      >
+                        <ExternalLink size={13} className="text-amber-400 dark:text-amber-600" />
+                        <span>Abrir</span>
+                      </a>
+
+                      <button
+                        type="button"
+                        onClick={() => handleCopyLink(item.id, item.url!)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all min-h-[36px] ${
+                          copiedUrlId === item.id
+                            ? "bg-emerald-600 text-white border-emerald-600"
+                            : "border-stone-200 dark:border-stone-700 bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-300"
+                        }`}
+                        title="Copiar link al portapapeles"
+                      >
+                        {copiedUrlId === item.id ? (
+                          <>
+                            <Check size={13} className="text-white" />
+                            <span>¡Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} className="text-stone-400" />
+                            <span>Copiar link</span>
+                          </>
+                        )}
+                      </button>
+                    </>
                   )}
 
                   {item.taskId && onSelectTask && (

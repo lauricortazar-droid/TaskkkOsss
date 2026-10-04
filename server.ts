@@ -233,6 +233,7 @@ interface CloudSyncRecord {
   tasks: TaskItem[];
   globalResources?: any[];
   urlLibrary?: any[];
+  quickResponses?: any[];
   contacts?: Contact[];
   tags?: any[];
   esencialTaskId?: number | null;
@@ -488,6 +489,7 @@ app.post("/api/sync/push", (req: Request, res: Response) => {
       tasks = [],
       globalResources = [],
       urlLibrary = [],
+      quickResponses = [],
       contacts,
       tags,
       esencialTaskId,
@@ -515,6 +517,7 @@ app.post("/api/sync/push", (req: Request, res: Response) => {
       tasks: Array.isArray(tasks) ? tasks : [],
       globalResources: Array.isArray(globalResources) ? globalResources : undefined,
       urlLibrary: sanitizedUrlLibrary,
+      quickResponses: Array.isArray(quickResponses) ? quickResponses : undefined,
       contacts: Array.isArray(contacts) ? contacts : undefined,
       tags: Array.isArray(tags) ? tags : undefined,
       esencialTaskId: typeof esencialTaskId === "number" ? esencialTaskId : null,

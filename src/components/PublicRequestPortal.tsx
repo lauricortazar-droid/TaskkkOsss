@@ -30,13 +30,14 @@ import {
   Bell,
   KeyRound,
   X,
+  Plane,
 } from "lucide-react";
 import { SolicitudItem } from "../types";
 import { playChime } from "../utils/audio";
 import { googleSignIn, loginWithEmail } from "../lib/firebase";
 
 interface PublicRequestPortalProps {
-  onAdminLoginClick: () => void;
+  onAdminLoginClick: (adminEmail?: string) => void;
   onRequestCreated: (newSolicitud: SolicitudItem) => void;
   existingSolicitudes?: SolicitudItem[];
   isAdminLoggedIn?: boolean;
@@ -238,14 +239,14 @@ export default function PublicRequestPortal({
   const handleAdminPinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const clean = adminPinInput.trim();
-    if (clean === "2026" || clean === "laura" || clean === "admin" || clean === "pepe" || clean === "fgdll") {
+    if (clean === "110809") {
       setAdminPinError(null);
       setShowAdminPinModal(false);
       setAdminPinInput("");
-      onAdminLoginClick();
+      onAdminLoginClick("laurcortazar@gmail.com");
       playChime("success");
     } else {
-      setAdminPinError("PIN incorrecto. Ingresa el PIN de administradora (2026).");
+      setAdminPinError("Contraseña incorrecta. Solo puedes entrar a Avión de Admin con la contraseña: 110809 o iniciando sesión con tu cuenta de Google (laurcortazar@gmail.com o jaguarcortazar@gmail.com).");
       playChime("urgent");
     }
   };
@@ -253,10 +254,17 @@ export default function PublicRequestPortal({
   const handleGoogleAdminLogin = async () => {
     try {
       const res = await googleSignIn();
-      if (res?.user) {
+      const email = res?.user?.email?.toLowerCase().trim() || "";
+      const allowedAdmins = ["laurcortazar@gmail.com", "jaguarcortazar@gmail.com"];
+      if (allowedAdmins.includes(email)) {
         setShowAdminPinModal(false);
-        onAdminLoginClick();
+        onAdminLoginClick(email);
         playChime("success");
+      } else {
+        setAdminPinError(
+          `La cuenta "${email || "seleccionada"}" no tiene permisos de Administradora. Solo puedes entrar a Avión de Admin iniciando sesión con laurcortazar@gmail.com o jaguarcortazar@gmail.com.`
+        );
+        playChime("urgent");
       }
     } catch (err: any) {
       setAdminPinError(err.message || "Error al autenticar con Google");
@@ -540,9 +548,10 @@ export default function PublicRequestPortal({
               </button>
             )}
 
-            {/* Private Admin Mode Switch */}
+            {/* Private Admin Mode Switch / Avión de Admin */}
             <button
               type="button"
+              id="btn-avion-admin"
               onClick={() => {
                 if (isAdminLoggedIn) {
                   if (onGoToAdminDashboard) onGoToAdminDashboard();
@@ -551,11 +560,11 @@ export default function PublicRequestPortal({
                   setShowAdminPinModal(true);
                 }
               }}
-              className="px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all transform active:scale-95"
-              title="Acceso exclusivo para Laura / Pepe Cortazar"
+              className="px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all transform active:scale-95"
+              title="Avión de Admin • Acceso para Laura o Pepe Cortazar (Contraseña: 110809 o Google)"
             >
-              <Lock size={12} className="text-amber-400 dark:text-amber-600" />
-              <span>{isAdminLoggedIn ? "👑 Volver a Task-OS" : "Modo Administradora"}</span>
+              <Plane size={13} className="text-amber-400 dark:text-amber-600" />
+              <span>{isAdminLoggedIn ? "👑 Volver a Task-OS" : "Avión de Admin ✈️"}</span>
             </button>
           </div>
         </div>
@@ -1309,13 +1318,13 @@ export default function PublicRequestPortal({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-stone-900 to-amber-600 dark:from-amber-500 dark:to-orange-500 text-white flex items-center justify-center font-bold shadow-xs">
-                  <Lock size={16} />
+                  <Plane size={17} />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-sm text-stone-900 dark:text-stone-100">
-                    Modo Administradora
+                  <h3 className="font-extrabold text-sm text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                    <span>Avión de Administradora ✈️</span>
                   </h3>
-                  <p className="text-[10px] text-stone-500">Acceso exclusivo • Laura / Pepe</p>
+                  <p className="text-[10px] text-stone-500">Acceso exclusivo • Laura / Pepe Cortazar</p>
                 </div>
               </div>
               <button
@@ -1340,7 +1349,7 @@ export default function PublicRequestPortal({
             <form onSubmit={handleAdminPinSubmit} className="space-y-3">
               <div>
                 <label className="text-xs font-bold text-stone-700 dark:text-stone-300 block mb-1">
-                  Ingresa tu PIN de Administradora
+                  Ingresa tu Contraseña de Avión de Admin:
                 </label>
                 <div className="relative">
                   <KeyRound size={16} className="absolute left-3 top-3 text-stone-400" />
@@ -1348,22 +1357,23 @@ export default function PublicRequestPortal({
                     type="password"
                     autoFocus
                     required
-                    placeholder="PIN (por defecto: 2026)"
+                    placeholder="Contraseña (110809)"
                     value={adminPinInput}
                     onChange={(e) => setAdminPinInput(e.target.value)}
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/60 text-stone-900 dark:text-stone-100 text-sm font-mono tracking-widest text-center focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </div>
                 <p className="text-[10px] text-stone-400 mt-1 text-center">
-                  PIN predeterminado: <strong>2026</strong>
+                  Contraseña autorizada: <strong>110809</strong>
                 </p>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-xs shadow-md transition-all active:scale-98"
+                className="w-full py-2.5 px-4 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 font-bold text-xs shadow-md transition-all active:scale-98 flex items-center justify-center gap-1.5"
               >
-                Desbloquear Task-OS
+                <Plane size={13} className="text-amber-400 dark:text-amber-600" />
+                <span>Entrar a Avión de Admin ✈️</span>
               </button>
             </form>
 
@@ -1372,17 +1382,40 @@ export default function PublicRequestPortal({
                 <div className="w-full border-t border-stone-200 dark:border-stone-800" />
               </div>
               <div className="relative flex justify-center text-[10px] uppercase font-bold text-stone-400">
-                <span className="bg-white dark:bg-stone-900 px-2">o con Google</span>
+                <span className="bg-white dark:bg-stone-900 px-2">o con mi correo Google</span>
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleGoogleAdminLogin}
-              className="w-full py-2 px-3 rounded-xl border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center justify-center gap-2"
-            >
-              <span>Acceder con cuenta de Google</span>
-            </button>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleGoogleAdminLogin}
+                className="w-full py-2.5 px-3 rounded-xl border border-stone-300 dark:border-stone-700 hover:bg-stone-50 dark:hover:bg-stone-800 text-xs font-bold text-stone-700 dark:text-stone-300 flex items-center justify-center gap-2 transition-colors"
+              >
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span>Acceder con Google (laurcortazar / jaguarcortazar)</span>
+              </button>
+              <p className="text-[10px] text-stone-400 dark:text-stone-500 text-center leading-tight">
+                Al iniciar sesión se sincronizarán todos tus dispositivos con la cuenta de Google cada minuto.
+              </p>
+            </div>
           </div>
         </div>
       )}

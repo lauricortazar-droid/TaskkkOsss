@@ -533,3 +533,70 @@ export function formatAllTasksForGoogleKeep(tasks: TaskItem[]): string {
 
   return noteText;
 }
+
+/* =========================================================
+   6. GOOGLE DRIVE BACKUP (Respaldo automático semanal JSON)
+========================================================= */
+
+export interface GoogleDriveUploadResult {
+  id: string;
+  name: string;
+  mimeType: string;
+  webViewLink?: string;
+  size?: string;
+  createdTime?: string;
+}
+
+/**
+ * Sube un archivo JSON de respaldo de Task-OS a Google Drive mediante la API v3.
+ * Usa multipart upload para enviar los metadatos y el cuerpo JSON en una sola solicitud.
+ */
+export async function uploadJsonBackupToGoogleDrive(
+  accessToken: string,
+  backupData: any,
+  customFileName?: string
+): Promise<GoogleDriveUploadResult> {
+  const dateStr = new Date().toISOString().split("T")[0];
+  const timeStr = new Date().toTimeString().split(" ")[0].replace(/:/g, "-");
+  const fileName = customFileName || `task-os-backup-${dateStr}_${timeStr}.json`;
+  const fileContent = typeof backupData === "string" ? backupData : JSON.stringify(backupData, null, 2);
+
+  const metadata = {
+    name: fileName,
+    mimeType: "application/json",
+    description: `Respaldo automático semanal de Task-OS generado el ${new Date().toLocaleString("es-MX")}`,
+  };
+
+  const boundary = "-------314159265358979323846";
+  const delimiter = `\r\n--${boundary}\r\n`;
+  const closeDelimiter = `\r\n--${boundary}--`;
+
+  const multipartRequestBody =
+    delimiter +
+    "Content-Type: application/json; charset=UTF-8\r\n\r\n" +
+    JSON.stringify(metadata) +
+    delimiter +
+    "Content-Type: application/json\r\n\r\n" +
+    fileContent +
+    closeDelimiter;
+
+  const url =
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,webViewLink,createdTime,size";
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`,
+    },
+    body: multipartRequestBody,
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Error al subir respaldo a Google Drive (${res.status}): ${errorText}`);
+  }
+
+  const result: GoogleDriveUploadResult = await res.json();
+  return result;
+}

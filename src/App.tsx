@@ -19,7 +19,7 @@ import RouterLogViewer from "./components/RouterLogViewer";
 import UniversalSearchModal from "./components/UniversalSearchModal";
 import ExportImportModal from "./components/ExportImportModal";
 import UndoToast, { UndoActionPayload } from "./components/UndoToast";
-import UrlLibraryOS, { INITIAL_URL_LIBRARY } from "./components/UrlLibraryOS";
+import UrlLibraryOS, { INITIAL_URL_LIBRARY, INITIAL_QUICK_RESPONSES } from "./components/UrlLibraryOS";
 import PrintOS from "./components/PrintOS";
 import NotificationsModal from "./components/NotificationsModal";
 import PublicRequestPortal from "./components/PublicRequestPortal";
@@ -38,6 +38,7 @@ import {
   TaskResource,
   GlobalResource,
   UrlLibraryItem,
+  QuickResponseMessage,
   RouterStructuredOutput,
   TaskOSExportData,
   TaskOSResponse,
@@ -67,13 +68,15 @@ import {
   deleteSolicitudFromFirestore,
   subscribeToSolicitudes,
 } from "./lib/firestoreService";
-import { auth, initAuth } from "./lib/firebase";
+import { auth, initAuth, getAccessToken } from "./lib/firebase";
+import { uploadJsonBackupToGoogleDrive } from "./lib/googleWorkspace";
 import { playChime } from "./utils/audio";
 import { Flame, Sparkles, Users, Tag as TagIcon, Cloud, Printer, Wallet, Bookmark } from "lucide-react";
 
 const STORAGE_KEY_TASKS = "task_os_pepe_cortazar_ledger_v1";
 const STORAGE_KEY_GLOBAL_RESOURCES = "task_os_global_resources_v1";
 const STORAGE_KEY_URL_LIBRARY = "task_os_url_library_v1";
+const STORAGE_KEY_QUICK_RESPONSES = "task_os_quick_responses_v1";
 const STORAGE_KEY_ACTIVE_TASK_ID = "task_os_active_task_id_v1";
 const STORAGE_KEY_CONTACTS = "task_os_pepe_contacts_v1";
 const STORAGE_KEY_TAGS = "task_os_pepe_tags_v1";
@@ -376,10 +379,10 @@ export default function App() {
         if (parsed > 0) return parsed;
       }
     } catch (_) {}
-    return 30;
+    return 60; // Sincronización automática cada 1 minuto (60 segundos)
   });
 
-  const [secondsUntilSync, setSecondsUntilSync] = useState<number>(30);
+  const [secondsUntilSync, setSecondsUntilSync] = useState<number>(60);
   const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
   const [syncHistory, setSyncHistory] = useState<{ time: string; count: number; email: string }[]>([]);
   const isInitialSyncCompletedRef = useRef(false);
@@ -428,6 +431,20 @@ export default function App() {
       console.error("Failed to load saved url library", e);
     }
     return INITIAL_URL_LIBRARY;
+  });
+
+  // Quick Responses state (Plantillas y respuestas rápidas)
+  const [quickResponses, setQuickResponses] = useState<QuickResponseMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_QUICK_RESPONSES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved quick responses", e);
+    }
+    return INITIAL_QUICK_RESPONSES;
   });
 
   // Lonas Orders state for cross-linking (Drive, Print, OUT, URLs)
@@ -506,6 +523,15 @@ export default function App() {
     }
   }, [urlLibrary]);
 
+  // Save quick responses
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_QUICK_RESPONSES, JSON.stringify(quickResponses));
+    } catch (e) {
+      console.error("Failed to save quick responses", e);
+    }
+  }, [quickResponses]);
+
   // Save lonas orders
   useEffect(() => {
     try {
@@ -552,6 +578,20 @@ export default function App() {
   // Real-time Firestore sync when authenticated
   useEffect(() => {
     const unsubAuth = initAuth((user) => {
+      if (user && user.email) {
+        const cleanEmail = user.email.toLowerCase().trim();
+        const allowedAdmins = ["laurcortazar@gmail.com", "jaguarcortazar@gmail.com"];
+        if (allowedAdmins.includes(cleanEmail)) {
+          setIsAdminAuthenticated(true);
+          setSyncEmail(cleanEmail);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+            localStorage.setItem(STORAGE_KEY_USER_EMAIL, cleanEmail);
+          } catch (_) {}
+          handleForceSync(true);
+        }
+      }
+
       const unsubTasks = subscribeToFirestoreTasks(
         user.uid,
         (syncedTasks) => {
@@ -701,7 +741,8 @@ export default function App() {
     curContacts: Contact[],
     curTags: TagItem[],
     curEsencial: number | null,
-    curSecundarias: number[]
+    curSecundarias: number[],
+    curQuickResponses?: QuickResponseMessage[]
   ) => {
     if (!email || !email.trim()) return;
     if (typeof navigator !== "undefined" && !navigator.onLine) return;
@@ -715,6 +756,7 @@ export default function App() {
           tasks: curTasks,
           globalResources: curGlobal,
           urlLibrary: curUrlLib,
+          quickResponses: curQuickResponses || quickResponses,
           contacts: curContacts,
           tags: curTags,
           esencialTaskId: curEsencial,
@@ -781,6 +823,7 @@ export default function App() {
             const cloud = data.data as CloudSyncPayload & {
               globalResources?: GlobalResource[];
               urlLibrary?: UrlLibraryItem[];
+              quickResponses?: QuickResponseMessage[];
             };
             if (Array.isArray(cloud.tasks) && cloud.tasks.length > 0) {
               setTasks(cloud.tasks);
@@ -790,6 +833,9 @@ export default function App() {
             }
             if (Array.isArray(cloud.urlLibrary) && cloud.urlLibrary.length > 0) {
               setUrlLibrary(cloud.urlLibrary);
+            }
+            if (Array.isArray(cloud.quickResponses) && cloud.quickResponses.length > 0) {
+              setQuickResponses(cloud.quickResponses);
             }
             if (Array.isArray(cloud.contacts) && cloud.contacts.length > 0) {
               setContacts(cloud.contacts);
@@ -823,7 +869,7 @@ export default function App() {
             isInitialSyncCompletedRef.current = true;
           } else {
             // First time this email connects or empty cloud: push current local state to cloud
-            await pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds);
+            await pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, quickResponses);
             isInitialSyncCompletedRef.current = true;
           }
         }
@@ -900,10 +946,12 @@ export default function App() {
 
       const data = pullResult.data;
       let currentTasksState = tasks;
+      let currentQuickRespState = quickResponses;
       if (data.exists && data.data) {
         const cloud = data.data as CloudSyncPayload & {
           globalResources?: GlobalResource[];
           urlLibrary?: UrlLibraryItem[];
+          quickResponses?: QuickResponseMessage[];
         };
         if (Array.isArray(cloud.tasks) && cloud.tasks.length > 0) {
           setTasks(cloud.tasks);
@@ -911,13 +959,17 @@ export default function App() {
         }
         if (Array.isArray(cloud.globalResources)) setGlobalResources(cloud.globalResources);
         if (Array.isArray(cloud.urlLibrary)) setUrlLibrary(cloud.urlLibrary);
+        if (Array.isArray(cloud.quickResponses) && cloud.quickResponses.length > 0) {
+          setQuickResponses(cloud.quickResponses);
+          currentQuickRespState = cloud.quickResponses;
+        }
         if (Array.isArray(cloud.contacts)) setContacts(cloud.contacts);
         if (Array.isArray(cloud.tags)) setTags(cloud.tags);
         if (typeof cloud.esencialTaskId === "number") setEsencialTaskId(cloud.esencialTaskId);
         if (Array.isArray(cloud.secundariasTaskIds)) setSecundariasTaskIds(cloud.secundariasTaskIds);
       }
 
-      await pushCloudState(syncEmail, currentTasksState, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds);
+      await pushCloudState(syncEmail, currentTasksState, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, currentQuickRespState);
       const now = new Date();
       setLastSyncTime(now);
       setSyncHistory((prev) => [
@@ -958,7 +1010,7 @@ export default function App() {
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [autoSyncEnabled, autoSyncInterval, syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds]);
+  }, [autoSyncEnabled, autoSyncInterval, syncEmail, tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId, secundariasTaskIds]);
 
   // Event-based background sync triggers (Tab Visibility, Window Focus, Online)
   useEffect(() => {
@@ -987,7 +1039,91 @@ export default function App() {
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("online", handleOnline);
     };
-  }, [autoSyncEnabled, syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds]);
+  }, [autoSyncEnabled, syncEmail, tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId, secundariasTaskIds]);
+
+  // Automated Weekly Google Drive Backup Runner
+  useEffect(() => {
+    const runWeeklyDriveBackupCheck = async () => {
+      try {
+        const savedConfig = localStorage.getItem("taskos_drive_backup_config");
+        if (!savedConfig) return;
+        const config = JSON.parse(savedConfig);
+        if (!config || !config.enabled) return;
+
+        const now = Date.now();
+        const lastBackupTime = config.lastBackupAt ? new Date(config.lastBackupAt).getTime() : 0;
+        const intervalMs = config.frequency === "daily" ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+
+        // If scheduled interval has passed (or never backed up before)
+        if (now - lastBackupTime >= intervalMs) {
+          const token = await getAccessToken();
+          if (!token) return; // Wait until Google credentials are authenticated
+
+          const payload: TaskOSExportData = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            tasks,
+            globalResources,
+            urlLibrary,
+            quickResponses,
+            contacts,
+            tags,
+            esencialTaskId,
+          };
+
+          const dateStr = new Date().toISOString().split("T")[0];
+          const uploadRes = await uploadJsonBackupToGoogleDrive(
+            token,
+            payload,
+            `task-os-backup-${dateStr}.json`
+          );
+
+          const nextScheduled = new Date(now + intervalMs).toISOString();
+          const updatedConfig = {
+            ...config,
+            lastBackupAt: new Date().toISOString(),
+            nextScheduledBackupAt: nextScheduled,
+            lastBackupFileId: uploadRes.id,
+            lastBackupFileName: uploadRes.name,
+            lastBackupWebViewLink: uploadRes.webViewLink,
+            lastBackupStatus: "success",
+            totalBackupsRun: (config.totalBackupsRun || 0) + 1,
+          };
+          localStorage.setItem("taskos_drive_backup_config", JSON.stringify(updatedConfig));
+
+          // Save to drive backup history
+          try {
+            const histStr = localStorage.getItem("taskos_drive_backup_history");
+            const history = histStr ? JSON.parse(histStr) : [];
+            const newRecord = {
+              id: `rec-${Date.now()}`,
+              fileId: uploadRes.id,
+              fileName: uploadRes.name,
+              fileSize: uploadRes.size ? parseInt(uploadRes.size, 10) : JSON.stringify(payload).length,
+              createdAt: new Date().toISOString(),
+              webViewLink: uploadRes.webViewLink,
+              status: "success",
+              frequency: config.frequency || "weekly",
+              tasksCount: tasks.length,
+              resourcesCount: globalResources.length,
+              urlsCount: urlLibrary.length,
+              quickResponsesCount: quickResponses.length,
+            };
+            localStorage.setItem("taskos_drive_backup_history", JSON.stringify([newRecord, ...history.slice(0, 19)]));
+          } catch (_) {}
+
+          setLastActionSummary(`☁️ Respaldo automático (${config.frequency === "daily" ? "diario" : "semanal"}) guardado exitosamente en Google Drive.`);
+        }
+      } catch (err) {
+        console.warn("Weekly Google Drive backup notice:", err);
+      }
+    };
+
+    // Run check on startup and periodically
+    runWeeklyDriveBackupCheck();
+    const interval = setInterval(runWeeklyDriveBackupCheck, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId]);
 
   const handleToggleAutoSync = (enabled: boolean) => {
     setAutoSyncEnabled(enabled);
@@ -1280,6 +1416,50 @@ export default function App() {
       },
     });
     setLastActionSummary(`Enlace eliminado de la biblioteca.`);
+  };
+
+  // Quick Responses CRUD handlers (Plantillas y respuestas rápidas)
+  const handleAddQuickResponse = (item: Omit<QuickResponseMessage, "id">) => {
+    const newItem: QuickResponseMessage = {
+      ...item,
+      id: `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    const updated = [newItem, ...quickResponses];
+    setQuickResponses(updated);
+    setLastActionSummary(`Respuesta rápida "${newItem.titulo}" creada.`);
+    playChime("success");
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
+  };
+
+  const handleUpdateQuickResponse = (updatedItem: QuickResponseMessage) => {
+    const updated = quickResponses.map((r) => (r.id === updatedItem.id ? updatedItem : r));
+    setQuickResponses(updated);
+    setLastActionSummary(`Respuesta rápida "${updatedItem.titulo}" actualizada.`);
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
+  };
+
+  const handleDeleteQuickResponse = (id: string) => {
+    const target = quickResponses.find((r) => r.id === id);
+    if (!target) return;
+    const updated = quickResponses.filter((r) => r.id !== id);
+    setQuickResponses(updated);
+    setUndoAction({
+      id: `undo-delete-qr-${Date.now()}`,
+      message: `Se eliminó "${target.titulo}" de tus respuestas rápidas.`,
+      onUndo: () => {
+        setQuickResponses((prev) => [target, ...prev]);
+        setLastActionSummary(`Acción deshecha: "${target.titulo}" restaurada.`);
+        playChime("tick");
+      },
+    });
+    setLastActionSummary(`Respuesta rápida eliminada.`);
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
   };
 
   const handleAttachUrlToActiveTask = (url: string, title: string) => {
@@ -2044,13 +2224,24 @@ export default function App() {
   if (!isAdminAuthenticated) {
     return (
       <PublicRequestPortal
-        onAdminLoginClick={() => {
+        onAdminLoginClick={(adminEmail?: string) => {
           setIsAdminAuthenticated(true);
+          const emailToUse = adminEmail || (syncEmail && syncEmail.includes("@") ? syncEmail : "laurcortazar@gmail.com");
+          setSyncEmail(emailToUse);
           try {
             localStorage.setItem("taskos_is_admin_active", "true");
+            localStorage.setItem(STORAGE_KEY_USER_EMAIL, emailToUse);
+            localStorage.setItem("taskos_auto_sync_enabled", "true");
+            localStorage.setItem("taskos_auto_sync_interval", "60");
           } catch (_) {}
+          setAutoSyncEnabled(true);
+          setAutoSyncInterval(60);
+          setSecondsUntilSync(60);
           setCurrentWorkspace("task-os");
           playChime("tick");
+          setTimeout(() => {
+            handleForceSync(true);
+          }, 150);
         }}
         onRequestCreated={(newSol) => {
           handleCreateSolicitud(newSol);
@@ -2310,6 +2501,10 @@ export default function App() {
             onAttachToActiveTask={handleAttachUrlToActiveTask}
             onNavigateToLonas={() => setCurrentWorkspace("lonas")}
             onNavigateToPrint={handleSendToPrint}
+            quickResponses={quickResponses}
+            onAddQuickResponse={handleAddQuickResponse}
+            onUpdateQuickResponse={handleUpdateQuickResponse}
+            onDeleteQuickResponse={handleDeleteQuickResponse}
             onSendToProcessor={(text) => {
               setCurrentWorkspace("task-os");
               setTimeout(() => {
@@ -2627,9 +2822,11 @@ export default function App() {
         tasks={tasks}
         globalResources={globalResources}
         urlLibrary={urlLibrary}
+        quickResponses={quickResponses}
         contacts={contacts}
         tags={tags}
         esencialTaskId={esencialTaskId}
+        userEmail={syncEmail}
         onImportData={handleImportBackup}
       />
 
