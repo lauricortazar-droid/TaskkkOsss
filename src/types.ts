@@ -313,16 +313,58 @@ export interface PomodoroLogEntry {
 ========================================================= */
 export type LonasStatus =
   | "Cotización"
+  | "Anticipo recibido"
   | "Diseño"
   | "Esperando aprobación"
   | "Aprobado"
   | "Producción"
+  | "Acabados"
   | "Listo"
-  | "Entregado";
+  | "Entregado"
+  | "Cancelado";
+
+export interface LonasOrderLink {
+  id: string;
+  titulo: string;
+  url: string;
+  tipo?: "drive" | "boceto" | "comprobante" | "otro";
+}
+
+export interface LonasOrderImage {
+  id: string;
+  nombre: string;
+  dataUrl: string; // base64 o URL
+  fecha: string;
+}
+
+export interface LonasOrderItemAcabados {
+  ojillos?: boolean;
+  ojillosCantidad?: number;
+  ojillosCostoUnitario?: number;
+  bastilla?: boolean;
+  bastillaMetrosLineales?: number;
+  bastillaCostoMetro?: number;
+  jaretas?: boolean;
+  jaretasCosto?: number;
+  refuerzoEsquinas?: boolean;
+  refuerzoCosto?: number;
+  otrosAcabadosTexto?: string;
+  otrosAcabadosCosto?: number;
+}
+
+export interface LonasOrderItemEstructura {
+  incluyeEstructura?: boolean;
+  tipoEstructura?: string; // "Roll-up 85x200", "Araña X 60x160", "Bastidor madera", "Bastidor herrería", "Otro"
+  costoEstructura?: number;
+  instalacionEnSitio?: boolean;
+  costoInstalacion?: number;
+  envioFlete?: number;
+}
 
 export interface LonasOrderItem {
   id: string;
   descripcion: string; // e.g. "Lona Front 13oz", "Vinil brillante", "Estructura banner"
+  material?: string;
   ancho: number; // metros
   alto: number; // metros
   cantidad: number;
@@ -331,9 +373,11 @@ export interface LonasOrderItem {
   precioVentaPorM2: number;
   costoCalculado: number;
   precioCalculado: number;
-  precioFinal: number; // editable
+  precioFinal: number; // editable manualmente por ítem
   costoFinal: number;
   observaciones?: string;
+  acabados?: LonasOrderItemAcabados;
+  estructuraInstalacion?: LonasOrderItemEstructura;
 }
 
 export interface LonasPayment {
@@ -357,7 +401,10 @@ export interface LonasOrder {
   items: LonasOrderItem[];
   subtotal: number;
   descuento: number;
-  total: number;
+  recargoUrgencia?: number;
+  costoTotalCalculado?: number; // Total calculado por las calculadoras
+  total: number; // Total final acordado (modificable por el usuario)
+  totalModificadoManualmente?: boolean;
   anticipo: number;
   pagos: LonasPayment[];
   saldo: number; // total - suma de pagos
@@ -366,6 +413,8 @@ export interface LonasOrder {
   fechaEntregaEstimada: string;
   comprobanteUrl?: string;
   driveUrl?: string; // Link de Google Drive donde está el archivo del diseño creado
+  links?: LonasOrderLink[];
+  imagenesEjemplo?: LonasOrderImage[];
   notasInternas?: string;
   notasCliente?: string;
   entregadoAt?: string;

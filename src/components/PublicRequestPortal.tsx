@@ -501,7 +501,7 @@ export default function PublicRequestPortal({
 
   // WhatsApp quick contact message
   const makeWhatsAppUrl = (ticket: SolicitudItem) => {
-    const phone = "525512345678"; // Laura's contact number
+    const phone = "19999011852"; // Laura's direct contact number: https://wa.me/19999011852
     const text = `Hola Laura, acabo de registrar mi requerimiento en el portal l.fgdll.org:\n\n*Ticket:* ${ticket.folio || ticket.id}\n*Solicitante:* ${ticket.solicitante}\n*Área:* ${ticket.area || "FGDLL"}\n*Requerimiento:* ${ticket.titulo}\n\nQuedo al pendiente de tu aviso, muchas gracias!`;
     return `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
   };

@@ -23,6 +23,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { PrintItem, PrintDocType, LonasOrder, ExpectedIncome } from "../types";
+import { buildWhatsAppUrl } from "../utils/whatsapp";
 import { formatReceiptText, downloadReceiptPNG, generateReceiptPNG } from "../utils/receiptGenerator";
 import { playChime } from "../utils/audio";
 
@@ -203,9 +204,9 @@ export default function PrintOS({
 
   const handleSendWhatsApp = () => {
     const text = formatReceiptText(activeItem);
-    const phone = (activeItem.clienteTelefono || "").replace(/[^0-9]/g, "");
+    const phone = activeItem.clienteTelefono || "";
     const url = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(text)}`
+      ? buildWhatsAppUrl(phone, text)
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, "_blank");
     playChime("work_done");

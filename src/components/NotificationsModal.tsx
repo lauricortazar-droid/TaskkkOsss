@@ -38,6 +38,7 @@ import {
   triggerSolicitudEmailAlert,
 } from "../lib/fcmNotifications";
 import { playChime } from "../utils/audio";
+import { buildWhatsAppUrl } from "../utils/whatsapp";
 import { SolicitudItem } from "../types";
 
 interface NotificationsModalProps {
@@ -736,9 +737,10 @@ export default function NotificationsModal({
                                 playChime("success");
                                 if (s.telefono) {
                                   window.open(
-                                    `https://wa.me/${s.telefono.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                                    buildWhatsAppUrl(
+                                      s.telefono,
                                       `Hola ${s.solicitante}, he recibido y aceptado tu solicitud de "${s.titulo}" (${s.folio || s.id}). Ya está en mi lista de trabajo activa. Te mantendré al tanto del avance.`
-                                    )}`,
+                                    ),
                                     "_blank"
                                   );
                                 }
@@ -765,9 +767,10 @@ export default function NotificationsModal({
                                 playChime("success");
                                 if (s.telefono) {
                                   window.open(
-                                    `https://wa.me/${s.telefono.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
+                                    buildWhatsAppUrl(
+                                      s.telefono,
                                       `Hola ${s.solicitante}, te aviso que tu requerimiento de "${s.titulo}" (${s.folio || s.id}) ha quedado COMPLETADO y listo para entrega. ¡Quedo a la orden!`
-                                    )}`,
+                                    ),
                                     "_blank"
                                   );
                                 }

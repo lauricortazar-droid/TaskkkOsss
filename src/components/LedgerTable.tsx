@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { TaskItem, StatusFilter, DomainType, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
+import { buildWhatsAppUrl } from "../utils/whatsapp";
 import { playChime } from "../utils/audio";
 import TaskItemRow from "./TaskItemRow";
 import TaskCardMobile from "./TaskCardMobile";
@@ -138,10 +139,9 @@ export default function LedgerTable({
       return;
     }
     const phone = task.contacto?.telefono;
-    const cleanPhone = phone ? phone.replace(/[^0-9]/g, "") : "";
     const msg = `Hola ${task.solicitante}, sobre la tarea: "${task.tarea}"...`;
-    const url = cleanPhone
-      ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`
+    const url = phone
+      ? buildWhatsAppUrl(phone, msg)
       : `https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
     window.open(url, "_blank");
   };
