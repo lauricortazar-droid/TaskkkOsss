@@ -46,13 +46,14 @@ import {
   Cell,
   Legend,
 } from "recharts";
-import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, doc, updateDoc, deleteDoc, addDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { playChime } from "../utils/audio";
 import { cleanPhoneNumber, buildWhatsAppUrl } from "../utils/whatsapp";
 
 export interface ReconocimientoRecord {
   id: string;
+  solicitudId?: string;
   nombre: string;
   rol: string;
   grupo: string;
@@ -119,25 +120,105 @@ export default function ReconocimientosOS({
   const [newNotas, setNewNotas] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
+  // Modal para agregar para la misma persona registrada la impresión de otros reconocimientos de otras generaciones
+  const [personForExtra, setPersonForExtra] = useState<ReconocimientoRecord | null>(null);
+  const [extraYear, setExtraYear] = useState<string>("2022");
+  const [extraTipo, setExtraTipo] = useState<"Primera Impresión" | "Re-impresión">("Re-impresión");
+  const [extraNotas, setExtraNotas] = useState("");
+  const [isSavingExtra, setIsSavingExtra] = useState(false);
+
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // 1. Real-time sync with Firestore collections ('reconocimientos' and 'solicitudes')
+  // 1. Sincronización en tiempo real con Firestore y deduplicación robusta
   useEffect(() => {
     setIsLoading(true);
     const mapReconocimientos = new Map<string, ReconocimientoRecord>();
     const mapSolicitudes = new Map<string, ReconocimientoRecord>();
 
     const mergeAndSet = () => {
-      const merged = new Map<string, ReconocimientoRecord>();
-      // First put solicitudes
-      mapSolicitudes.forEach((val, key) => merged.set(key, val));
-      // Overwrite with reconocimientos (which has the updated checklist status)
-      mapReconocimientos.forEach((val, key) => merged.set(key, val));
+      const byKey = new Map<string, ReconocimientoRecord>();
 
-      const list = Array.from(merged.values());
-      list.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
-      setRecords(list);
+      // 1. Base: Solicitudes
+      mapSolicitudes.forEach((val, id) => {
+        byKey.set(id, val);
+      });
+
+      // 2. Fusionar con reconocimientos
+      mapReconocimientos.forEach((val, id) => {
+        const matchedKey = val.solicitudId && byKey.has(val.solicitudId)
+          ? val.solicitudId
+          : byKey.has(id)
+          ? id
+          : null;
+
+        if (matchedKey) {
+          const base = byKey.get(matchedKey)!;
+          byKey.set(matchedKey, {
+            ...base,
+            ...val,
+            id: matchedKey,
+            solicitudId: val.solicitudId || matchedKey,
+            pagado: base.pagado || val.pagado,
+            cuadernillos: base.cuadernillos || val.cuadernillos,
+            audio: base.audio || val.audio,
+            digital: base.digital || val.digital,
+            impreso: base.impreso || val.impreso,
+            entregado: base.entregado || val.entregado,
+          });
+        } else {
+          byKey.set(id, val);
+        }
+      });
+
+      // 3. Segunda pasada: Deduplicación por firma normalizada para evitar registros dobles
+      const uniqueList: ReconocimientoRecord[] = [];
+      const allItems = Array.from(byKey.values());
+      allItems.sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+
+      for (const item of allItems) {
+        const normName = (item.nombre || "").trim().toLowerCase();
+        const normYear = String(item.year || "").trim();
+        const normTipo = String(item.tipoImpresion || "").trim();
+
+        const existingIdx = uniqueList.findIndex((existing) => {
+          if (existing.id === item.id) return true;
+          if (item.solicitudId && (existing.id === item.solicitudId || existing.solicitudId === item.solicitudId)) return true;
+          if (existing.solicitudId && existing.solicitudId === item.id) return true;
+
+          const sameName = (existing.nombre || "").trim().toLowerCase() === normName;
+          const sameYear = String(existing.year || "").trim() === normYear;
+          const sameTipo = String(existing.tipoImpresion || "").trim() === normTipo;
+
+          if (sameName && sameYear && sameTipo) {
+            const tA = item.timestamp?.toDate ? item.timestamp.toDate().getTime() : (item.createdAt ? new Date(item.createdAt).getTime() : 0);
+            const tB = existing.timestamp?.toDate ? existing.timestamp.toDate().getTime() : (existing.createdAt ? new Date(existing.createdAt).getTime() : 0);
+            if (tA && tB && Math.abs(tA - tB) < 48 * 60 * 60 * 1000) {
+              return true;
+            }
+            if (existing.grupo === item.grupo && existing.zona === item.zona) {
+              return true;
+            }
+          }
+          return false;
+        });
+
+        if (existingIdx === -1) {
+          uniqueList.push({ ...item });
+        } else {
+          const existing = uniqueList[existingIdx];
+          existing.pagado = existing.pagado || item.pagado;
+          existing.cuadernillos = existing.cuadernillos || item.cuadernillos;
+          existing.audio = existing.audio || item.audio;
+          existing.digital = existing.digital || item.digital;
+          existing.impreso = existing.impreso || item.impreso;
+          existing.entregado = existing.entregado || item.entregado;
+          if (!existing.telefono && item.telefono) existing.telefono = item.telefono;
+          if (!existing.notas && item.notas) existing.notas = item.notas;
+        }
+      }
+
+      setRecords(uniqueList);
       setIsLoading(false);
     };
 
@@ -148,6 +229,7 @@ export default function ReconocimientosOS({
           const d = snap.data();
           mapReconocimientos.set(snap.id, {
             id: snap.id,
+            solicitudId: d.solicitudId || undefined,
             nombre: d.nombre || "Sin nombre",
             rol: d.rol || "Alumno",
             grupo: d.grupo || "G-1",
@@ -184,6 +266,7 @@ export default function ReconocimientosOS({
           if (d && d.nombre && (d.diplomado || d.tipoImpresion || d.costo !== undefined)) {
             mapSolicitudes.set(snap.id, {
               id: snap.id,
+              solicitudId: snap.id,
               nombre: d.nombre,
               rol: d.rol || "Alumno",
               grupo: d.grupo || "G-1",
@@ -218,7 +301,7 @@ export default function ReconocimientosOS({
     };
   }, []);
 
-  // 2. Toggle one of the 6 tracking fields with instant Firestore sync
+  // 2. Toggle one of the 6 tracking fields with instant Firestore sync in both collections
   const handleToggleStatus = async (
     record: ReconocimientoRecord,
     field: "pagado" | "cuadernillos" | "audio" | "digital" | "impreso" | "entregado"
@@ -232,17 +315,17 @@ export default function ReconocimientosOS({
     );
 
     try {
-      const docRef = doc(db, "reconocimientos", record.id);
-      await updateDoc(docRef, {
+      const updates = {
         [field]: nextVal,
         updatedAt: new Date().toISOString(),
-      }).catch(() => null);
+      };
 
-      const solRef = doc(db, "solicitudes", record.id);
-      await updateDoc(solRef, {
-        [field]: nextVal,
-        updatedAt: new Date().toISOString(),
-      }).catch(() => null);
+      await Promise.allSettled([
+        updateDoc(doc(db, "reconocimientos", record.id), updates),
+        updateDoc(doc(db, "solicitudes", record.id), updates),
+        record.solicitudId ? updateDoc(doc(db, "solicitudes", record.solicitudId), updates) : Promise.resolve(),
+        record.solicitudId ? updateDoc(doc(db, "reconocimientos", record.solicitudId), updates) : Promise.resolve(),
+      ]);
 
       playChime("success");
     } catch (err) {
@@ -250,18 +333,24 @@ export default function ReconocimientosOS({
     }
   };
 
-  // 3. Delete record
-  const handleDeleteRecord = async (id: string, nombre: string) => {
-    if (!window.confirm(`¿Seguro que deseas eliminar el registro de ${nombre}?`)) return;
+  // 3. Delete record completely from both collections to prevent ghost duplicate reappearances
+  const handleDeleteRecord = async (record: ReconocimientoRecord) => {
+    if (!window.confirm(`¿Seguro que deseas eliminar el registro de ${record.nombre} (Gen. ${record.year} - ${record.tipoImpresion})?`)) return;
     try {
-      await deleteDoc(doc(db, "reconocimientos", id));
+      setRecords((prev) => prev.filter((r) => r.id !== record.id && r.id !== record.solicitudId));
+      await Promise.allSettled([
+        deleteDoc(doc(db, "reconocimientos", record.id)),
+        deleteDoc(doc(db, "solicitudes", record.id)),
+        record.solicitudId ? deleteDoc(doc(db, "solicitudes", record.solicitudId)) : Promise.resolve(),
+        record.solicitudId ? deleteDoc(doc(db, "reconocimientos", record.solicitudId)) : Promise.resolve(),
+      ]);
       playChime("tick");
     } catch (err) {
       console.warn("Error deleting record:", err);
     }
   };
 
-  // 4. Create new manual record
+  // 4. Create new manual record with single primary key across collections
   const handleCreateManualRecord = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNombre.trim()) return;
@@ -290,7 +379,13 @@ export default function ReconocimientosOS({
         timestamp: serverTimestamp(),
       };
 
-      await addDoc(collection(db, "reconocimientos"), payload);
+      // Guardar en solicitudes y sincronizar con mismo ID en reconocimientos
+      const docRef = await addDoc(collection(db, "solicitudes"), payload);
+      await setDoc(doc(db, "reconocimientos", docRef.id), {
+        ...payload,
+        solicitudId: docRef.id,
+      }).catch(() => null);
+
       playChime("work_done");
       setShowAddModal(false);
       setNewNombre("");
@@ -302,6 +397,51 @@ export default function ReconocimientosOS({
       console.error("Error creating record:", err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // 4b. Agregar para la misma persona registrada la impresión de otros reconocimientos de otras generaciones ($100 primera / $50 re-impresión)
+  const handleCreateExtraForPerson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!personForExtra) return;
+
+    setIsSavingExtra(true);
+    const costo = extraTipo === "Primera Impresión" ? 100 : 50;
+    try {
+      const payload = {
+        nombre: personForExtra.nombre,
+        rol: personForExtra.rol,
+        grupo: personForExtra.grupo,
+        zona: personForExtra.zona,
+        diplomado: "Liderazgo I",
+        year: extraYear,
+        tipoImpresion: extraTipo,
+        costo,
+        telefono: personForExtra.telefono || undefined,
+        notas: extraNotas.trim() || undefined,
+        pagado: false,
+        cuadernillos: false,
+        audio: false,
+        digital: false,
+        impreso: false,
+        entregado: false,
+        createdAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(collection(db, "solicitudes"), payload);
+      await setDoc(doc(db, "reconocimientos", docRef.id), {
+        ...payload,
+        solicitudId: docRef.id,
+      }).catch(() => null);
+
+      playChime("work_done");
+      setPersonForExtra(null);
+      setExtraNotas("");
+    } catch (err) {
+      console.error("Error creating extra recognition:", err);
+    } finally {
+      setIsSavingExtra(false);
     }
   };
 
@@ -1412,6 +1552,22 @@ export default function ReconocimientosOS({
                       {/* ACCIONES */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Botón para agregar otra generación para la misma persona */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPersonForExtra(r);
+                              setExtraYear(r.year === "2026" ? "2025" : "2026");
+                              setExtraTipo("Re-impresión");
+                              setExtraNotas("");
+                            }}
+                            className="px-2 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-2xs flex items-center gap-1 font-bold text-[11px]"
+                            title={`Agregar otro reconocimiento de otra generación para ${r.nombre}`}
+                          >
+                            <Plus size={13} className="text-amber-600" />
+                            <span className="hidden sm:inline">Otra Gen</span>
+                          </button>
+
                           {/* WhatsApp button */}
                           {r.telefono && (
                             <button
@@ -1445,7 +1601,7 @@ export default function ReconocimientosOS({
                           {/* Delete */}
                           <button
                             type="button"
-                            onClick={() => handleDeleteRecord(r.id, r.nombre)}
+                            onClick={() => handleDeleteRecord(r)}
                             className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition"
                             title="Eliminar registro"
                           >
@@ -1464,7 +1620,158 @@ export default function ReconocimientosOS({
 
       </div>
 
-      {/* MODAL: REGISTRAR ALUMNO MANUAL */}
+      {/* MODAL: AGREGAR OTRA GENERACIÓN / RECONOCIMIENTO PARA LA MISMA PERSONA */}
+      {personForExtra && (
+        <div
+          className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setPersonForExtra(null)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl p-6 sm:p-8 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-5 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-300 text-lg">
+                  🎓
+                </span>
+                <div>
+                  <h3 className="font-black text-stone-900 dark:text-stone-100 text-base">
+                    Agregar Otra Generación para {personForExtra.nombre}
+                  </h3>
+                  <p className="text-[11px] text-stone-500">
+                    Misma persona registrada • Elige la generación y el formato ($100 primera vez / $50 re-impresión)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPersonForExtra(null)}
+                className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-stone-700"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Ficha resumen del alumno registrado */}
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700/60 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-stone-500 font-medium">Alumno Registrado:</span>
+                <strong className="text-stone-900 dark:text-stone-100 font-extrabold text-sm">{personForExtra.nombre}</strong>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-stone-600 dark:text-stone-300 pt-1 border-t border-stone-200/60 dark:border-stone-700/40">
+                <span><strong>Rol:</strong> {personForExtra.rol}</span>
+                <span>•</span>
+                <span><strong>Grupo:</strong> {personForExtra.grupo}</span>
+                <span>•</span>
+                <span><strong>Zona:</strong> {personForExtra.zona}</span>
+              </div>
+            </div>
+
+            <form onSubmit={handleCreateExtraForPerson} className="space-y-4 text-xs font-medium">
+              
+              {/* Selector de Generación / Año */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1.5 font-bold">
+                  Selecciona la Generación para este Nuevo Reconocimiento *
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["2022", "2025", "2026"] as const).map((y) => (
+                    <button
+                      key={y}
+                      type="button"
+                      onClick={() => setExtraYear(y)}
+                      className={`py-2 px-3 rounded-xl border text-center font-bold text-xs transition cursor-pointer shadow-2xs ${
+                        extraYear === y
+                          ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-950 dark:text-indigo-200 ring-2 ring-indigo-500/20"
+                          : "bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                      }`}
+                    >
+                      Gen. {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Formato a elegir: Primera Impresión ($100) vs Re-impresión ($50) */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1.5 font-bold">
+                  Formato de Impresión a Elegir *
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  
+                  {/* Opción 1: Primera Impresión ($100) */}
+                  <div
+                    onClick={() => setExtraTipo("Primera Impresión")}
+                    className={`cursor-pointer p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
+                      extraTipo === "Primera Impresión"
+                        ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20"
+                        : "border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 hover:border-indigo-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <strong className="text-stone-900 dark:text-stone-100 text-xs">Primera Impresión</strong>
+                      <span className="px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800 font-black text-xs">$100</span>
+                    </div>
+                    <span className="text-[10px] text-stone-500">Diploma inicial para esta generación</span>
+                  </div>
+
+                  {/* Opción 2: Re-impresión ($50) */}
+                  <div
+                    onClick={() => setExtraTipo("Re-impresión")}
+                    className={`cursor-pointer p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
+                      extraTipo === "Re-impresión"
+                        ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 ring-2 ring-blue-500/20"
+                        : "border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 hover:border-blue-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <strong className="text-stone-900 dark:text-stone-100 text-xs">Re-impresión</strong>
+                      <span className="px-2 py-0.5 rounded-md bg-blue-100 text-blue-800 font-black text-xs">$50</span>
+                    </div>
+                    <span className="text-[10px] text-stone-500">Reposición o copia extra</span>
+                  </div>
+
+                </div>
+              </div>
+
+              {/* Notas opcionales */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1 font-semibold">
+                  Notas u Observaciones (Opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Reconocimiento de generación anterior para entrega en el mismo paquete..."
+                  value={extraNotas}
+                  onChange={(e) => setExtraNotas(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs"
+                />
+              </div>
+
+              {/* Botones de acción */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setPersonForExtra(null)}
+                  className="px-4 py-2 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingExtra}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-600 to-indigo-600 hover:from-amber-700 hover:to-indigo-700 text-white font-extrabold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  <span>{isSavingExtra ? "Guardando..." : `Agregar a la Lista ($${extraTipo === "Primera Impresión" ? 100 : 50})`}</span>
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
       {showAddModal && (
         <div
           className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
