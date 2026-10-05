@@ -1122,6 +1122,7 @@ app.post(["/api/reconocimientos/notify", "/api/reconocimientos/solicitar"], (req
       tipoImpresion = "Primera Impresión",
       costo = 100,
       telefono,
+      notas,
       targetEmail = "laurcortazar@gmail.com",
     } = req.body;
 
@@ -1143,7 +1144,7 @@ app.post(["/api/reconocimientos/notify", "/api/reconocimientos/solicitar"], (req
       area: zona || "Zona General",
       categoria: "diplomado",
       titulo: `Solicitud de Reconocimiento • ${diplomado} (${year})`,
-      descripcion: `Solicitud de ${tipoImpresion} ($${costo}) para ${nombre} (Rol: ${rol}, Grupo: ${grupo}, Zona: ${zona}). Diplomado: ${diplomado} Generación ${year}.`,
+      descripcion: `Solicitud de ${tipoImpresion} ($${costo}) para ${nombre} (Rol: ${rol}, Grupo: ${grupo}, Zona: ${zona}). Diplomado: ${diplomado} Generación ${year}.${notas ? " Notas: " + notas : ""}`,
       especificaciones: {
         tipoImpresion,
         costo,
@@ -1152,6 +1153,7 @@ app.post(["/api/reconocimientos/notify", "/api/reconocimientos/solicitar"], (req
         grupo,
         zona,
         rol,
+        notas,
       },
       canal: "Web",
       prioridad: "Alta",
@@ -1212,6 +1214,7 @@ app.post(["/api/reconocimientos/notify", "/api/reconocimientos/solicitar"], (req
       `👥 Grupo: ${grupo}\n` +
       `📍 Zona / Sede: ${zona}\n` +
       (telefono ? `📞 Teléfono / WhatsApp: ${telefono}\n` : "") +
+      (notas ? `📝 Notas / Observaciones: ${notas}\n` : "") +
       `📜 Diplomado: ${diplomado}\n` +
       `📅 Generación / Año: ${year}\n` +
       `🖨️ Tipo de Impresión: ${tipoImpresion}\n` +

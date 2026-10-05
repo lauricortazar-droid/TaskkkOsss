@@ -41,6 +41,16 @@
       white-space: nowrap;
       border-width: 0;
     }
+    /* Garantizar texto oscuro y visible al llenar datos (no blanco sobre blanco) */
+    input[type="text"], input[type="tel"], textarea, select {
+      color: #0f172a !important;
+      background-color: #ffffff !important;
+      font-weight: 600;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #94a3b8 !important;
+      font-weight: normal;
+    }
   </style>
 </head>
 <body class="bg-gray-100 text-gray-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8 selection:bg-indigo-500 selection:text-white">
@@ -137,34 +147,83 @@
                 
                 <!-- Nombre Completo -->
                 <div class="sm:col-span-2">
-                  <label for="nombre" class="block text-xs font-semibold text-gray-700 mb-1">Nombre Completo *</label>
-                  <input type="text" id="nombre" name="nombre" required placeholder="Ej. Juan Pérez García" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                  <label for="nombre" class="block text-xs font-bold text-gray-800 mb-1">Nombre Completo *</label>
+                  <input type="text" id="nombre" name="nombre" required placeholder="Ej. Juan Pérez García" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition">
                 </div>
 
-                <!-- Rol -->
-                <div>
-                  <label for="rol" class="block text-xs font-semibold text-gray-700 mb-1">Rol / Puesto *</label>
-                  <input type="text" id="rol" name="rol" required placeholder="Ej. Alumno, Instructor, Coordinador" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                <!-- Rol (opción múltiple: Líder, Sublíder, Director centro, OSG, Otro) -->
+                <div class="sm:col-span-2">
+                  <label class="block text-xs font-bold text-gray-800 mb-1.5">Rol / Función *</label>
+                  <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    <label class="cursor-pointer">
+                      <input type="radio" name="rolOption" value="Líder" checked class="sr-only-radio rol-radio">
+                      <div class="rol-btn py-2 px-2 text-center rounded-xl border border-indigo-600 bg-indigo-50 text-indigo-950 font-bold text-xs ring-2 ring-indigo-500/20 transition shadow-2xs">
+                        Líder
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="rolOption" value="Sublíder" class="sr-only-radio rol-radio">
+                      <div class="rol-btn py-2 px-2 text-center rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-xs hover:bg-gray-50 transition shadow-2xs">
+                        Sublíder
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="rolOption" value="Director centro" class="sr-only-radio rol-radio">
+                      <div class="rol-btn py-2 px-2 text-center rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-xs hover:bg-gray-50 transition shadow-2xs">
+                        Director centro
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="rolOption" value="OSG" class="sr-only-radio rol-radio">
+                      <div class="rol-btn py-2 px-2 text-center rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-xs hover:bg-gray-50 transition shadow-2xs">
+                        OSG
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="rolOption" value="Otro" class="sr-only-radio rol-radio">
+                      <div class="rol-btn py-2 px-2 text-center rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-xs hover:bg-gray-50 transition shadow-2xs">
+                        Otro
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Espacio opcional para llenar otro rol -->
+                  <div id="otroRolContainer" class="mt-2.5 hidden">
+                    <label for="otroRolInput" class="block text-[11px] font-semibold text-gray-600 mb-1">Especificar otro rol (opcional):</label>
+                    <input type="text" id="otroRolInput" placeholder="Escribe tu rol o función (opcional)" class="w-full px-4 py-2 rounded-xl border border-indigo-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition">
+                  </div>
                 </div>
 
                 <!-- Grupo -->
                 <div>
-                  <label for="grupo" class="block text-xs font-semibold text-gray-700 mb-1">Grupo *</label>
-                  <input type="text" id="grupo" name="grupo" required placeholder="Ej. Grupo A, Matutino, G-3" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                  <label for="grupo" class="block text-xs font-bold text-gray-800 mb-1">Grupo *</label>
+                  <input type="text" id="grupo" name="grupo" required placeholder="Ej. Grupo A, Matutino, G-3" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition">
                 </div>
 
                 <!-- Zona -->
-                <div class="sm:col-span-2">
-                  <label for="zona" class="block text-xs font-semibold text-gray-700 mb-1">Zona / Sede *</label>
-                  <input type="text" id="zona" name="zona" required placeholder="Ej. Zona Tiburón, Centro, Norte, Online" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                <div>
+                  <label for="zona" class="block text-xs font-bold text-gray-800 mb-1">Zona / Sede *</label>
+                  <input type="text" id="zona" name="zona" required placeholder="Ej. Zona Tiburón, Centro, Norte, Online" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition">
                 </div>
 
                 <!-- Teléfono (Opcional para avisos WhatsApp) -->
                 <div class="sm:col-span-2">
-                  <label for="telefono" class="block text-xs font-semibold text-gray-700 mb-1">Teléfono Móvil / WhatsApp (Para coordinar tu entrega)</label>
-                  <input type="tel" id="telefono" name="telefono" placeholder="Ej. 999 123 4567" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                  <label for="telefono" class="block text-xs font-bold text-gray-800 mb-1">Teléfono Móvil / WhatsApp (Para coordinar tu entrega)</label>
+                  <input type="tel" id="telefono" name="telefono" placeholder="Ej. 999 123 4567" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition">
                 </div>
               </div>
+            </div>
+
+            <!-- Apartado de Notas u Observaciones -->
+            <hr class="border-gray-200">
+            <div>
+              <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <i class="fa-solid fa-file-lines text-indigo-600"></i> Apartado para Notas u Observaciones (Opcional)
+              </h3>
+              <p class="text-xs text-gray-500 mb-2">
+                Si requieres alguna indicación particular sobre la impresión, fecha de entrega o comprobante, anótala aquí:
+              </p>
+              <textarea id="notas" name="notas" rows="2" placeholder="Ej. Realicé mi depósito vía OXXO, favor de entregar en la sesión presencial del sábado..." class="w-full px-4 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-medium placeholder:text-gray-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm shadow-xs transition resize-y"></textarea>
             </div>
 
             <!-- Divider -->
@@ -515,6 +574,26 @@
       });
     });
 
+    // 3b. Manejo de Selección de Rol (Líder, Sublíder, Director centro, OSG, Otro)
+    const rolRadios = document.querySelectorAll(".rol-radio");
+    const otroRolContainer = document.getElementById("otroRolContainer");
+    rolRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        document.querySelectorAll(".rol-btn").forEach((btn) => {
+          btn.className = "rol-btn py-2 px-2 text-center rounded-xl border border-gray-300 bg-white text-gray-700 font-bold text-xs hover:bg-gray-50 transition shadow-2xs";
+        });
+        const selectedBtn = radio.nextElementSibling;
+        if (selectedBtn) {
+          selectedBtn.className = "rol-btn py-2 px-2 text-center rounded-xl border border-indigo-600 bg-indigo-50 text-indigo-950 font-bold text-xs ring-2 ring-indigo-500/20 transition shadow-2xs";
+        }
+        if (radio.value === "Otro") {
+          otroRolContainer.classList.remove("hidden");
+        } else {
+          otroRolContainer.classList.add("hidden");
+        }
+      });
+    });
+
     // 4. Manejo de Tipo de Impresión y Cálculo de Total Dinámico
     const printTypeRadios = document.querySelectorAll(".print-type-radio");
     printTypeRadios.forEach((radio) => {
@@ -536,6 +615,9 @@
       });
     });
 
+    // Variable global para re-descarga del ticket
+    let latestTicketData = null;
+
     // 5. Envío del Formulario (Guardar datos en Firestore)
     reconocimientoForm.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -547,10 +629,17 @@
       }
 
       const nombre = document.getElementById("nombre").value.trim();
-      const rol = document.getElementById("rol").value.trim();
+      const selectedRolRadio = document.querySelector(".rol-radio:checked");
+      let rol = selectedRolRadio ? selectedRolRadio.value : "Líder";
+      if (rol === "Otro") {
+        const otroRolVal = document.getElementById("otroRolInput")?.value.trim();
+        rol = otroRolVal || "Otro";
+      }
+
       const grupo = document.getElementById("grupo").value.trim();
       const zona = document.getElementById("zona").value.trim();
       const telefono = document.getElementById("telefono").value.trim();
+      const notas = document.getElementById("notas") ? document.getElementById("notas").value.trim() : "";
       const year = document.querySelector(".year-radio:checked")?.value || "2026";
       const tipoImpresion = selectedPrintRadio.value;
       const costo = currentCost;
@@ -574,6 +663,7 @@
           tipoImpresion,
           costo,
           telefono: telefono || null,
+          notas: notas || null,
           timestamp: serverTimestamp(),
           // Banderas de seguimiento para control de Laura:
           pagado: false,
@@ -609,6 +699,7 @@
               tipoImpresion,
               costo,
               telefono,
+              notas,
               targetEmail: "laurcortazar@gmail.com"
             })
           }).catch(() => null);
@@ -621,7 +712,7 @@
               telefono,
               area: zona,
               titulo: `Solicitud de Reconocimiento • ${diplomado} (${year})`,
-              descripcion: `Solicitud de impresión de reconocimiento para ${nombre} (${rol}, Grupo ${grupo}, Zona ${zona}). Tipo: ${tipoImpresion} ($${costo}).`,
+              descripcion: `Solicitud de impresión de reconocimiento para ${nombre} (${rol}, Grupo ${grupo}, Zona ${zona}). Tipo: ${tipoImpresion} ($${costo}).${notas ? " Notas: " + notas : ""}`,
               canal: "Web",
               prioridad: "Alta",
               targetUserEmail: "laurcortazar@gmail.com"
@@ -629,11 +720,31 @@
           }).catch(() => null);
         } catch (_) {}
 
+        // Guardar datos para re-descarga de ticket
+        latestTicketData = {
+          id: docRef.id,
+          nombre,
+          rol,
+          grupo,
+          zona,
+          diplomado,
+          year,
+          tipoImpresion,
+          costo,
+          telefono,
+          notas
+        };
+
+        // Auto-descargar el ticket oficial en la galería del solicitante
+        setTimeout(() => {
+          generateAndDownloadTicket(latestTicketData);
+        }, 500);
+
         // Mostrar estado de éxito
         reconocimientoForm.classList.add("hidden");
         successState.classList.remove("hidden");
 
-        // Construir resumen con datos de transferencia y depósito
+        // Construir resumen con datos de transferencia, notas y ticket para galería
         successSummaryBox.innerHTML = `
           <div class="flex justify-between items-center text-xs pb-2 border-b border-gray-200">
             <span class="text-gray-400 font-semibold uppercase">Folio de Ticket:</span>
@@ -658,6 +769,37 @@
             </div>
           </div>
 
+          ${notas ? `
+            <div class="pt-2 border-t border-gray-200 text-xs">
+              <span class="text-gray-400 block text-[10px] uppercase font-bold">Notas u Observaciones:</span>
+              <span class="text-gray-700 italic text-[11px]">"${escapeHtml(notas)}"</span>
+            </div>
+          ` : ""}
+
+          <!-- TARJETA DESTACADA: DESCARGA DE TICKET PARA GALERÍA -->
+          <div class="mt-3 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 space-y-2">
+            <div class="flex items-center gap-2.5">
+              <div class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-sm shadow-xs shrink-0">
+                <i class="fa-solid fa-download"></i>
+              </div>
+              <div class="flex-1">
+                <div class="font-extrabold text-emerald-950 text-xs flex items-center gap-1.5">
+                  <span>Ticket Oficial para tu Galería</span>
+                  <span class="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900">Guardado en Galería</span>
+                </div>
+                <p class="text-[11px] text-emerald-800">Se ha descargado como imagen PNG en tus archivos/fotos.</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              id="btnDownloadTicketGallery"
+              class="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <i class="fa-solid fa-image"></i>
+              <span>Volver a Descargar Ticket en Galería (PNG)</span>
+            </button>
+          </div>
+
           <!-- Datos de Transferencia o Depósito en Resumen de Éxito -->
           <div class="mt-3 pt-3 border-t border-gray-200 space-y-2">
             <div class="flex items-center justify-between">
@@ -674,7 +816,7 @@
                   <span class="text-gray-400 block text-[9px] uppercase font-bold">CLABE SPIN</span>
                   <span class="font-mono font-bold text-gray-900">728969000008838228</span>
                 </div>
-                <button type="button" id="copyClabeSuccessBtn" onclick="copyToClipboard('728969000008838228', 'copyClabeSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                <button type="button" id="copyClabeSuccessBtn" onclick="copyToClipboard('728969000008838228', 'copyClabeSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition cursor-pointer">
                   <i class="fa-regular fa-copy"></i> Copiar
                 </button>
               </div>
@@ -683,7 +825,7 @@
                   <span class="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta SPIN</span>
                   <span class="font-mono font-bold text-gray-900">4217 4701 0045 4061</span>
                 </div>
-                <button type="button" id="copyTarjetaSuccessBtn" onclick="copyToClipboard('4217470100454061', 'copyTarjetaSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                <button type="button" id="copyTarjetaSuccessBtn" onclick="copyToClipboard('4217470100454061', 'copyTarjetaSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition cursor-pointer">
                   <i class="fa-regular fa-copy"></i> Copiar
                 </button>
               </div>
@@ -692,13 +834,21 @@
                   <span class="text-gray-400 block text-[9px] uppercase font-bold">Código Depósito SPIN (OXXO)</span>
                   <span class="font-mono font-bold text-gray-900">2242-1787-4421-1658</span>
                 </div>
-                <button type="button" id="copyOxxoSuccessBtn" onclick="copyToClipboard('2242178744211658', 'copyOxxoSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                <button type="button" id="copyOxxoSuccessBtn" onclick="copyToClipboard('2242178744211658', 'copyOxxoSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition cursor-pointer">
                   <i class="fa-regular fa-copy"></i> Copiar
                 </button>
               </div>
             </div>
           </div>
         `;
+
+        // Event listener para el botón de re-descarga del ticket
+        const btnDlGallery = document.getElementById("btnDownloadTicketGallery");
+        if (btnDlGallery) {
+          btnDlGallery.addEventListener("click", () => {
+            if (latestTicketData) generateAndDownloadTicket(latestTicketData);
+          });
+        }
 
         // Configurar enlace de WhatsApp directo
         const waText = `Hola Laura, acabo de registrar mi solicitud de reconocimiento en la plataforma y te comparto mi comprobante de pago:\n\n*Nombre:* ${nombre}\n*Rol:* ${rol}\n*Grupo:* ${grupo}\n*Zona:* ${zona}\n*Diplomado:* ${diplomado} (${year})\n*Tipo:* ${tipoImpresion} ($${costo})\n*Folio:* ${docRef.id.slice(0, 10).toUpperCase()}`;
@@ -819,6 +969,278 @@
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&#039;");
+    }
+
+    // Función oficial para generar y descargar ticket en formato PNG a la galería
+    function generateAndDownloadTicket(data) {
+      if (!data) return;
+      try {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+        const scale = 2;
+        const width = 800;
+        const hasNotas = Boolean(data.notas && data.notas.trim());
+        const height = hasNotas ? 1280 : 1180;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        ctx.scale(scale, scale);
+
+        // Fondo suave
+        ctx.fillStyle = "#f8fafc";
+        ctx.fillRect(0, 0, width, height);
+
+        // Tarjeta principal
+        ctx.fillStyle = "#ffffff";
+        roundRect(ctx, 30, 30, width - 60, height - 60, 24);
+        ctx.fill();
+
+        // Encabezado institucional azul
+        ctx.fillStyle = "#042f66";
+        roundRectTop(ctx, 30, 30, width - 60, 150, 24);
+        ctx.fill();
+
+        // Franja dorada
+        ctx.fillStyle = "#f2ad00";
+        ctx.fillRect(30, 175, width - 60, 6);
+
+        // Títulos
+        ctx.fillStyle = "#ffd15c";
+        ctx.font = "bold 13px system-ui, -apple-system, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("UNIVERSIDAD FGDLL • CONTROL DE RECONOCIMIENTOS", width / 2, 70);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "900 24px system-ui, -apple-system, sans-serif";
+        ctx.fillText("COMPROBANTE DE SOLICITUD", width / 2, 105);
+
+        ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
+        ctx.font = "500 13px system-ui, -apple-system, sans-serif";
+        ctx.fillText("DIPLOMADO DE LIDERAZGO I", width / 2, 132);
+
+        // Folio y Fecha
+        const folioShort = (data.id || "REC-0000").slice(0, 10).toUpperCase();
+        const fechaTexto = new Date().toLocaleDateString("es-MX", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+
+        ctx.fillStyle = "#f1f5f9";
+        roundRect(ctx, 60, 205, width - 120, 50, 12);
+        ctx.fill();
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#042f66";
+        ctx.font = "900 15px monospace";
+        ctx.fillText(`FOLIO: ${folioShort}`, 80, 236);
+
+        ctx.textAlign = "right";
+        ctx.fillStyle = "#64748b";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText(`EXPEDICIÓN: ${fechaTexto}`, width - 80, 236);
+
+        // 1. Datos del Solicitante
+        let currentY = 285;
+        drawSectionHeader(ctx, "1. DATOS DEL SOLICITANTE", 60, currentY);
+        currentY += 24;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 1;
+        roundRect(ctx, 60, currentY, width - 120, 110, 14);
+        ctx.stroke();
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#64748b";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText("NOMBRE COMPLETO:", 80, currentY + 30);
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "900 17px system-ui, sans-serif";
+        ctx.fillText(data.nombre || "Sin Nombre", 220, currentY + 30);
+
+        ctx.fillStyle = "#64748b";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText("ROL / PUESTO:", 80, currentY + 62);
+        ctx.fillStyle = "#1e293b";
+        ctx.font = "bold 13px system-ui, sans-serif";
+        ctx.fillText(data.rol || "Líder", 220, currentY + 62);
+
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("GRUPO:", 440, currentY + 62);
+        ctx.fillStyle = "#1e293b";
+        ctx.fillText(data.grupo || "G-1", 500, currentY + 62);
+
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("SEDE / ZONA:", 80, currentY + 92);
+        ctx.fillStyle = "#1e293b";
+        ctx.fillText(data.zona || "General", 220, currentY + 92);
+
+        if (data.telefono) {
+          ctx.fillStyle = "#64748b";
+          ctx.fillText("TELÉFONO:", 440, currentY + 92);
+          ctx.fillStyle = "#1e293b";
+          ctx.fillText(data.telefono, 520, currentY + 92);
+        }
+
+        // 2. Detalles de Impresión
+        currentY += 135;
+        drawSectionHeader(ctx, "2. DETALLES DE IMPRESIÓN Y COSTO", 60, currentY);
+        currentY += 24;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = "#e2e8f0";
+        roundRect(ctx, 60, currentY, width - 120, 95, 14);
+        ctx.stroke();
+
+        ctx.fillStyle = "#64748b";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText("PROGRAMA:", 80, currentY + 30);
+        ctx.fillStyle = "#042f66";
+        ctx.font = "900 13px system-ui, sans-serif";
+        ctx.fillText(`${data.diplomado || "Liderazgo I"} (Generación ${data.year || "2026"})`, 220, currentY + 30);
+
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("TIPO DE TRÁMITE:", 80, currentY + 64);
+        ctx.fillStyle = "#1e293b";
+        ctx.font = "bold 13px system-ui, sans-serif";
+        ctx.fillText(data.tipoImpresion || "Primera Impresión", 220, currentY + 64);
+
+        // Caja de Total
+        ctx.fillStyle = "#ecfdf5";
+        ctx.strokeStyle = "#a7f3d0";
+        roundRect(ctx, width - 240, currentY + 16, 160, 62, 12);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#047857";
+        ctx.font = "bold 10px system-ui, sans-serif";
+        ctx.fillText("TOTAL A PAGAR", width - 160, currentY + 36);
+        ctx.font = "900 22px system-ui, sans-serif";
+        ctx.fillText(`$${data.costo || 100} MXN`, width - 160, currentY + 64);
+
+        // 3. Notas (si existen)
+        currentY += 115;
+        if (data.notas && data.notas.trim()) {
+          drawSectionHeader(ctx, "3. NOTAS / OBSERVACIONES", 60, currentY);
+          currentY += 24;
+          ctx.fillStyle = "#fefce8";
+          ctx.strokeStyle = "#fef08a";
+          roundRect(ctx, 60, currentY, width - 120, 60, 12);
+          ctx.fill();
+          ctx.stroke();
+
+          ctx.textAlign = "left";
+          ctx.fillStyle = "#854d0e";
+          ctx.font = "italic 12px system-ui, sans-serif";
+          ctx.fillText(`"${data.notas.trim().slice(0, 85)}"`, 80, currentY + 35);
+          currentY += 80;
+        }
+
+        // 4. Datos de Pago
+        drawSectionHeader(ctx, "DATOS DE PAGO (SPIN BY OXXO)", 60, currentY);
+        currentY += 24;
+
+        ctx.fillStyle = "#fffbeb";
+        ctx.strokeStyle = "#fde68a";
+        roundRect(ctx, 60, currentY, width - 120, 160, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#78350f";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText("BENEFICIARIA / TITULAR:", 80, currentY + 30);
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "900 14px system-ui, sans-serif";
+        ctx.fillText("LAURA CORTAZAR", 240, currentY + 30);
+
+        ctx.fillStyle = "#78350f";
+        ctx.fillText("CLABE SPIN:", 80, currentY + 64);
+        ctx.fillStyle = "#042f66";
+        ctx.font = "900 15px monospace";
+        ctx.fillText("728969000008838228", 240, currentY + 64);
+
+        ctx.fillStyle = "#78350f";
+        ctx.fillText("TARJETA SPIN:", 80, currentY + 98);
+        ctx.fillStyle = "#042f66";
+        ctx.font = "900 15px monospace";
+        ctx.fillText("4217 4701 0045 4061", 240, currentY + 98);
+
+        ctx.fillStyle = "#78350f";
+        ctx.fillText("DEPÓSITO OXXO:", 80, currentY + 132);
+        ctx.fillStyle = "#b45309";
+        ctx.font = "900 15px monospace";
+        ctx.fillText("2242-1787-4421-1658", 240, currentY + 132);
+
+        // WhatsApp callout
+        currentY += 180;
+        ctx.fillStyle = "#059669";
+        roundRect(ctx, 60, currentY, width - 120, 50, 14);
+        ctx.fill();
+
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "bold 13px system-ui, sans-serif";
+        ctx.fillText("📲 ENVÍA TU COMPROBANTE AL WHATSAPP: wa.me/19999011852", width / 2, currentY + 31);
+
+        // Pie
+        currentY += 70;
+        ctx.fillStyle = "#94a3b8";
+        ctx.font = "500 10px monospace";
+        ctx.fillText(`* ${folioShort} - VALIDO PARA IMPRESIÓN Y ENTREGA *`, width / 2, currentY + 20);
+
+        ctx.fillStyle = "#cbd5e1";
+        ctx.font = "italic 9px system-ui, sans-serif";
+        ctx.fillText("Guarda este comprobante en tu galería para cualquier consulta con Laura Cortazar.", width / 2, currentY + 36);
+
+        // Descarga directa a la galería / descargas
+        const dataUrl = canvas.toDataURL("image/png");
+        const link = document.createElement("a");
+        link.download = `Ticket_Reconocimiento_${folioShort}.png`;
+        link.href = dataUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } catch (err) {
+        console.warn("Notice downloading ticket image:", err);
+      }
+    }
+
+    function drawSectionHeader(ctx, text, x, y) {
+      ctx.textAlign = "left";
+      ctx.fillStyle = "#042f66";
+      ctx.font = "900 12px system-ui, sans-serif";
+      ctx.fillText(text, x, y);
+    }
+
+    function roundRect(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h - r);
+      ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+      ctx.lineTo(x + r, y + h);
+      ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
+    }
+
+    function roundRectTop(ctx, x, y, w, h, r) {
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.lineTo(x + w - r, y);
+      ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+      ctx.lineTo(x + w, y + h);
+      ctx.lineTo(x, y + h);
+      ctx.lineTo(x, y + r);
+      ctx.quadraticCurveTo(x, y, x + r, y);
+      ctx.closePath();
     }
 
     // Función global para copiar datos de transferencia

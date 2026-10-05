@@ -17,6 +17,8 @@ import {
   Layers,
   ArrowRight,
   Plus,
+  Download,
+  FileText,
 } from "lucide-react";
 import {
   collection,
@@ -26,6 +28,7 @@ import {
 } from "firebase/firestore";
 import { db, auth, ensureAnonymousAuth } from "../lib/firebase";
 import { playChime } from "../utils/audio";
+import { downloadTicketImage } from "../utils/ticketGenerator";
 
 interface ReconocimientoFormModalProps {
   isOpen: boolean;
@@ -44,6 +47,7 @@ export interface SolicitudReconocimientoRecord {
   tipoImpresion: string;
   costo: number;
   telefono?: string;
+  notas?: string;
   timestamp?: any;
   createdAt?: string;
   timeVal?: number;
@@ -56,16 +60,20 @@ export default function ReconocimientoFormModal({
 }: ReconocimientoFormModalProps) {
   // Form fields
   const [nombre, setNombre] = useState("");
-  const [rol, setRol] = useState("");
+  const [rolOption, setRolOption] = useState<string>("Líder");
+  const [otroRol, setOtroRol] = useState<string>("");
   const [grupo, setGrupo] = useState("");
   const [zona, setZona] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [notas, setNotas] = useState("");
   const [year, setYear] = useState<"2022" | "2025" | "2026">("2026");
   const [tipoImpresion, setTipoImpresion] = useState<"Primera Impresión" | "Re-impresión" | null>(null);
 
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isDownloadingTicket, setIsDownloadingTicket] = useState(false);
+  const [ticketDownloaded, setTicketDownloaded] = useState(false);
   const [submittedData, setSubmittedData] = useState<{
     id: string;
     nombre: string;
@@ -77,6 +85,7 @@ export default function ReconocimientoFormModal({
     tipoImpresion: string;
     costo: number;
     telefono?: string;
+    notas?: string;
   } | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [copiedFolio, setCopiedFolio] = useState(false);
@@ -161,8 +170,10 @@ export default function ReconocimientoFormModal({
       return;
     }
 
-    if (!nombre.trim() || !rol.trim() || !grupo.trim() || !zona.trim()) {
-      setUiError("Por favor completa todos los datos personales requeridos (*).");
+    const finalRol = rolOption === "Otro" ? (otroRol.trim() || "Otro") : rolOption;
+
+    if (!nombre.trim() || !grupo.trim() || !zona.trim()) {
+      setUiError("Por favor completa todos los datos requeridos (*): Nombre Completo, Grupo y Zona.");
       playChime("tick");
       return;
     }
@@ -175,7 +186,7 @@ export default function ReconocimientoFormModal({
 
       const payload = {
         nombre: nombre.trim(),
-        rol: rol.trim(),
+        rol: finalRol,
         grupo: grupo.trim(),
         zona: zona.trim(),
         diplomado: "Liderazgo I",
@@ -183,6 +194,7 @@ export default function ReconocimientoFormModal({
         tipoImpresion,
         costo: costoTotal,
         telefono: telefono.trim() || null,
+        notas: notas.trim() || null,
         timestamp: serverTimestamp(),
         // 6 flags de control para Laura:
         pagado: false,
@@ -218,6 +230,7 @@ export default function ReconocimientoFormModal({
             tipoImpresion: payload.tipoImpresion,
             costo: payload.costo,
             telefono: payload.telefono,
+            notas: payload.notas,
             targetEmail: "laurcortazar@gmail.com",
           }),
         }).catch(() => null);
@@ -230,7 +243,7 @@ export default function ReconocimientoFormModal({
             telefono: payload.telefono,
             area: payload.zona,
             titulo: `Solicitud de Reconocimiento • ${payload.diplomado} (${payload.year})`,
-            descripcion: `Solicitud de impresión para ${payload.nombre} (${payload.rol}, Grupo ${payload.grupo}, Zona ${payload.zona}). Tipo: ${payload.tipoImpresion} ($${payload.costo}).`,
+            descripcion: `Solicitud de impresión para ${payload.nombre} (${payload.rol}, Grupo ${payload.grupo}, Zona ${payload.zona}). Tipo: ${payload.tipoImpresion} ($${payload.costo}).${payload.notas ? " Notas: " + payload.notas : ""}`,
             canal: "Web Reconocimientos",
             prioridad: "Alta",
             targetUserEmail: "laurcortazar@gmail.com",
@@ -250,11 +263,19 @@ export default function ReconocimientoFormModal({
         tipoImpresion: payload.tipoImpresion,
         costo: payload.costo,
         telefono: payload.telefono || undefined,
+        notas: payload.notas || undefined,
       };
 
       setSubmittedData(ticketInfo);
       setIsSuccess(true);
       playChime("success");
+
+      // Auto-descargar ticket oficial en la galería del usuario
+      setTimeout(() => {
+        downloadTicketImage(ticketInfo).then((ok) => {
+          if (ok) setTicketDownloaded(true);
+        });
+      }, 600);
 
       if (onSuccess) onSuccess(docRef.id);
     } catch (err: any) {
@@ -266,18 +287,47 @@ export default function ReconocimientoFormModal({
     }
   };
 
+  // Descarga manual del ticket a la galería de fotos
+  const handleDownloadTicket = async () => {
+    if (!submittedData) return;
+    setIsDownloadingTicket(true);
+    playChime("tick");
+    const ok = await downloadTicketImage({
+      id: submittedData.id,
+      nombre: submittedData.nombre,
+      rol: submittedData.rol,
+      grupo: submittedData.grupo,
+      zona: submittedData.zona,
+      diplomado: submittedData.diplomado,
+      year: submittedData.year,
+      tipoImpresion: submittedData.tipoImpresion,
+      costo: submittedData.costo,
+      telefono: submittedData.telefono,
+      notas: submittedData.notas,
+    });
+    setIsDownloadingTicket(false);
+    if (ok) {
+      setTicketDownloaded(true);
+      playChime("success");
+      setTimeout(() => setTicketDownloaded(false), 4000);
+    }
+  };
+
   // Reset form to make another request
   const handleResetForm = () => {
     setNombre("");
-    setRol("");
+    setRolOption("Líder");
+    setOtroRol("");
     setGrupo("");
     setZona("");
     setTelefono("");
+    setNotas("");
     setYear("2026");
     setTipoImpresion(null);
     setIsSuccess(false);
     setSubmittedData(null);
     setUiError(null);
+    setTicketDownloaded(false);
     playChime("tick");
   };
 
@@ -425,6 +475,50 @@ export default function ReconocimientoFormModal({
                           <strong className="text-indigo-600 font-black">{submittedData.tipoImpresion} (${submittedData.costo})</strong>
                         </div>
                       </div>
+
+                      {/* Notas en el resumen */}
+                      {submittedData.notas && (
+                        <div className="pt-2 border-t border-gray-200">
+                          <span className="text-gray-400 block text-[10px] uppercase font-bold">Notas u Observaciones:</span>
+                          <span className="text-gray-700 italic text-[11px]">"{submittedData.notas}"</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* BOTÓN Y ACCIÓN DE DESCARGA DE TICKET EN GALERÍA */}
+                    <div className="max-w-md mx-auto p-4 rounded-2xl bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border-2 border-emerald-300 text-left space-y-2.5 shadow-xs">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center text-lg shrink-0 shadow-xs">
+                          <Download size={20} />
+                        </div>
+                        <div className="flex-1">
+                          <div className="font-black text-emerald-950 text-xs sm:text-sm flex items-center gap-1.5">
+                            <span>Ticket Oficial para tu Galería</span>
+                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-200 text-emerald-900">
+                              {ticketDownloaded ? "✓ Guardado" : "PNG Listo"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-emerald-800 leading-snug">
+                            Se ha descargado a tus fotos/archivos. Puedes volver a descargarlo si lo necesitas.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleDownloadTicket}
+                        disabled={isDownloadingTicket}
+                        className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-md transition transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <Download size={14} />
+                        <span>
+                          {isDownloadingTicket
+                            ? "Generando imagen PNG..."
+                            : ticketDownloaded
+                            ? "Volver a Descargar Ticket en Galería"
+                            : "Descargar Ticket en mi Galería (PNG)"}
+                        </span>
+                      </button>
                     </div>
 
                     {/* DATOS DE TRANSFERENCIA O DEPÓSITO */}
@@ -525,7 +619,7 @@ export default function ReconocimientoFormModal({
                     <div className="max-w-md mx-auto">
                       <a
                         href={`https://wa.me/19999011852?text=${encodeURIComponent(
-                          `Hola Laura, te comparto mi comprobante de pago para mi reconocimiento:\n\n*Nombre:* ${submittedData.nombre}\n*Rol:* ${submittedData.rol}\n*Grupo:* ${submittedData.grupo}\n*Zona:* ${submittedData.zona}\n*Diplomado:* ${submittedData.diplomado} (${submittedData.year})\n*Tipo:* ${submittedData.tipoImpresion}\n*Monto:* $${submittedData.costo} MXN\n*Folio:* ${submittedData.id.slice(0, 10).toUpperCase()}`
+                          `Hola Laura, te comparto mi comprobante de pago para mi reconocimiento:\n\n*Nombre:* ${submittedData.nombre}\n*Rol:* ${submittedData.rol}\n*Grupo:* ${submittedData.grupo}\n*Zona:* ${submittedData.zona}\n*Diplomado:* ${submittedData.diplomado} (${submittedData.year})\n*Tipo:* ${submittedData.tipoImpresion}\n*Monto:* $${submittedData.costo} MXN\n*Folio:* ${submittedData.id.slice(0, 10).toUpperCase()}${submittedData.notas ? `\n*Notas:* ${submittedData.notas}` : ""}`
                         )}`}
                         target="_blank"
                         rel="noreferrer"
@@ -561,8 +655,8 @@ export default function ReconocimientoFormModal({
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {/* Nombre Completo */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-gray-800 mb-1">
                             Nombre Completo *
                           </label>
                           <input
@@ -571,28 +665,58 @@ export default function ReconocimientoFormModal({
                             placeholder="Ej. Juan Pérez García"
                             value={nombre}
                             onChange={(e) => setNombre(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-medium transition bg-gray-50/50"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
                           />
                         </div>
 
-                        {/* Rol */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Rol *
+                        {/* Rol (opción múltiple: Líder, Sublíder, Director centro, OSG, Otro) */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                            Rol / Función *
                           </label>
-                          <input
-                            type="text"
-                            required
-                            placeholder="Ej. Alumno, Instructor, Coordinador"
-                            value={rol}
-                            onChange={(e) => setRol(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-medium transition bg-gray-50/50"
-                          />
+                          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                            {[
+                              { label: "Líder", value: "Líder" },
+                              { label: "Sublíder", value: "Sublíder" },
+                              { label: "Director centro", value: "Director centro" },
+                              { label: "OSG", value: "OSG" },
+                              { label: "Otro", value: "Otro" },
+                            ].map((item) => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => setRolOption(item.value)}
+                                className={`py-2 px-2.5 rounded-xl border text-center font-bold text-xs transition cursor-pointer shadow-2xs ${
+                                  rolOption === item.value
+                                    ? "bg-indigo-50 border-indigo-600 text-indigo-950 ring-2 ring-indigo-600/30"
+                                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Campo opcional si selecciona 'Otro' */}
+                          {rolOption === "Otro" && (
+                            <div className="mt-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                                Especificar otro rol (opcional):
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Escribe tu rol o función personalizada (opcional)"
+                                value={otroRol}
+                                onChange={(e) => setOtroRol(e.target.value)}
+                                className="w-full px-3.5 py-2 rounded-xl border border-indigo-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
+                              />
+                            </div>
+                          )}
                         </div>
 
                         {/* Grupo */}
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          <label className="block text-xs font-bold text-gray-800 mb-1">
                             Grupo *
                           </label>
                           <input
@@ -601,13 +725,13 @@ export default function ReconocimientoFormModal({
                             placeholder="Ej. Grupo A, Matutino, G-3"
                             value={grupo}
                             onChange={(e) => setGrupo(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-medium transition bg-gray-50/50"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
                           />
                         </div>
 
                         {/* Zona */}
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          <label className="block text-xs font-bold text-gray-800 mb-1">
                             Zona *
                           </label>
                           <input
@@ -616,13 +740,13 @@ export default function ReconocimientoFormModal({
                             placeholder="Ej. Zona Tiburón, Centro, Norte"
                             value={zona}
                             onChange={(e) => setZona(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-medium transition bg-gray-50/50"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
                           />
                         </div>
 
                         {/* Teléfono (Opcional para avisos WhatsApp) */}
                         <div className="sm:col-span-2">
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
+                          <label className="block text-xs font-bold text-gray-800 mb-1">
                             Teléfono / WhatsApp (Opcional para avisarte cuando esté impreso)
                           </label>
                           <input
@@ -630,10 +754,30 @@ export default function ReconocimientoFormModal({
                             placeholder="Ej. 999 123 4567"
                             value={telefono}
                             onChange={(e) => setTelefono(e.target.value)}
-                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-xs sm:text-sm font-medium transition bg-gray-50/50"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
                           />
                         </div>
                       </div>
+                    </div>
+
+                    <hr className="border-gray-200" />
+
+                    {/* APARTADO DE NOTAS / OBSERVACIONES */}
+                    <div>
+                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <FileText size={14} className="text-indigo-600" />
+                        <span>Apartado para Notas u Observaciones (Opcional)</span>
+                      </h4>
+                      <p className="text-[11px] text-gray-500 mb-2">
+                        Si requieres alguna indicación particular sobre la impresión, fecha de entrega o comprobante, déjanos tu nota:
+                      </p>
+                      <textarea
+                        rows={2}
+                        placeholder="Ej. Realicé mi pago en OXXO, favor de entregar en la sesión presencial de este sábado..."
+                        value={notas}
+                        onChange={(e) => setNotas(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-medium placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition resize-y"
+                      />
                     </div>
 
                     <hr className="border-gray-200" />
