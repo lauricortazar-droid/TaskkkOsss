@@ -56,6 +56,30 @@
   ],
   "laurcortazar@gmail.com": [
     {
+      "id": "rec-1791230493019-w4bi",
+      "folio": "REC-3986",
+      "solicitante": "Test Alumno",
+      "area": "Tiburón",
+      "categoria": "diplomado",
+      "titulo": "Solicitud de Reconocimiento • Liderazgo I (2026)",
+      "descripcion": "Solicitud de Primera Impresión ($100) para Test Alumno (Rol: Alumno, Grupo: G-1, Zona: Tiburón). Diplomado: Liderazgo I Generación 2026.",
+      "especificaciones": {
+        "tipoImpresion": "Primera Impresión",
+        "costo": 100,
+        "diplomado": "Liderazgo I",
+        "year": "2026",
+        "grupo": "G-1",
+        "zona": "Tiburón",
+        "rol": "Alumno"
+      },
+      "canal": "Web",
+      "prioridad": "Alta",
+      "estado": "Nueva",
+      "estadoTracking": "espera",
+      "fechaIngreso": "2026-10-05T20:01:33.019Z",
+      "leida": false
+    },
+    {
       "id": "sol-1790965990589-awak",
       "folio": "REQ-5161",
       "solicitante": "Dr. Morales",

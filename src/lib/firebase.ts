@@ -13,6 +13,7 @@ import {
   ConfirmationResult,
   onAuthStateChanged,
   signOut,
+  signInAnonymously,
   User,
 } from "firebase/auth";
 import {
@@ -52,6 +53,18 @@ appleProvider.addScope("name");
 // In-memory caching for OAuth access token (mandatory: never store in localStorage)
 let cachedAccessToken: string | null = null;
 let isSigningIn = false;
+
+// Ensure anonymous authentication before performing Firestore writes from public forms
+export async function ensureAnonymousAuth(): Promise<User | null> {
+  if (auth.currentUser) return auth.currentUser;
+  try {
+    const cred = await signInAnonymously(auth);
+    return cred.user;
+  } catch (err) {
+    console.warn("Could not sign in anonymously:", err);
+    return null;
+  }
+}
 
 export enum OperationType {
   CREATE = "create",

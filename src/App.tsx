@@ -23,6 +23,8 @@ import UrlLibraryOS, { INITIAL_URL_LIBRARY, INITIAL_QUICK_RESPONSES } from "./co
 import PrintOS from "./components/PrintOS";
 import NotificationsModal from "./components/NotificationsModal";
 import PublicRequestPortal from "./components/PublicRequestPortal";
+import ReconocimientosOS from "./components/ReconocimientosOS";
+import ReconocimientoFormModal from "./components/ReconocimientoFormModal";
 import {
   notifyTaskCompleted,
   notifyClientMessageReceived,
@@ -68,7 +70,8 @@ import {
   deleteSolicitudFromFirestore,
   subscribeToSolicitudes,
 } from "./lib/firestoreService";
-import { auth, initAuth, getAccessToken } from "./lib/firebase";
+import { auth, initAuth, getAccessToken, db } from "./lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
 import { uploadJsonBackupToGoogleDrive } from "./lib/googleWorkspace";
 import { playChime } from "./utils/audio";
 import { Flame, Sparkles, Users, Tag as TagIcon, Cloud, Printer, Wallet, Bookmark } from "lucide-react";
@@ -332,6 +335,22 @@ export default function App() {
     return "portal";
   });
   const [currentPrintItem, setCurrentPrintItem] = useState<PrintItem | null>(null);
+
+  // Reconocimientos & Diplomas state (Mini Web App + Tracking)
+  const [showReconocimientoModal, setShowReconocimientoModal] = useState(false);
+  const [reconocimientosCount, setReconocimientosCount] = useState<number>(0);
+  const [pendingReconocimientosCount, setPendingReconocimientosCount] = useState<number>(0);
+  const [newReconocimientoAlert, setNewReconocimientoAlert] = useState<{
+    id: string;
+    nombre: string;
+    rol: string;
+    grupo: string;
+    zona: string;
+    diplomado: string;
+    year: string;
+    tipoImpresion: string;
+    costo: number;
+  } | null>(null);
 
   // Cloud Sync state (Email synchronization for Phone ↔ PC)
   const [syncEmail, setSyncEmail] = useState<string>(() => {
@@ -658,6 +677,86 @@ export default function App() {
 
       return () => cleanup();
     }
+  }, []);
+
+  // Real-time listener for Solicitudes de Reconocimiento (Webapp alert, sound & email notification to laurcortazar@gmail.com)
+  useEffect(() => {
+    let isInitialLoad = true;
+    const unsub = onSnapshot(
+      collection(db, "solicitudes"),
+      (snapshot) => {
+        setReconocimientosCount(snapshot.size);
+
+        let pendingCount = 0;
+        snapshot.forEach((snapDoc) => {
+          const d = snapDoc.data();
+          // Solicitudes nuevas o pendientes de procesar
+          if (d && (!d.entregado || !d.pagado || !d.revisado)) {
+            pendingCount++;
+          }
+        });
+        setPendingReconocimientosCount(pendingCount);
+
+        if (!isInitialLoad) {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              const data = change.doc.data();
+              if (data && data.nombre) {
+                playChime("notification");
+
+                const alertPayload = {
+                  id: change.doc.id,
+                  nombre: data.nombre || "Graduado",
+                  rol: data.rol || "Alumno",
+                  grupo: data.grupo || "G-1",
+                  zona: data.zona || "General",
+                  diplomado: data.diplomado || "Liderazgo I",
+                  year: String(data.year || "2026"),
+                  tipoImpresion: data.tipoImpresion || "Primera Impresión",
+                  costo: Number(data.costo || 100),
+                };
+
+                setNewReconocimientoAlert(alertPayload);
+
+                // Desktop / browser Notification
+                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+                  try {
+                    new Notification("🎓 ¡Solicitud de Reconocimiento!", {
+                      body: `${alertPayload.nombre} (${alertPayload.rol}, Grupo ${alertPayload.grupo}) solicitó ${alertPayload.tipoImpresion} ($${alertPayload.costo}) para ${alertPayload.diplomado} (${alertPayload.year})`,
+                      icon: "/icon-192.svg",
+                    });
+                  } catch (_) {}
+                }
+
+                // Dispatch notification to email laurcortazar@gmail.com
+                fetch("/api/reconocimientos/notify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    nombre: alertPayload.nombre,
+                    rol: alertPayload.rol,
+                    grupo: alertPayload.grupo,
+                    zona: alertPayload.zona,
+                    diplomado: alertPayload.diplomado,
+                    year: alertPayload.year,
+                    tipoImpresion: alertPayload.tipoImpresion,
+                    costo: alertPayload.costo,
+                    telefono: data.telefono,
+                    targetEmail: "laurcortazar@gmail.com",
+                  }),
+                }).catch(() => null);
+              }
+            }
+          });
+        }
+        isInitialLoad = false;
+      },
+      (err) => {
+        console.warn("Notice in app solicitudes snapshot:", err);
+      }
+    );
+
+    return () => unsub();
   }, []);
 
   // Keep essential task valid if tasks change
@@ -2473,6 +2572,39 @@ export default function App() {
             >
               <span>📊</span>
             </button>
+
+            {/* Reconocimientos: 🎓 */}
+            <button
+              type="button"
+              id="ws-tab-reconocimientos"
+              onClick={() => {
+                setCurrentWorkspace("reconocimientos");
+                setNewReconocimientoAlert(null);
+                playChime("tick");
+              }}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                pendingReconocimientosCount > 0 || newReconocimientoAlert
+                  ? "animate-heartbeat-soft ring-2 ring-[#f2ad00] shadow-md shadow-[#f2ad00]/30"
+                  : ""
+              } ${
+                currentWorkspace === "reconocimientos"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20 font-bold"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Reconocimientos y Diplomas: 🎓 (Pago, Cuadernillos, Audio, Digital, Impreso y Entrega)"
+              aria-label="Reconocimientos: 🎓"
+            >
+              <span className={pendingReconocimientosCount > 0 || newReconocimientoAlert ? "animate-pulse" : ""}>🎓</span>
+              {reconocimientosCount > 0 && (
+                <span className={`absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-black leading-tight shadow-xs ${
+                  pendingReconocimientosCount > 0 || newReconocimientoAlert
+                    ? "bg-[#f2ad00] text-[#1d1d1b] animate-bounce font-black ring-1 ring-white"
+                    : "bg-[#f2ad00] text-[#1d1d1b]"
+                }`}>
+                  {reconocimientosCount}
+                </span>
+              )}
+            </button>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -2566,6 +2698,23 @@ export default function App() {
             onSaveToLonas={handleSaveToLonas}
             onSwitchWorkspace={(ws) => setCurrentWorkspace(ws)}
           />
+        ) : currentWorkspace === "reconocimientos" ? (
+          <ReconocimientosOS
+            userEmail={syncEmail}
+            onOpenPortal={() => setCurrentWorkspace("portal")}
+            onSendToPrint={(title, desc, cost) => {
+              handleSendToPrint({
+                id: `rec-print-${Date.now()}`,
+                tipo: "recibo_general",
+                titulo: title,
+                clienteNombre: desc,
+                total: cost,
+                fecha: new Date().toISOString().split("T")[0],
+                estado: "Listo para Impresión",
+                createdAt: new Date().toISOString(),
+              });
+            }}
+          />
         ) : currentWorkspace === "pomodoro" ? (
           <div className="space-y-6 animate-in fade-in duration-300">
             <div className="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -2640,6 +2789,89 @@ export default function App() {
                 </button>
               </div>
             )}
+
+            {/* Alerta flotante en tiempo real: Nueva Solicitud de Reconocimiento */}
+            {newReconocimientoAlert && (
+              <div className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white p-4 shadow-xl border border-indigo-400/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl p-2 rounded-xl bg-white/20 shrink-0">🎓</span>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                      ¡Nueva Solicitud de Reconocimiento en Tiempo Real!
+                    </div>
+                    <div className="text-sm font-bold">
+                      {newReconocimientoAlert.nombre} ({newReconocimientoAlert.rol}, Grupo {newReconocimientoAlert.grupo})
+                    </div>
+                    <div className="text-xs text-indigo-200">
+                      {newReconocimientoAlert.tipoImpresion} (${newReconocimientoAlert.costo}) • {newReconocimientoAlert.diplomado} {newReconocimientoAlert.year} • Zona {newReconocimientoAlert.zona}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentWorkspace("reconocimientos");
+                      setNewReconocimientoAlert(null);
+                      playChime("tick");
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs shadow-md transition"
+                  >
+                    Ver en Reconocimientos 🎓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewReconocimientoAlert(null)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs"
+                    title="Descartar aviso"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* BOTÓN DESTACADO: QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO */}
+            <div className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white p-3.5 sm:p-4 shadow-md border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <span className="text-2xl p-2 rounded-xl bg-white/20 shrink-0">🎓</span>
+                <div>
+                  <div className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                    <span>Diplomas Oficiales • Liderazgo I</span>
+                    <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-white/20 text-indigo-100">
+                      Universidad FGDLL
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-indigo-100">
+                    Control de alumnos: Pago, Cuadernillos, Audio, Digital, Impreso y Entrega
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  id="btn-solicitar-reconocimiento-main"
+                  onClick={() => {
+                    setShowReconocimientoModal(true);
+                    playChime("tick");
+                  }}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs uppercase tracking-wider shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>📜 QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentWorkspace("reconocimientos");
+                    playChime("tick");
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                  title="Ir a lista de reconocimientos"
+                >
+                  <span>Ver Lista 🎓</span>
+                </button>
+              </div>
+            </div>
 
             {/* Top Split: Executive Input (with active task context selector & tags) + Output WhatsApp Message */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -2863,6 +3095,15 @@ export default function App() {
       <UndoToast
         action={undoAction}
         onDismiss={() => setUndoAction(null)}
+      />
+
+      {/* Reconocimiento Form Modal (Mini Web App) */}
+      <ReconocimientoFormModal
+        isOpen={showReconocimientoModal}
+        onClose={() => setShowReconocimientoModal(false)}
+        onSuccess={() => {
+          setNewReconocimientoAlert(null);
+        }}
       />
 
       {/* Centro de Notificaciones & Solicitudes Modal (Push + Email) */}

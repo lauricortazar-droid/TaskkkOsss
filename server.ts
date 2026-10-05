@@ -1109,6 +1109,144 @@ app.post("/api/solicitudes/crear", (req: Request, res: Response) => {
   }
 });
 
+// 2b. Registrar y notificar Solicitud de Impresión de Reconocimientos (Task-OS, WebApp y correo a laurcortazar@gmail.com)
+app.post(["/api/reconocimientos/notify", "/api/reconocimientos/solicitar"], (req: Request, res: Response) => {
+  try {
+    const {
+      nombre,
+      rol = "Alumno",
+      grupo = "G-1",
+      zona = "General",
+      diplomado = "Liderazgo I",
+      year = "2026",
+      tipoImpresion = "Primera Impresión",
+      costo = 100,
+      telefono,
+      targetEmail = "laurcortazar@gmail.com",
+    } = req.body;
+
+    if (!nombre) {
+      return res.status(400).json({ error: "El nombre es obligatorio" });
+    }
+
+    const cleanUserEmail = (targetEmail || "laurcortazar@gmail.com").trim().toLowerCase();
+    const store = getSolicitudesStore();
+    const userSolicitudes = store[cleanUserEmail] || store["default"] || [];
+    const folio = `REC-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const newSolicitud: ServerSolicitudItem = {
+      id: `rec-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      folio,
+      solicitante: nombre.trim(),
+      telefono: telefono ? String(telefono).trim() : undefined,
+      email: undefined,
+      area: zona || "Zona General",
+      categoria: "diplomado",
+      titulo: `Solicitud de Reconocimiento • ${diplomado} (${year})`,
+      descripcion: `Solicitud de ${tipoImpresion} ($${costo}) para ${nombre} (Rol: ${rol}, Grupo: ${grupo}, Zona: ${zona}). Diplomado: ${diplomado} Generación ${year}.`,
+      especificaciones: {
+        tipoImpresion,
+        costo,
+        diplomado,
+        year,
+        grupo,
+        zona,
+        rol,
+      },
+      canal: "Web",
+      prioridad: "Alta",
+      estado: "Nueva",
+      estadoTracking: "espera",
+      fechaIngreso: new Date().toISOString(),
+      leida: false,
+    };
+
+    userSolicitudes.unshift(newSolicitud);
+    store[cleanUserEmail] = userSolicitudes;
+    saveSolicitudesStore(store);
+
+    // 1. Guardar en historial de Notificaciones Push y Alertas
+    const notifRecord: NotificationHistoryRecord = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: `🎓 ¡Solicitud de Reconocimiento!: ${nombre}`,
+      body: `${tipoImpresion} ($${costo}) • ${rol} • Grupo ${grupo} (${zona}) • ${diplomado} ${year}`,
+      icon: "/icon-192.svg",
+      tag: "reconocimiento_nuevo",
+      url: "/?workspace=reconocimientos",
+      email: cleanUserEmail,
+      type: "solicitud_nueva",
+      data: {
+        tipo: "reconocimiento",
+        nombre,
+        rol,
+        grupo,
+        zona,
+        diplomado,
+        year,
+        tipoImpresion,
+        costo,
+        telefono,
+        folio,
+      },
+      timestamp: new Date().toISOString(),
+      delivered: true,
+    };
+
+    const notifHistory = getNotificationsHistory();
+    notifHistory.unshift(notifRecord);
+    saveNotificationsHistory(notifHistory);
+
+    // 2. Preparar Notificación por Correo para Laura Cortazar
+    const dateFormatted = new Date().toLocaleString("es-ES", {
+      dateStyle: "full",
+      timeStyle: "short",
+    });
+
+    const emailSubject = `[Task-OS] 🎓 Nueva Solicitud de Reconocimiento: ${nombre} (${tipoImpresion} $${costo})`;
+    const emailBodyText =
+      `Hola Laura,\n\n` +
+      `Se ha registrado una nueva Solicitud de Impresión de Reconocimiento en tiempo real:\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `👤 Solicitante: ${nombre}\n` +
+      `💼 Rol / Puesto: ${rol}\n` +
+      `👥 Grupo: ${grupo}\n` +
+      `📍 Zona / Sede: ${zona}\n` +
+      (telefono ? `📞 Teléfono / WhatsApp: ${telefono}\n` : "") +
+      `📜 Diplomado: ${diplomado}\n` +
+      `📅 Generación / Año: ${year}\n` +
+      `🖨️ Tipo de Impresión: ${tipoImpresion}\n` +
+      `💰 Total a Pagar: $${costo} MXN\n` +
+      `🎫 Folio Asignado: ${folio}\n` +
+      `🕒 Fecha de Registro: ${dateFormatted}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `Puedes ingresar a Task-OS y seleccionar el emoji 🎓 para gestionar el seguimiento:\n` +
+      `1. ¿Ya pagó? (Confirmar pago)\n` +
+      `2. ¿Mandó cuadernillos?\n` +
+      `3. ¿Mandó audio?\n` +
+      `4. ¿Reconocimiento digital enviado?\n` +
+      `5. ¿Ya se imprimió físicamente?\n` +
+      `6. ¿Ya se entregó al graduado?\n\n` +
+      `Task-OS • Sistema Operativo Ejecutivo de Laura Cortazar\n`;
+
+    console.log(`[Reconocimiento Notificado con Éxito a ${cleanUserEmail}] ${nombre} - ${tipoImpresion} ($${costo})`);
+
+    return res.json({
+      success: true,
+      folio,
+      solicitud: newSolicitud,
+      pushDelivered: true,
+      emailPrepared: {
+        to: cleanUserEmail,
+        subject: emailSubject,
+        bodyText: emailBodyText,
+      },
+    });
+  } catch (err: any) {
+    console.error("Error in /api/reconocimientos/notify:", err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // 3. Update solicitud (mark as read, change status, link task)
 app.put("/api/solicitudes/:id", (req: Request, res: Response) => {
   try {
@@ -2488,6 +2626,15 @@ async function startServer() {
       success: false,
       error: err?.message || "Internal API error",
     });
+  });
+
+  // Direct route for the standalone Mini Web App de Solicitud de Reconocimientos
+  app.get(["/solicitud", "/solicitudes", "/reconocimientos", "/solicitud.html", "/reconocimientos.html"], (_req: Request, res: Response) => {
+    const filePath = path.join(process.cwd(), "public", "reconocimientos.html");
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+    return res.redirect("/");
   });
 
   if (!isProdWithDist) {

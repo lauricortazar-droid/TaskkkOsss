@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Solicitud de Reconocimiento • Liderazgo I</title>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha512-DTOQO9RWCH3ppGqcWaEA1BIZOC6xxalwEsw9c2QQeAIftl+Vegovlnee1c9QX4TctnWMn13TZye+giMm8e2LwA==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          borderRadius: {
+            '2xl': '1rem',
+            '3xl': '1.5rem',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    /* Hide native radio button visuals */
+    .sr-only-radio {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 text-gray-800 min-h-screen py-8 px-4 sm:px-6 lg:px-8 selection:bg-indigo-500 selection:text-white">
+
+  <!-- Container -->
+  <div class="max-w-6xl mx-auto">
+    
+    <!-- Top Header -->
+    <header class="mb-8 text-center sm:text-left flex flex-col sm:flex-row items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-indigo-700 text-white flex items-center justify-center text-xl shadow-md">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div>
+          <h1 class="text-xl sm:text-2xl font-black text-gray-900 tracking-tight">Mini Web App • Solicitud de Reconocimientos</h1>
+          <p class="text-xs sm:text-sm text-gray-500">Módulo oficial de registro y expedición de diplomas • Universidad FGDLL</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <span id="authStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+          <i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i> Conectando...
+        </span>
+        <a href="/" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold transition shadow-sm">
+          <i class="fa-solid fa-arrow-left"></i> Volver a Task-OS
+        </a>
+      </div>
+    </header>
+
+    <!-- Main 3-Column Grid (2 cols for form, 1 col for recent list) -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+
+      <!-- LEFT COLUMN: SOLICITUD FORM (Ocupa 2/3 en pantallas grandes) -->
+      <div class="lg:col-span-2">
+        
+        <!-- Main Form Card -->
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+          
+          <!-- Colorful Gradient Header -->
+          <div class="bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 p-6 sm:p-8 text-white relative">
+            <div class="flex items-center justify-between">
+              <div>
+                <span class="inline-block px-3 py-0.5 rounded-full text-xs font-bold bg-white/20 text-white backdrop-blur-xs mb-2 uppercase tracking-wider">
+                  Expedición de Diplomas
+                </span>
+                <h2 class="text-2xl sm:text-3xl font-black tracking-tight">Solicitud de Reconocimiento</h2>
+                <p class="text-indigo-100 text-xs sm:text-sm mt-1">Completa los datos para solicitar la impresión oficial de tu diploma.</p>
+              </div>
+              <div class="hidden sm:flex w-16 h-16 rounded-2xl bg-white/10 backdrop-blur-xs items-center justify-center text-3xl text-indigo-100">
+                <i class="fa-solid fa-certificate"></i>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alert Notification Box in UI (No alerts) -->
+          <div id="uiMessageContainer" class="hidden px-6 pt-6"></div>
+
+          <!-- Success State View (Initially Hidden) -->
+          <div id="successState" class="hidden p-8 sm:p-12 text-center space-y-6">
+            <div class="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center text-4xl shadow-sm animate-bounce">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+            <div class="space-y-2">
+              <h3 class="text-2xl sm:text-3xl font-black text-gray-900">¡Solicitud Registrada con Éxito!</h3>
+              <p class="text-sm text-gray-500 max-w-md mx-auto">
+                Tu solicitud ha sido guardada en la base de datos en tiempo real. Laura Cortazar ha recibido la notificación en Task-OS y correo electrónico.
+              </p>
+            </div>
+
+            <!-- Receipt Summary Box -->
+            <div id="successSummaryBox" class="max-w-md mx-auto bg-gray-50 rounded-2xl p-5 border border-gray-200 text-left space-y-3">
+              <!-- Injected dynamically -->
+            </div>
+
+            <!-- Action buttons -->
+            <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <button id="btnAnotherRequest" type="button" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-plus"></i> Hacer otra solicitud
+              </button>
+              <a id="btnWhatsAppConfirm" href="#" target="_blank" class="w-full sm:w-auto px-6 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+                <i class="fa-brands fa-whatsapp text-lg"></i> Notificar a Laura por WhatsApp
+              </a>
+            </div>
+          </div>
+
+          <!-- Form Element -->
+          <form id="reconocimientoForm" class="p-6 sm:p-8 space-y-6">
+
+            <!-- 1. DATOS PERSONALES (Grid de 2 columnas) -->
+            <div>
+              <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-user text-indigo-600"></i> 1. Datos Personales del Solicitante
+              </h3>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Nombre Completo -->
+                <div class="sm:col-span-2">
+                  <label for="nombre" class="block text-xs font-semibold text-gray-700 mb-1">Nombre Completo *</label>
+                  <input type="text" id="nombre" name="nombre" required placeholder="Ej. Juan Pérez García" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                </div>
+
+                <!-- Rol -->
+                <div>
+                  <label for="rol" class="block text-xs font-semibold text-gray-700 mb-1">Rol / Puesto *</label>
+                  <input type="text" id="rol" name="rol" required placeholder="Ej. Alumno, Instructor, Coordinador" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                </div>
+
+                <!-- Grupo -->
+                <div>
+                  <label for="grupo" class="block text-xs font-semibold text-gray-700 mb-1">Grupo *</label>
+                  <input type="text" id="grupo" name="grupo" required placeholder="Ej. Grupo A, Matutino, G-3" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                </div>
+
+                <!-- Zona -->
+                <div class="sm:col-span-2">
+                  <label for="zona" class="block text-xs font-semibold text-gray-700 mb-1">Zona / Sede *</label>
+                  <input type="text" id="zona" name="zona" required placeholder="Ej. Zona Tiburón, Centro, Norte, Online" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                </div>
+
+                <!-- Teléfono (Opcional para avisos WhatsApp) -->
+                <div class="sm:col-span-2">
+                  <label for="telefono" class="block text-xs font-semibold text-gray-700 mb-1">Teléfono Móvil / WhatsApp (Para coordinar tu entrega)</label>
+                  <input type="tel" id="telefono" name="telefono" placeholder="Ej. 999 123 4567" class="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm font-medium transition bg-gray-50/50">
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <hr class="border-gray-200">
+
+            <!-- 2. DETALLES DEL DIPLOMA -->
+            <div>
+              <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-award text-indigo-600"></i> 2. Detalles del Diploma
+              </h3>
+
+              <div class="space-y-4">
+                <!-- Diplomado (Solo lectura) -->
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-1">Diplomado / Programa</label>
+                  <div class="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-300 text-gray-800 text-sm font-bold select-none">
+                    <i class="fa-solid fa-lock text-gray-400 text-xs"></i>
+                    <span>Liderazgo I</span>
+                    <span class="ml-auto text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">Programa Oficial</span>
+                  </div>
+                </div>
+
+                <!-- Selector de Año/Generación (Radio buttons con estilo de botón) -->
+                <div>
+                  <label class="block text-xs font-semibold text-gray-700 mb-2">Año / Generación *</label>
+                  <div class="grid grid-cols-3 gap-3">
+                    <label class="cursor-pointer">
+                      <input type="radio" name="year" value="2022" class="sr-only-radio year-radio">
+                      <div class="year-btn text-center py-2.5 px-3 rounded-xl border border-gray-300 bg-white font-bold text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition shadow-2xs">
+                        2022
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="year" value="2025" class="sr-only-radio year-radio">
+                      <div class="year-btn text-center py-2.5 px-3 rounded-xl border border-gray-300 bg-white font-bold text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition shadow-2xs">
+                        2025
+                      </div>
+                    </label>
+                    <label class="cursor-pointer">
+                      <input type="radio" name="year" value="2026" checked class="sr-only-radio year-radio">
+                      <div class="year-btn text-center py-2.5 px-3 rounded-xl border border-gray-300 bg-white font-bold text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition shadow-2xs ring-2 ring-indigo-600 bg-indigo-50/50 text-indigo-900 border-indigo-500">
+                        2026
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <hr class="border-gray-200">
+
+            <!-- 3. TIPO DE IMPRESIÓN (Dos tarjetas clicables) -->
+            <div>
+              <h3 class="text-sm font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <i class="fa-solid fa-print text-indigo-600"></i> 3. Tipo de Impresión
+              </h3>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                <!-- Tarjeta 1: Primera Impresión ($100) -->
+                <label class="cursor-pointer">
+                  <input type="radio" name="tipoImpresion" value="Primera Impresión" data-costo="100" class="sr-only-radio print-type-radio">
+                  <div class="print-card p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-indigo-300 transition-all shadow-2xs flex flex-col justify-between h-full">
+                    <div class="flex items-start justify-between">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold">
+                          1ª
+                        </div>
+                        <div>
+                          <div class="font-bold text-gray-900 text-sm">Primera Impresión</div>
+                          <p class="text-[11px] text-gray-500">Diploma oficial inicial</p>
+                        </div>
+                      </div>
+                      <span class="text-base font-black text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg">$100</span>
+                    </div>
+                    <div class="mt-3 text-[11px] text-gray-500 flex items-center gap-1.5">
+                      <i class="fa-solid fa-check text-indigo-500 text-xs"></i> Papel Opalina premium con sellos
+                    </div>
+                  </div>
+                </label>
+
+                <!-- Tarjeta 2: Re-impresión ($50) -->
+                <label class="cursor-pointer">
+                  <input type="radio" name="tipoImpresion" value="Re-impresión" data-costo="50" class="sr-only-radio print-type-radio">
+                  <div class="print-card p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-indigo-300 transition-all shadow-2xs flex flex-col justify-between h-full">
+                    <div class="flex items-start justify-between">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold">
+                          <i class="fa-solid fa-repeat"></i>
+                        </div>
+                        <div>
+                          <div class="font-bold text-gray-900 text-sm">Re-impresión</div>
+                          <p class="text-[11px] text-gray-500">Reposición o copia adicional</p>
+                        </div>
+                      </div>
+                      <span class="text-base font-black text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-lg">$50</span>
+                    </div>
+                    <div class="mt-3 text-[11px] text-gray-500 flex items-center gap-1.5">
+                      <i class="fa-solid fa-check text-blue-500 text-xs"></i> Reposición por extravío o daño
+                    </div>
+                  </div>
+                </label>
+
+              </div>
+
+              <!-- DATOS DE TRANSFERENCIA O DEPÓSITO EN EL FORMULARIO -->
+              <div class="mt-4 p-4 rounded-2xl bg-amber-50/70 border border-amber-200 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <i class="fa-solid fa-credit-card"></i> Datos de Transferencia o Depósito
+                  </span>
+                  <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                    LAURA CORTAZAR
+                  </span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+                  <div class="p-2.5 rounded-xl bg-white border border-amber-200/70 flex items-center justify-between">
+                    <div>
+                      <span class="text-gray-400 block text-[10px] uppercase font-bold">CLABE SPIN</span>
+                      <span class="font-mono font-bold text-gray-900 text-xs">728969000008838228</span>
+                    </div>
+                    <button type="button" id="copyClabeFormBtn" onclick="copyToClipboard('728969000008838228', 'copyClabeFormBtn')" class="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs transition" title="Copiar CLABE">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-white border border-amber-200/70 flex items-center justify-between">
+                    <div>
+                      <span class="text-gray-400 block text-[10px] uppercase font-bold">Tarjeta SPIN</span>
+                      <span class="font-mono font-bold text-gray-900 text-xs">4217 4701 0045 4061</span>
+                    </div>
+                    <button type="button" id="copyTarjetaFormBtn" onclick="copyToClipboard('4217470100454061', 'copyTarjetaFormBtn')" class="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs transition" title="Copiar Tarjeta">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-white border border-amber-200/70 flex items-center justify-between">
+                    <div>
+                      <span class="text-gray-400 block text-[10px] uppercase font-bold">Depósito OXXO</span>
+                      <span class="font-mono font-bold text-gray-900 text-xs">2242-1787-4421-1658</span>
+                    </div>
+                    <button type="button" id="copyOxxoFormBtn" onclick="copyToClipboard('2242178744211658', 'copyOxxoFormBtn')" class="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs transition" title="Copiar OXXO">
+                      <i class="fa-regular fa-copy"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="pt-1 flex items-center justify-between text-[11px] text-gray-600">
+                  <span>¿Tienes dudas o quieres confirmar tu pago?</span>
+                  <a href="https://wa.me/19999011852" target="_blank" class="font-bold text-emerald-700 hover:text-emerald-800 flex items-center gap-1">
+                    <i class="fa-brands fa-whatsapp text-sm"></i> WhatsApp de Pago
+                  </a>
+                </div>
+              </div>
+            </div>
+
+            <!-- Divider -->
+            <hr class="border-gray-200">
+
+            <!-- 4. PIE DEL FORMULARIO -->
+            <div class="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
+              
+              <!-- Total a pagar dinámico -->
+              <div>
+                <span class="text-xs text-gray-500 font-medium block">Total de tu solicitud:</span>
+                <div id="totalDisplay" class="text-3xl font-black text-gray-900 tracking-tight">
+                  Total a pagar: <span class="text-indigo-600">$0</span>
+                </div>
+              </div>
+
+              <!-- Submit Button -->
+              <button id="btnSubmit" type="submit" class="w-full sm:w-auto px-8 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-sm sm:text-base shadow-lg hover:shadow-indigo-500/25 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3">
+                <span id="btnSubmitSpinner" class="hidden">
+                  <i class="fa-solid fa-circle-notch fa-spin"></i>
+                </span>
+                <span id="btnSubmitText">Registrar Solicitud</span>
+                <i id="btnSubmitArrow" class="fa-solid fa-arrow-right text-xs"></i>
+              </button>
+
+            </div>
+
+          </form>
+
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: REGISTROS RECIENTES (Ocupa 1/3) -->
+      <div class="lg:col-span-1 space-y-4">
+        
+        <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5 space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="font-extrabold text-gray-900 text-sm flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-indigo-600"></i> Registros Recientes
+            </h3>
+            <span id="recientesCountBadge" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+              0
+            </span>
+          </div>
+          <p class="text-xs text-gray-500 leading-relaxed">
+            Solicitudes enviadas en tiempo real. Se actualizan automáticamente mediante Firestore.
+          </p>
+
+          <!-- List container -->
+          <div id="recientesList" class="space-y-3 max-h-[560px] overflow-y-auto pr-1">
+            <!-- Loading state -->
+            <div id="recientesLoading" class="p-8 text-center text-gray-400 space-y-2">
+              <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-500"></i>
+              <p class="text-xs font-medium">Sincronizando con base de datos...</p>
+            </div>
+            
+            <!-- Empty state -->
+            <div id="recientesEmpty" class="hidden p-8 text-center text-gray-400 space-y-3 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+              <div class="w-12 h-12 rounded-full bg-gray-100 text-gray-400 mx-auto flex items-center justify-center text-xl">
+                <i class="fa-regular fa-folder-open"></i>
+              </div>
+              <p class="text-xs font-medium text-gray-500">Aún no hay solicitudes registradas.</p>
+              <span class="text-[11px] text-gray-400 block">Sé el primero en completar el formulario.</span>
+            </div>
+
+            <!-- Dynamic items rendered here -->
+          </div>
+        </div>
+
+        <!-- Laura Admin Direct Card -->
+        <div class="bg-gradient-to-br from-indigo-900 via-indigo-950 to-gray-900 text-white p-5 rounded-2xl shadow-sm space-y-3 text-xs">
+          <div class="flex items-center gap-2 text-indigo-300 font-bold uppercase tracking-wider text-[10px]">
+            <i class="fa-solid fa-shield-halved"></i> Control y Entrega
+          </div>
+          <p class="text-gray-300 leading-snug">
+            Las solicitudes registradas aquí se sincronizan inmediatamente con el <strong>Panel de Control Task-OS</strong> de Laura Cortazar (<span class="text-indigo-200 underline">laurcortazar@gmail.com</span>).
+          </p>
+          <div class="pt-1 flex items-center justify-between text-[11px] text-indigo-300/80 border-t border-indigo-800/60">
+            <span>¿Dudas de tu trámite?</span>
+            <a href="https://wa.me/19999011852?text=Hola%20Laura,%20tengo%20una%20duda%20sobre%20mi%20reconocimiento" target="_blank" class="text-emerald-400 hover:underline font-bold flex items-center gap-1">
+              <i class="fa-brands fa-whatsapp"></i> Contactar a Laura
+            </a>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- FIREBASE SDK V11 (Módulos vía CDN) & APLICACIÓN JS -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-auth.js";
+    import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.4.0/firebase-firestore.js";
+
+    // 1. Configuración de Firebase del Proyecto
+    const firebaseConfig = {
+      projectId: "gen-lang-client-0098696571",
+      appId: "1:268081973600:web:992918dbc175a866a2b605",
+      apiKey: "AIzaSyC2G1AOOMukboJJvv6AIrcJy5WHAtA8hGk",
+      authDomain: "gen-lang-client-0098696571.firebaseapp.com",
+      firestoreDatabaseId: "ai-studio-taskos-90239d7f-e919-4b74-8cf9-4bd6da226df9",
+      storageBucket: "gen-lang-client-0098696571.firebasestorage.app",
+      messagingSenderId: "268081973600",
+    };
+
+    // Inicializar Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+    // Colecciones de almacenamiento
+    const COLLECTION_NAME = "solicitudes"; // Colección solicitada en la especificación
+    const RECONOCIMIENTOS_COLLECTION = "reconocimientos"; // Colección gemela para compatibilidad con Task-OS
+
+    // Elementos DOM
+    const authStatusBadge = document.getElementById("authStatusBadge");
+    const reconocimientoForm = document.getElementById("reconocimientoForm");
+    const successState = document.getElementById("successState");
+    const successSummaryBox = document.getElementById("successSummaryBox");
+    const btnAnotherRequest = document.getElementById("btnAnotherRequest");
+    const btnWhatsAppConfirm = document.getElementById("btnWhatsAppConfirm");
+    const totalDisplay = document.getElementById("totalDisplay");
+    const btnSubmit = document.getElementById("btnSubmit");
+    const btnSubmitSpinner = document.getElementById("btnSubmitSpinner");
+    const btnSubmitText = document.getElementById("btnSubmitText");
+    const btnSubmitArrow = document.getElementById("btnSubmitArrow");
+    const uiMessageContainer = document.getElementById("uiMessageContainer");
+    
+    // Panel de registros recientes
+    const recientesList = document.getElementById("recientesList");
+    const recientesLoading = document.getElementById("recientesLoading");
+    const recientesEmpty = document.getElementById("recientesEmpty");
+    const recientesCountBadge = document.getElementById("recientesCountBadge");
+
+    // Estado del formulario
+    let currentCost = 0;
+    let currentUser = null;
+
+    // Helper para mensajes en UI (Sin alert ni confirm)
+    function showUIMessage(message, type = "info") {
+      uiMessageContainer.className = "px-6 pt-6 block";
+      const isError = type === "error";
+      const isSuccess = type === "success";
+      
+      const bgColor = isError ? "bg-rose-50 border-rose-200 text-rose-800" : isSuccess ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-blue-50 border-blue-200 text-blue-800";
+      const icon = isError ? "fa-circle-exclamation" : isSuccess ? "fa-circle-check" : "fa-circle-info";
+
+      uiMessageContainer.innerHTML = `
+        <div class="p-3.5 rounded-xl border ${bgColor} flex items-center justify-between gap-3 text-xs font-semibold">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid ${icon}"></i>
+            <span>${message}</span>
+          </div>
+          <button type="button" onclick="this.parentElement.remove()" class="opacity-60 hover:opacity-100">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      `;
+    }
+
+    // 2. Iniciar sesión anónimamente ANTES de operar en la base de datos
+    signInAnonymously(auth)
+      .then((cred) => {
+        currentUser = cred.user;
+        authStatusBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800";
+        authStatusBadge.innerHTML = '<i class="fa-solid fa-check text-[10px]"></i> Conectado a Firestore';
+        listenToRecentRequests();
+      })
+      .catch((err) => {
+        console.error("Auth error:", err);
+        authStatusBadge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-800";
+        authStatusBadge.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-[10px]"></i> Modo Directo';
+        // Aún así inicializamos el listener
+        listenToRecentRequests();
+      });
+
+    onAuthStateChanged(auth, (user) => {
+      if (user) currentUser = user;
+    });
+
+    // 3. Manejo de Años / Generación (Estilo visual de botón activo)
+    const yearRadios = document.querySelectorAll(".year-radio");
+    yearRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        document.querySelectorAll(".year-btn").forEach((btn) => {
+          btn.className = "year-btn text-center py-2.5 px-3 rounded-xl border border-gray-300 bg-white font-bold text-xs sm:text-sm text-gray-700 hover:bg-gray-50 transition shadow-2xs";
+        });
+        const selectedBtn = radio.nextElementSibling;
+        if (selectedBtn) {
+          selectedBtn.className = "year-btn text-center py-2.5 px-3 rounded-xl border font-bold text-xs sm:text-sm transition shadow-2xs ring-2 ring-indigo-600 bg-indigo-50/50 text-indigo-900 border-indigo-500";
+        }
+      });
+    });
+
+    // 4. Manejo de Tipo de Impresión y Cálculo de Total Dinámico
+    const printTypeRadios = document.querySelectorAll(".print-type-radio");
+    printTypeRadios.forEach((radio) => {
+      radio.addEventListener("change", (e) => {
+        // Reset card styles
+        document.querySelectorAll(".print-card").forEach((card) => {
+          card.className = "print-card p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-indigo-300 transition-all shadow-2xs flex flex-col justify-between h-full";
+        });
+
+        // Highlight selected card
+        const card = radio.nextElementSibling;
+        if (card) {
+          card.className = "print-card p-4 rounded-2xl border-2 border-indigo-600 bg-indigo-50/30 transition-all shadow-md flex flex-col justify-between h-full ring-2 ring-indigo-500/20";
+        }
+
+        // Update total to pay
+        currentCost = parseInt(radio.getAttribute("data-costo") || "0", 10);
+        totalDisplay.innerHTML = `Total a pagar: <span class="text-indigo-600">$${currentCost}</span>`;
+      });
+    });
+
+    // 5. Envío del Formulario (Guardar datos en Firestore)
+    reconocimientoForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const selectedPrintRadio = document.querySelector(".print-type-radio:checked");
+      if (!selectedPrintRadio || currentCost <= 0) {
+        showUIMessage("Por favor selecciona un Tipo de Impresión (Primera Impresión o Re-impresión).", "error");
+        return;
+      }
+
+      const nombre = document.getElementById("nombre").value.trim();
+      const rol = document.getElementById("rol").value.trim();
+      const grupo = document.getElementById("grupo").value.trim();
+      const zona = document.getElementById("zona").value.trim();
+      const telefono = document.getElementById("telefono").value.trim();
+      const year = document.querySelector(".year-radio:checked")?.value || "2026";
+      const tipoImpresion = selectedPrintRadio.value;
+      const costo = currentCost;
+      const diplomado = "Liderazgo I";
+
+      // Deshabilitar botón y mostrar spinner
+      btnSubmit.disabled = true;
+      btnSubmitSpinner.classList.remove("hidden");
+      btnSubmitText.textContent = "Registrando...";
+      btnSubmitArrow.classList.add("hidden");
+      uiMessageContainer.innerHTML = "";
+
+      try {
+        const payload = {
+          nombre,
+          rol,
+          grupo,
+          zona,
+          diplomado,
+          year,
+          tipoImpresion,
+          costo,
+          telefono: telefono || null,
+          timestamp: serverTimestamp(),
+          // Banderas de seguimiento para control de Laura:
+          pagado: false,
+          cuadernillos: false,
+          audio: false,
+          digital: false,
+          impreso: false,
+          entregado: false,
+          createdAt: new Date().toISOString()
+        };
+
+        // Guardar en la colección requerida 'solicitudes'
+        const docRef = await addDoc(collection(db, COLLECTION_NAME), payload);
+        
+        // Guardar también en 'reconocimientos' para sincronización garantizada con el dashboard de Task-OS
+        await addDoc(collection(db, RECONOCIMIENTOS_COLLECTION), {
+          ...payload,
+          solicitudId: docRef.id
+        }).catch(() => null);
+
+        // Disparar aviso al servidor para notificación por correo a laurcortazar@gmail.com y alertas en webapp
+        try {
+          fetch("/api/reconocimientos/notify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              nombre,
+              rol,
+              grupo,
+              zona,
+              diplomado,
+              year,
+              tipoImpresion,
+              costo,
+              telefono,
+              targetEmail: "laurcortazar@gmail.com"
+            })
+          }).catch(() => null);
+
+          fetch("/api/solicitudes/crear", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              solicitante: nombre,
+              telefono,
+              area: zona,
+              titulo: `Solicitud de Reconocimiento • ${diplomado} (${year})`,
+              descripcion: `Solicitud de impresión de reconocimiento para ${nombre} (${rol}, Grupo ${grupo}, Zona ${zona}). Tipo: ${tipoImpresion} ($${costo}).`,
+              canal: "Web",
+              prioridad: "Alta",
+              targetUserEmail: "laurcortazar@gmail.com"
+            })
+          }).catch(() => null);
+        } catch (_) {}
+
+        // Mostrar estado de éxito
+        reconocimientoForm.classList.add("hidden");
+        successState.classList.remove("hidden");
+
+        // Construir resumen con datos de transferencia y depósito
+        successSummaryBox.innerHTML = `
+          <div class="flex justify-between items-center text-xs pb-2 border-b border-gray-200">
+            <span class="text-gray-400 font-semibold uppercase">Folio de Ticket:</span>
+            <span class="font-mono font-bold text-indigo-700">${docRef.id.slice(0, 10).toUpperCase()}</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <span class="text-gray-400 block text-[10px]">Solicitante:</span>
+              <strong class="text-gray-800">${escapeHtml(nombre)}</strong>
+            </div>
+            <div>
+              <span class="text-gray-400 block text-[10px]">Rol y Grupo:</span>
+              <strong class="text-gray-800">${escapeHtml(rol)} • ${escapeHtml(grupo)}</strong>
+            </div>
+            <div>
+              <span class="text-gray-400 block text-[10px]">Diplomado y Año:</span>
+              <strong class="text-gray-800">${escapeHtml(diplomado)} (${escapeHtml(year)})</strong>
+            </div>
+            <div>
+              <span class="text-gray-400 block text-[10px]">Tipo e Importe:</span>
+              <strong class="text-indigo-600 font-black">${escapeHtml(tipoImpresion)} ($${costo})</strong>
+            </div>
+          </div>
+
+          <!-- Datos de Transferencia o Depósito en Resumen de Éxito -->
+          <div class="mt-3 pt-3 border-t border-gray-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[11px] font-bold text-amber-900 uppercase">
+                <i class="fa-solid fa-credit-card"></i> Datos para tu Pago
+              </span>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                Beneficiaria: LAURA CORTAZAR
+              </span>
+            </div>
+            <div class="space-y-1.5 text-xs text-gray-800">
+              <div class="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+                <div>
+                  <span class="text-gray-400 block text-[9px] uppercase font-bold">CLABE SPIN</span>
+                  <span class="font-mono font-bold text-gray-900">728969000008838228</span>
+                </div>
+                <button type="button" id="copyClabeSuccessBtn" onclick="copyToClipboard('728969000008838228', 'copyClabeSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+              <div class="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+                <div>
+                  <span class="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta SPIN</span>
+                  <span class="font-mono font-bold text-gray-900">4217 4701 0045 4061</span>
+                </div>
+                <button type="button" id="copyTarjetaSuccessBtn" onclick="copyToClipboard('4217470100454061', 'copyTarjetaSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+              <div class="p-2 rounded-lg bg-amber-50/70 border border-amber-200/80 flex items-center justify-between">
+                <div>
+                  <span class="text-gray-400 block text-[9px] uppercase font-bold">Código Depósito SPIN (OXXO)</span>
+                  <span class="font-mono font-bold text-gray-900">2242-1787-4421-1658</span>
+                </div>
+                <button type="button" id="copyOxxoSuccessBtn" onclick="copyToClipboard('2242178744211658', 'copyOxxoSuccessBtn')" class="px-2 py-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-900 text-[11px] font-semibold transition">
+                  <i class="fa-regular fa-copy"></i> Copiar
+                </button>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Configurar enlace de WhatsApp directo
+        const waText = `Hola Laura, acabo de registrar mi solicitud de reconocimiento en la plataforma y te comparto mi comprobante de pago:\n\n*Nombre:* ${nombre}\n*Rol:* ${rol}\n*Grupo:* ${grupo}\n*Zona:* ${zona}\n*Diplomado:* ${diplomado} (${year})\n*Tipo:* ${tipoImpresion} ($${costo})\n*Folio:* ${docRef.id.slice(0, 10).toUpperCase()}`;
+        btnWhatsAppConfirm.href = `https://wa.me/19999011852?text=${encodeURIComponent(waText)}`;
+
+      } catch (error) {
+        console.error("Error al registrar solicitud:", error);
+        showUIMessage(`No se pudo registrar la solicitud: ${error.message || "Error de red"}. Por favor intenta nuevamente.`, "error");
+      } finally {
+        btnSubmit.disabled = false;
+        btnSubmitSpinner.classList.add("hidden");
+        btnSubmitText.textContent = "Registrar Solicitud";
+        btnSubmitArrow.classList.remove("hidden");
+      }
+    });
+
+    // 6. Botón "Hacer otra solicitud"
+    btnAnotherRequest.addEventListener("click", () => {
+      reconocimientoForm.reset();
+      currentCost = 0;
+      totalDisplay.innerHTML = `Total a pagar: <span class="text-indigo-600">$0</span>`;
+      
+      // Reset card selection
+      document.querySelectorAll(".print-card").forEach((card) => {
+        card.className = "print-card p-4 rounded-2xl border-2 border-gray-200 bg-white hover:border-indigo-300 transition-all shadow-2xs flex flex-col justify-between h-full";
+      });
+
+      // Reset year selection to 2026 default
+      const defaultYearRadio = document.querySelector('input[name="year"][value="2026"]');
+      if (defaultYearRadio) {
+        defaultYearRadio.checked = true;
+        defaultYearRadio.dispatchEvent(new Event("change"));
+      }
+
+      successState.classList.add("hidden");
+      reconocimientoForm.classList.remove("hidden");
+      uiMessageContainer.innerHTML = "";
+    });
+
+    // 7. Leer datos en tiempo real (onSnapshot a la colección solicitudes)
+    function listenToRecentRequests() {
+      try {
+        onSnapshot(collection(db, COLLECTION_NAME), (snapshot) => {
+          recientesLoading.classList.add("hidden");
+
+          const items = [];
+          snapshot.forEach((doc) => {
+            const data = doc.data();
+            items.push({
+              id: doc.id,
+              ...data,
+              // Convertir fecha para ordenar
+              timeVal: data.timestamp?.toDate ? data.timestamp.toDate().getTime() : (data.createdAt ? new Date(data.createdAt).getTime() : 0)
+            });
+          });
+
+          // Ordenar en memoria (JavaScript) por fecha descendente
+          items.sort((a, b) => b.timeVal - a.timeVal);
+
+          recientesCountBadge.textContent = items.length;
+
+          if (items.length === 0) {
+            recientesEmpty.classList.remove("hidden");
+            // Limpiar items dinámicos
+            document.querySelectorAll(".reciente-card").forEach(el => el.remove());
+            return;
+          }
+
+          recientesEmpty.classList.add("hidden");
+
+          // Renderizar tarjetas
+          const html = items.slice(0, 15).map((item) => {
+            const isFirstPrint = item.tipoImpresion === "Primera Impresión";
+            const badgeColor = isFirstPrint ? "bg-indigo-100 text-indigo-800" : "bg-blue-100 text-blue-800";
+            const timeLabel = item.timeVal ? new Date(item.timeVal).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Reciente";
+
+            return `
+              <div class="reciente-card p-3.5 rounded-xl border border-gray-200 bg-white hover:border-indigo-300 transition-all shadow-2xs space-y-1.5 animate-in fade-in">
+                <div class="flex items-start justify-between gap-2">
+                  <div class="min-w-0">
+                    <h4 class="font-bold text-gray-900 text-xs sm:text-sm truncate">${escapeHtml(item.nombre || "Sin nombre")}</h4>
+                    <p class="text-[11px] text-gray-500 truncate">${escapeHtml(item.rol || "Alumno")} • Grupo ${escapeHtml(item.grupo || "G-1")}</p>
+                  </div>
+                  <span class="text-xs font-black text-gray-900 bg-gray-100 px-2 py-0.5 rounded-md shrink-0">
+                    $${item.costo || (isFirstPrint ? 100 : 50)}
+                  </span>
+                </div>
+                <div class="flex items-center justify-between text-[10px] text-gray-500 pt-1 border-t border-gray-100">
+                  <div class="flex items-center gap-1.5">
+                    <span class="px-1.5 py-0.5 rounded font-bold ${badgeColor}">${escapeHtml(item.tipoImpresion || "Impresión")}</span>
+                    <span class="font-semibold text-gray-600">(${escapeHtml(item.year || "2026")})</span>
+                  </div>
+                  <span class="text-gray-400 font-mono">${timeLabel}</span>
+                </div>
+              </div>
+            `;
+          }).join("");
+
+          // Reemplazar o actualizar lista
+          document.querySelectorAll(".reciente-card").forEach(el => el.remove());
+          recientesLoading.insertAdjacentHTML('afterend', html);
+
+        }, (error) => {
+          console.warn("Snapshot error:", error);
+          recientesLoading.classList.add("hidden");
+          recientesEmpty.classList.remove("hidden");
+        });
+      } catch (err) {
+        console.warn("Failed to attach snapshot listener:", err);
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    // Función global para copiar datos de transferencia
+    window.copyToClipboard = function(text, elId) {
+      if (!navigator.clipboard) return;
+      navigator.clipboard.writeText(text).then(() => {
+        const el = document.getElementById(elId);
+        if (el) {
+          const originalContent = el.innerHTML;
+          el.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> <span class="text-emerald-700 font-bold">¡Copiado!</span>';
+          setTimeout(() => {
+            el.innerHTML = originalContent;
+          }, 2500);
+        }
+      }).catch(err => {
+        console.warn("Error al copiar texto:", err);
+      });
+    };
+  </script>
+</body>
+</html>

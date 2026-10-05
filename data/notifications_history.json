@@ -1,5 +1,29 @@
 [
   {
+    "id": "notif-1791230493020-et5x",
+    "title": "🎓 ¡Solicitud de Reconocimiento!: Test Alumno",
+    "body": "Primera Impresión ($100) • Alumno • Grupo G-1 (Tiburón) • Liderazgo I 2026",
+    "icon": "/icon-192.svg",
+    "tag": "reconocimiento_nuevo",
+    "url": "/?workspace=reconocimientos",
+    "email": "laurcortazar@gmail.com",
+    "type": "solicitud_nueva",
+    "data": {
+      "tipo": "reconocimiento",
+      "nombre": "Test Alumno",
+      "rol": "Alumno",
+      "grupo": "G-1",
+      "zona": "Tiburón",
+      "diplomado": "Liderazgo I",
+      "year": "2026",
+      "tipoImpresion": "Primera Impresión",
+      "costo": 100,
+      "folio": "REC-3986"
+    },
+    "timestamp": "2026-10-05T20:01:33.020Z",
+    "delivered": true
+  },
+  {
     "id": "notif-1790965990589-fp9c",
     "title": "🚨 Nueva Solicitud: Dr. Morales",
     "body": "Revisión de Módulo 3 de Liderazgo — Revisión de contenido y constancias de graduación",

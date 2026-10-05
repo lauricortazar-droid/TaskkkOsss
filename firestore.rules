@@ -117,6 +117,46 @@ service cloud.firestore {
              (!('pushEnviado' in data) || (data.pushEnviado is bool));
     }
 
+    function isValidPublicSolicitud(data) {
+      return data.keys().hasAll(['solicitante', 'titulo', 'descripcion', 'fechaIngreso']) &&
+             data.solicitante is string && data.solicitante.size() > 0 && data.solicitante.size() <= 150 &&
+             data.titulo is string && data.titulo.size() > 0 && data.titulo.size() <= 300 &&
+             data.descripcion is string && data.descripcion.size() <= 5000 &&
+             data.fechaIngreso is string && data.fechaIngreso.size() <= 50 &&
+             (!('telefono' in data) || (data.telefono is string && data.telefono.size() <= 50)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 200)) &&
+             (!('area' in data) || (data.area is string && data.area.size() <= 100)) &&
+             (!('categoria' in data) || (data.categoria is string && data.categoria.size() <= 50)) &&
+             (!('folio' in data) || (data.folio is string && data.folio.size() <= 50)) &&
+             (!('canal' in data) || (data.canal is string && data.canal.size() <= 50)) &&
+             (!('prioridad' in data) || (data.prioridad is string && data.prioridad in ['Alta', 'Media', 'Baja'])) &&
+             (!('estado' in data) || (data.estado is string && data.estado in ['Nueva', 'Atendida', 'ConvertidaEnTarea', 'Descartada'])) &&
+             (!('estadoTracking' in data) || (data.estadoTracking is string && data.estadoTracking.size() <= 50)) &&
+             (!('leida' in data) || (data.leida is bool)) &&
+             (!('id' in data) || (data.id is string && data.id.size() <= 100));
+    }
+
+    // Public Solicitudes submitted from the public portal
+    match /public_solicitudes/{solicitudId} {
+      allow create: if isValidId(solicitudId) && isValidPublicSolicitud(incoming());
+      allow read: if true;
+      allow update, delete: if true;
+    }
+
+    // Solicitudes de Impresión de Reconocimientos (Mini Web App y Task-OS)
+    match /reconocimientos/{recId} {
+      allow create, read, update, delete: if true;
+    }
+
+    match /solicitudes/{solId} {
+      allow create, read, update, delete: if true;
+    }
+
+    // Device pairing pin codes
+    match /pair_codes/{codeId} {
+      allow create, update, read, delete: if isValidId(codeId);
+    }
+
     match /users/{userId} {
       allow get: if isOwner(userId);
 

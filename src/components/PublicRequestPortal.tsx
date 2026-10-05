@@ -35,6 +35,8 @@ import {
 import { SolicitudItem } from "../types";
 import { playChime } from "../utils/audio";
 import { googleSignIn, loginWithEmail } from "../lib/firebase";
+import { savePublicSolicitudToFirestore } from "../lib/firestoreService";
+import ReconocimientoFormModal from "./ReconocimientoFormModal";
 
 interface PublicRequestPortalProps {
   onAdminLoginClick: (adminEmail?: string) => void;
@@ -174,6 +176,9 @@ export default function PublicRequestPortal({
   const [showAdminPinModal, setShowAdminPinModal] = useState(false);
   const [adminPinInput, setAdminPinInput] = useState("");
   const [adminPinError, setAdminPinError] = useState<string | null>(null);
+
+  // Reconocimiento Modal state (Solicitud de Reconocimientos Mini Web App)
+  const [showReconocimientoModal, setShowReconocimientoModal] = useState(false);
 
   // Notification state
   const [hasNotifPermission, setHasNotifPermission] = useState<boolean>(() => {
@@ -600,6 +605,46 @@ export default function PublicRequestPortal({
                 Prioridad en lista de espera
               </span>
             </div>
+          </div>
+        </div>
+
+        {/* BOTÓN GRANDE DESTACADO: QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO */}
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white shadow-xl border border-indigo-400/40 relative overflow-hidden transition-all hover:shadow-indigo-500/20">
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5 w-full md:w-auto">
+              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl shrink-0 shadow-md">
+                🎓
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider">
+                    Diplomado Liderazgo I
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-bold">
+                    Trámite Oficial
+                  </span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
+                  ¿Eres graduado o necesitas reposición de tu diploma?
+                </h3>
+                <p className="text-xs text-indigo-100 max-w-xl">
+                  Registra tu solicitud en segundos. Laura Cortazar recibirá la notificación en tiempo real en su panel y correo electrónico (laurcortazar@gmail.com).
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="btn-solicitar-reconocimiento"
+              onClick={() => {
+                setShowReconocimientoModal(true);
+                playChime("tick");
+              }}
+              className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-amber-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+            >
+              <span>📜 QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO</span>
+              <ArrowRight size={16} />
+            </button>
           </div>
         </div>
 
@@ -1419,6 +1464,15 @@ export default function PublicRequestPortal({
           </div>
         </div>
       )}
+
+      {/* Modal de Solicitud de Reconocimientos (Mini Web App) */}
+      <ReconocimientoFormModal
+        isOpen={showReconocimientoModal}
+        onClose={() => setShowReconocimientoModal(false)}
+        onSuccess={(folio) => {
+          saveFolioLocal(folio);
+        }}
+      />
 
       {/* Footer */}
       <footer className="border-t border-stone-200 dark:border-stone-800 py-6 text-center text-xs text-stone-400 bg-white/40 dark:bg-stone-900/40">

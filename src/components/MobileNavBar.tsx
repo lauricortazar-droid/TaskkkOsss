@@ -40,7 +40,8 @@ export default function MobileNavBar({
   const isMoreTabActive =
     currentWorkspace === "urls" ||
     currentWorkspace === "print" ||
-    currentWorkspace === "analytics";
+    currentWorkspace === "analytics" ||
+    currentWorkspace === "reconocimientos";
 
   return (
     <nav
@@ -156,6 +157,8 @@ export default function MobileNavBar({
               ? "Print"
               : currentWorkspace === "analytics"
               ? "Métricas"
+              : currentWorkspace === "reconocimientos"
+              ? "Diplomas"
               : "Sincronizar"}
           </span>
         </button>

@@ -47,3 +47,30 @@ body {
 .border-institutional-gold { border-color: rgba(242, 173, 0, 0.40); }
 .shadow-institutional { box-shadow: var(--shadow); }
 .shadow-institutional-soft { box-shadow: var(--shadow-soft); }
+
+/* Animación de latido suave para el botón de reconocimientos pendientes */
+@keyframes softHeartbeat {
+  0%, 100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(242, 173, 0, 0));
+  }
+  14% {
+    transform: scale(1.07);
+    filter: drop-shadow(0 0 8px rgba(242, 173, 0, 0.45));
+  }
+  28% {
+    transform: scale(1.02);
+  }
+  42% {
+    transform: scale(1.10);
+    filter: drop-shadow(0 0 12px rgba(242, 173, 0, 0.55));
+  }
+  70% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 rgba(242, 173, 0, 0));
+  }
+}
+
+.animate-heartbeat-soft {
+  animation: softHeartbeat 2s ease-in-out infinite;
+}

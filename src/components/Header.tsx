@@ -40,6 +40,9 @@ interface HeaderProps {
   unreadSolicitudesCount?: number;
   onOpenPortal?: () => void;
   isPortalActive?: boolean;
+  onOpenReconocimientos?: () => void;
+  isReconocimientosActive?: boolean;
+  reconocimientosCount?: number;
   onLogoutAdmin?: () => void;
 }
 
@@ -63,6 +66,9 @@ export default function Header({
   unreadSolicitudesCount = 0,
   onOpenPortal,
   isPortalActive = false,
+  onOpenReconocimientos,
+  isReconocimientosActive = false,
+  reconocimientosCount = 0,
   onLogoutAdmin,
 }: HeaderProps) {
   const emailShort = syncStatus.email ? syncStatus.email.split("@")[0] : "Nube";
@@ -110,6 +116,28 @@ export default function Header({
               {unreadSolicitudesCount > 0 && (
                 <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-bold">
                   {unreadSolicitudesCount}
+                </span>
+              )}
+            </button>
+          )}
+
+          {/* Reconocimientos Emoji Button (Control e Impresiones) */}
+          {onOpenReconocimientos && (
+            <button
+              id="header-reconocimientos-btn"
+              onClick={onOpenReconocimientos}
+              className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-2xs min-h-[44px] active:scale-95 ${
+                isReconocimientosActive
+                  ? "bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-500/20 font-bold"
+                  : "border-stone-200 dark:border-stone-700 bg-white hover:bg-stone-50 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200"
+              }`}
+              title="🎓 Módulo de Reconocimientos e Impresiones (Liderazgo I)"
+            >
+              <span className="text-base sm:text-lg">🎓</span>
+              <span className="hidden md:inline">Reconocimientos</span>
+              {typeof reconocimientosCount === "number" && reconocimientosCount > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-indigo-500 text-white text-[10px] font-bold">
+                  {reconocimientosCount}
                 </span>
               )}
             </button>

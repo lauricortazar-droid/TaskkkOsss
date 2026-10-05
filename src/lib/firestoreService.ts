@@ -609,4 +609,112 @@ export function subscribeToSolicitudes(
 
 export const subscribeToFirestoreSolicitudes = subscribeToSolicitudes;
 
+// =========================================================
+// PUBLIC SOLICITUDES SERVICE (Portal Público en Tiempo Real)
+// =========================================================
+
+function sanitizePublicSolicitud(sol: SolicitudItem) {
+  const payload: Record<string, any> = {
+    id: String(sol.id || `sol_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 100),
+    solicitante: String(sol.solicitante || "Contacto").trim().slice(0, 150),
+    titulo: String(sol.titulo || sol.descripcion?.slice(0, 50) || "Solicitud").trim().slice(0, 300),
+    descripcion: String(sol.descripcion || "").trim().slice(0, 5000),
+    fechaIngreso: String(sol.fechaIngreso || new Date().toISOString()).slice(0, 50),
+    leida: Boolean(sol.leida),
+  };
+
+  if (sol.folio) payload.folio = String(sol.folio).slice(0, 50);
+  if (sol.telefono) payload.telefono = String(sol.telefono).slice(0, 50);
+  if (sol.email) payload.email = String(sol.email).slice(0, 200);
+  if (sol.area) payload.area = String(sol.area).slice(0, 100);
+  if (sol.categoria) payload.categoria = String(sol.categoria).slice(0, 50);
+  if (sol.canal) payload.canal = String(sol.canal).slice(0, 50);
+  if (sol.prioridad) payload.prioridad = sol.prioridad;
+  if (sol.estado) payload.estado = sol.estado;
+  if (sol.estadoTracking) payload.estadoTracking = String(sol.estadoTracking).slice(0, 50);
+
+  return payload;
+}
+
+export async function savePublicSolicitudToFirestore(sol: SolicitudItem): Promise<void> {
+  const idStr = String(sol.id || `sol_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 100);
+  const docRef = doc(db, "public_solicitudes", idStr);
+  const payload = sanitizePublicSolicitud(sol);
+
+  try {
+    await setDoc(docRef, payload, { merge: true });
+    console.log("Solicitud pública guardada con éxito en Firestore Cloud:", idStr);
+  } catch (error) {
+    console.warn("Notice saving public solicitud to Firestore:", error);
+  }
+}
+
+export function subscribeToPublicSolicitudes(
+  onSolicitudesChange: (items: SolicitudItem[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  try {
+    const unsubscribe = onSnapshot(
+      collection(db, "public_solicitudes"),
+      (snapshot) => {
+        const items: SolicitudItem[] = [];
+        snapshot.forEach((snap) => {
+          const data = snap.data();
+          items.push({
+            id: snap.id,
+            folio: data.folio || undefined,
+            solicitante: data.solicitante || "Contacto",
+            telefono: data.telefono || undefined,
+            email: data.email || undefined,
+            area: data.area || undefined,
+            categoria: data.categoria || undefined,
+            titulo: data.titulo || "Solicitud",
+            descripcion: data.descripcion || "",
+            especificaciones: data.especificaciones || undefined,
+            canal: data.canal || "Web",
+            prioridad: data.prioridad || "Media",
+            estado: data.estado || "Nueva",
+            estadoTracking: data.estadoTracking || "espera",
+            fechaIngreso: data.fechaIngreso || new Date().toISOString(),
+            leida: Boolean(data.leida),
+            tareaIdAsociada: typeof data.tareaIdAsociada === "number" ? data.tareaIdAsociada : undefined,
+          });
+        });
+        onSolicitudesChange(items.sort((a, b) => b.fechaIngreso.localeCompare(a.fechaIngreso)));
+      },
+      (error) => {
+        console.warn("Public solicitudes snapshot notice:", error);
+        if (onError) onError(error);
+      }
+    );
+    return unsubscribe;
+  } catch (err: any) {
+    console.warn("Failed to subscribe to public_solicitudes:", err);
+    return () => {};
+  }
+}
+
+export async function updatePublicSolicitudInFirestore(
+  id: string,
+  updates: Partial<SolicitudItem>
+): Promise<void> {
+  const idStr = String(id).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 100);
+  const docRef = doc(db, "public_solicitudes", idStr);
+  try {
+    await setDoc(docRef, updates, { merge: true });
+  } catch (err) {
+    console.warn("Notice updating public solicitud in Firestore:", err);
+  }
+}
+
+export async function deletePublicSolicitudFromFirestore(id: string): Promise<void> {
+  const idStr = String(id).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 100);
+  const docRef = doc(db, "public_solicitudes", idStr);
+  try {
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.warn("Notice deleting public solicitud in Firestore:", err);
+  }
+}
+
 

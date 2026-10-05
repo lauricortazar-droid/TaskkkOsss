@@ -214,7 +214,7 @@ export type DomainType =
   | "Lonas"
   | "Finanzas";
 
-export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro" | "analytics" | "portal";
+export type WorkspaceTab = "task-os" | "lonas" | "finanzas" | "urls" | "print" | "pomodoro" | "analytics" | "portal" | "reconocimientos";
 
 /* =========================================================
    PRINT STATION & VOUCHER TYPES (🖨️ Comprobantes, Tickets y Recibos)
