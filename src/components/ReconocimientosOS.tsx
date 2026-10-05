@@ -689,7 +689,7 @@ export default function ReconocimientosOS({
         </div>
       </div>
 
-      {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA Y DEPÓSITO SPIN (LAURA CORTAZAR) */}
+      {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA BANCARIA (LAURA CORTAZAR) */}
       <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-emerald-500/5 border-2 border-amber-400/40 dark:border-amber-500/30 bg-white dark:bg-stone-900 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-amber-200/60 dark:border-stone-800">
           <div className="flex items-center gap-3">
@@ -699,28 +699,31 @@ export default function ReconocimientosOS({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 tracking-tight">
-                  Datos de Transferencia y Depósito (SPIN by OXXO)
+                  Datos de Transferencia Bancaria
                 </h3>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300">
-                  Cobros Oficiales
+                  SPIN by OXXO
+                </span>
+                <span className="hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                  A nombre de: LAURA CORTAZAR
                 </span>
               </div>
               <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
-                Copia estos datos con un clic para compartirlos con los alumnos o verificar tus depósitos entrantes.
+                Datos oficiales para cobro y recepción de comprobantes de pago de reconocimientos y diplomas.
               </p>
             </div>
           </div>
 
-          {/* Botones de acción rápida: WhatsApp para comprobantes y Copiar Mensaje */}
+          {/* Botón de acción rápida: WhatsApp para enviar comprobantes */}
           <div className="flex flex-wrap items-center gap-2">
             <a
               href="https://wa.me/19999011852"
               target="_blank"
               rel="noreferrer"
-              className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-md flex items-center gap-2 active:scale-95 cursor-pointer"
-              title="Abrir WhatsApp para recibir o revisar comprobantes de pago"
+              className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-md hover:shadow-emerald-600/20 flex items-center gap-2 active:scale-95 cursor-pointer"
+              title="Abrir WhatsApp para enviar o recibir comprobantes de pago"
             >
-              <MessageCircle size={16} />
+              <MessageCircle size={17} />
               <span>Enviar Comprobantes por WhatsApp</span>
             </a>
 
@@ -728,7 +731,7 @@ export default function ReconocimientosOS({
               type="button"
               onClick={handleCopyFullPaymentMessage}
               className="px-3.5 py-2.5 rounded-2xl bg-amber-100 hover:bg-amber-200 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 text-amber-900 dark:text-amber-200 font-bold text-xs transition flex items-center gap-2 active:scale-95 cursor-pointer"
-              title="Copiar texto completo para enviar a cualquier alumno"
+              title="Copiar texto formateado completo para enviar por WhatsApp o SMS"
             >
               {copiedBankField === "full_message" ? (
                 <>
@@ -745,19 +748,19 @@ export default function ReconocimientosOS({
           </div>
         </div>
 
-        {/* Grid de 4 tarjetas de datos: Titular, CLABE SPIN, Tarjeta SPIN, y Código OXXO */}
+        {/* Grid de 4 tarjetas de datos bancarios: Titular, CLABE SPIN, Tarjeta SPIN, y Código OXXO */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           
-          {/* Card 1: Titular */}
+          {/* Card 1: Titular / Beneficiaria */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-800/80 border border-amber-200/80 dark:border-stone-700 shadow-2xs space-y-1">
             <span className="text-[10px] uppercase font-extrabold text-stone-400 block tracking-wider">
-              Beneficiaria / Titular
+              A Nombre de (Beneficiaria)
             </span>
             <div className="text-sm font-black text-stone-900 dark:text-stone-100 truncate">
               LAURA CORTAZAR
             </div>
             <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block">
-              Cuenta Oficial SPIN
+              Titular Oficial de la Cuenta
             </span>
           </div>
 
@@ -776,7 +779,7 @@ export default function ReconocimientosOS({
               type="button"
               onClick={() => handleCopyPaymentField("clabe", "728969000008838228")}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
-              title="Copiar CLABE"
+              title="Copiar CLABE SPIN"
             >
               {copiedBankField === "clabe" ? (
                 <Check size={16} className="text-emerald-600" />
@@ -801,7 +804,7 @@ export default function ReconocimientosOS({
               type="button"
               onClick={() => handleCopyPaymentField("tarjeta", "4217470100454061")}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
-              title="Copiar Tarjeta"
+              title="Copiar Tarjeta SPIN"
             >
               {copiedBankField === "tarjeta" ? (
                 <Check size={16} className="text-emerald-600" />
@@ -811,22 +814,22 @@ export default function ReconocimientosOS({
             </button>
           </div>
 
-          {/* Card 4: Código de Depósito SPIN (OXXO) */}
+          {/* Card 4: Código OXXO */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-800/80 border border-amber-200/80 dark:border-stone-700 shadow-2xs flex items-center justify-between gap-2">
             <div className="min-w-0">
               <span className="text-[10px] uppercase font-extrabold text-stone-400 block tracking-wider">
-                Código Depósito (OXXO)
+                Código OXXO (Depósito SPIN)
               </span>
               <div className="font-mono text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100 tracking-tight">
                 2242-1787-4421-1658
               </div>
-              <span className="text-[10px] text-stone-400 font-medium">En caja de OXXO</span>
+              <span className="text-[10px] text-stone-400 font-medium">Presentar en caja de OXXO</span>
             </div>
             <button
               type="button"
               onClick={() => handleCopyPaymentField("codigoOxxo", "2242178744211658")}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
-              title="Copiar Código de Depósito OXXO"
+              title="Copiar Código OXXO"
             >
               {copiedBankField === "codigoOxxo" ? (
                 <Check size={16} className="text-emerald-600" />
