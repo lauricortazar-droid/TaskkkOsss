@@ -2583,7 +2583,9 @@ export default function App() {
                 playChime("tick");
               }}
               className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
-                pendingReconocimientosCount > 0 || newReconocimientoAlert
+                pendingReconocimientosCount > 0
+                  ? "pulse-warning ring-2 ring-[#f2ad00] shadow-md shadow-[#f2ad00]/30"
+                  : newReconocimientoAlert
                   ? "animate-heartbeat-soft ring-2 ring-[#f2ad00] shadow-md shadow-[#f2ad00]/30"
                   : ""
               } ${

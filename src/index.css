@@ -74,3 +74,22 @@ body {
 .animate-heartbeat-soft {
   animation: softHeartbeat 2s ease-in-out infinite;
 }
+
+/* Animación clave 'pulse-warning': escala sutil y color dorado brillante */
+@keyframes pulse-warning {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(242, 173, 0, 0);
+  }
+  50% {
+    transform: scale(1.07);
+    color: #1d1d1b;
+    background-color: #ffd15c;
+    border-color: #f2ad00;
+    box-shadow: 0 0 16px 4px rgba(242, 173, 0, 0.7), 0 0 24px 6px rgba(255, 209, 92, 0.45);
+  }
+}
+
+.pulse-warning {
+  animation: pulse-warning 1.8s ease-in-out infinite;
+}
