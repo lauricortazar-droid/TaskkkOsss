@@ -1,15 +1,26 @@
+export interface TicketDiplomaItem {
+  diplomado: string;
+  year: string;
+  tipoImpresion: string;
+  costo: number;
+  driveUrl?: string;
+}
+
 export interface TicketData {
   id: string;
   nombre: string;
   rol: string;
   grupo: string;
   zona: string;
+  email?: string;
   diplomado: string;
   year: string;
   tipoImpresion: string;
   costo: number;
   telefono?: string;
+  driveUrl?: string;
   notas?: string;
+  items?: TicketDiplomaItem[];
   createdAt?: string;
 }
 
@@ -31,7 +42,11 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
       const scale = 2;
       const width = 800;
       const hasNotas = Boolean(data.notas && data.notas.trim());
-      const height = hasNotas ? 1280 : 1180;
+      const hasEmail = Boolean(data.email && data.email.trim());
+      const itemCount = data.items && data.items.length > 0 ? data.items.length : 1;
+      const extraItemsHeight = (itemCount - 1) * 36;
+      const emailHeight = hasEmail ? 30 : 0;
+      const height = (hasNotas ? 1280 : 1180) + extraItemsHeight + emailHeight;
       canvas.width = width * scale;
       canvas.height = height * scale;
       ctx.scale(scale, scale);
@@ -107,10 +122,11 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
       drawSectionHeader(ctx, "1. DATOS DEL SOLICITANTE", 60, currentY);
 
       currentY += 24;
+      const sec1Height = 110 + (hasEmail ? 28 : 0);
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#e2e8f0";
       ctx.lineWidth = 1;
-      roundRect(ctx, 60, currentY, width - 120, 110, 14);
+      roundRect(ctx, 60, currentY, width - 120, sec1Height, 14);
       ctx.stroke();
 
       // Fila 1: Nombre completo
@@ -148,47 +164,79 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
         ctx.fillText(data.telefono, 520, currentY + 92);
       }
 
+      // Fila 4: Correo (opcional)
+      if (hasEmail) {
+        ctx.fillStyle = "#64748b";
+        ctx.fillText("CORREO:", 80, currentY + 120);
+        ctx.fillStyle = "#1e293b";
+        ctx.fillText(data.email || "", 220, currentY + 120);
+      }
+
       // SECCIÓN 2: DETALLES DEL RECONOCIMIENTO Y COSTO
-      currentY += 135;
+      currentY += sec1Height + 25;
       drawSectionHeader(ctx, "2. DETALLES DE IMPRESIÓN Y COSTO", 60, currentY);
 
       currentY += 24;
+      const itemsList = data.items && data.items.length > 0
+        ? data.items
+        : [{
+            diplomado: data.diplomado || "Liderazgo I",
+            year: data.year || "2026",
+            tipoImpresion: data.tipoImpresion || "Primera Impresión",
+            costo: data.costo || 100,
+            driveUrl: data.driveUrl,
+          }];
+
+      const sec2Height = Math.max(95, 45 + itemsList.length * 36);
       ctx.fillStyle = "#ffffff";
       ctx.strokeStyle = "#e2e8f0";
       ctx.lineWidth = 1;
-      roundRect(ctx, 60, currentY, width - 120, 95, 14);
+      roundRect(ctx, 60, currentY, width - 120, sec2Height, 14);
       ctx.stroke();
 
-      ctx.fillStyle = "#64748b";
-      ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.fillText("PROGRAMA:", 80, currentY + 30);
-      ctx.fillStyle = "#042f66";
-      ctx.font = "900 13px system-ui, sans-serif";
-      ctx.fillText(`${data.diplomado || "Liderazgo I"} (Generación ${data.year || "2026"})`, 220, currentY + 30);
+      // Render diploma items
+      itemsList.forEach((it, idx) => {
+        const itemY = currentY + 30 + idx * 36;
+        ctx.textAlign = "left";
+        ctx.fillStyle = "#64748b";
+        ctx.font = "bold 11px system-ui, sans-serif";
+        ctx.fillText(`${idx + 1}.`, 80, itemY);
 
-      ctx.fillStyle = "#64748b";
-      ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.fillText("TIPO DE TRÁMITE:", 80, currentY + 64);
-      ctx.fillStyle = "#1e293b";
-      ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.fillText(data.tipoImpresion || "Primera Impresión", 220, currentY + 64);
+        ctx.fillStyle = "#042f66";
+        ctx.font = "900 13px system-ui, sans-serif";
+        ctx.fillText(`${it.diplomado} (Gen. ${it.year})`, 105, itemY);
+
+        ctx.fillStyle = "#1e293b";
+        ctx.font = "bold 12px system-ui, sans-serif";
+        ctx.fillText(`• ${it.tipoImpresion}`, 275, itemY);
+
+        ctx.fillStyle = "#047857";
+        ctx.font = "900 12px monospace";
+        ctx.fillText(`$${it.costo}`, 440, itemY);
+
+        if (it.driveUrl) {
+          ctx.fillStyle = "#4338ca";
+          ctx.font = "bold 10px system-ui, sans-serif";
+          ctx.fillText("📁 Drive Vinculado", 495, itemY);
+        }
+      });
 
       // Caja Destacada de Total
       ctx.fillStyle = "#ecfdf5";
       ctx.strokeStyle = "#a7f3d0";
-      roundRect(ctx, width - 240, currentY + 16, 160, 62, 12);
+      roundRect(ctx, width - 210, currentY + 16, 130, sec2Height - 32, 12);
       ctx.fill();
       ctx.stroke();
 
       ctx.textAlign = "center";
       ctx.fillStyle = "#047857";
       ctx.font = "bold 10px system-ui, sans-serif";
-      ctx.fillText("TOTAL A PAGAR", width - 160, currentY + 36);
+      ctx.fillText("TOTAL A PAGAR", width - 145, currentY + (sec2Height / 2) - 10);
       ctx.font = "900 22px system-ui, sans-serif";
-      ctx.fillText(`$${data.costo || 100} MXN`, width - 160, currentY + 64);
+      ctx.fillText(`$${data.costo || 100} MXN`, width - 145, currentY + (sec2Height / 2) + 16);
 
       // SECCIÓN NOTAS (SI EXISTEN)
-      currentY += 115;
+      currentY += sec2Height + 20;
       if (data.notas && data.notas.trim()) {
         drawSectionHeader(ctx, "3. NOTAS / OBSERVACIONES", 60, currentY);
         currentY += 24;

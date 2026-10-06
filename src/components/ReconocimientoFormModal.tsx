@@ -19,10 +19,15 @@ import {
   Plus,
   Download,
   FileText,
+  Trash2,
+  Mail,
+  Link2,
 } from "lucide-react";
 import {
   collection,
   addDoc,
+  setDoc,
+  doc,
   onSnapshot,
   serverTimestamp,
 } from "firebase/firestore";
@@ -63,11 +68,29 @@ export default function ReconocimientoFormModal({
   const [rolOption, setRolOption] = useState<string>("Líder");
   const [otroRol, setOtroRol] = useState<string>("");
   const [grupo, setGrupo] = useState("");
-  const [zona, setZona] = useState("");
+  // Zona (opción múltiple: Jaguar, Tiburón, Delfín, Colibrí, Águila, Teocalli (centros), Otro)
+  const [zonaOption, setZonaOption] = useState<string>("Jaguar");
+  const [otraZona, setOtraZona] = useState<string>("");
+  const [email, setEmail] = useState("");
   const [telefono, setTelefono] = useState("");
   const [notas, setNotas] = useState("");
-  const [year, setYear] = useState<"2022" | "2025" | "2026">("2026");
-  const [tipoImpresion, setTipoImpresion] = useState<"Primera Impresión" | "Re-impresión" | null>(null);
+
+  // Lista de diplomas solicitados (permite agregar más diplomas con un botón)
+  const [diplomas, setDiplomas] = useState<Array<{
+    id: string;
+    diplomado: string;
+    year: string;
+    tipoImpresion: "Primera Impresión" | "Re-impresión";
+    driveUrl?: string;
+  }>>([
+    {
+      id: "diploma-1",
+      diplomado: "Liderazgo I",
+      year: "2026",
+      tipoImpresion: "Primera Impresión",
+      driveUrl: "",
+    },
+  ]);
 
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -80,12 +103,21 @@ export default function ReconocimientoFormModal({
     rol: string;
     grupo: string;
     zona: string;
+    email?: string;
     diplomado: string;
     year: string;
     tipoImpresion: string;
     costo: number;
     telefono?: string;
+    driveUrl?: string;
     notas?: string;
+    items?: Array<{
+      diplomado: string;
+      year: string;
+      tipoImpresion: string;
+      costo: number;
+      driveUrl?: string;
+    }>;
   } | null>(null);
   const [uiError, setUiError] = useState<string | null>(null);
   const [copiedFolio, setCopiedFolio] = useState(false);
@@ -102,8 +134,43 @@ export default function ReconocimientoFormModal({
   const [recientes, setRecientes] = useState<SolicitudReconocimientoRecord[]>([]);
   const [isLoadingRecientes, setIsLoadingRecientes] = useState(true);
 
-  // Dynamic cost calculation
-  const costoTotal = tipoImpresion === "Primera Impresión" ? 100 : tipoImpresion === "Re-impresión" ? 50 : 0;
+  // Dynamic cost calculation based on all requested diplomas
+  const costoTotal = diplomas.reduce(
+    (acc, d) => acc + (d.tipoImpresion === "Primera Impresión" ? 100 : 50),
+    0
+  );
+
+  const handleAddDiploma = () => {
+    setDiplomas((prev) => [
+      ...prev,
+      {
+        id: `diploma-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+        diplomado: "Liderazgo I",
+        year: "2025",
+        tipoImpresion: "Re-impresión",
+        driveUrl: "",
+      },
+    ]);
+    playChime("tick");
+  };
+
+  const handleRemoveDiploma = (id: string) => {
+    if (diplomas.length <= 1) return;
+    setDiplomas((prev) => prev.filter((d) => d.id !== id));
+    playChime("tick");
+  };
+
+  const handleUpdateDiploma = (
+    id: string,
+    updates: Partial<{
+      diplomado: string;
+      year: string;
+      tipoImpresion: "Primera Impresión" | "Re-impresión";
+      driveUrl: string;
+    }>
+  ) => {
+    setDiplomas((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+  };
 
   // Real-time onSnapshot listener on collection 'solicitudes'
   useEffect(() => {
@@ -164,16 +231,17 @@ export default function ReconocimientoFormModal({
     e.preventDefault();
     setUiError(null);
 
-    if (!tipoImpresion) {
-      setUiError("Por favor selecciona un Tipo de Impresión (Primera Impresión o Re-impresión).");
+    if (diplomas.length === 0) {
+      setUiError("Por favor agrega al menos un diploma o reconocimiento.");
       playChime("tick");
       return;
     }
 
     const finalRol = rolOption === "Otro" ? (otroRol.trim() || "Otro") : rolOption;
+    const finalZona = zonaOption === "Otro" ? (otraZona.trim() || "Otro") : zonaOption;
 
-    if (!nombre.trim() || !grupo.trim() || !zona.trim()) {
-      setUiError("Por favor completa todos los datos requeridos (*): Nombre Completo, Grupo y Zona.");
+    if (!nombre.trim() || !grupo.trim() || !finalZona.trim()) {
+      setUiError("Por favor completa los datos requeridos (*): Nombre Completo, Grupo y Zona.");
       playChime("tick");
       return;
     }
@@ -184,53 +252,66 @@ export default function ReconocimientoFormModal({
       // 1. Iniciar sesión anónima antes de escribir
       await ensureAnonymousAuth();
 
-      const payload = {
-        nombre: nombre.trim(),
-        rol: finalRol,
-        grupo: grupo.trim(),
-        zona: zona.trim(),
-        diplomado: "Liderazgo I",
-        year,
-        tipoImpresion,
-        costo: costoTotal,
-        telefono: telefono.trim() || null,
-        notas: notas.trim() || null,
-        timestamp: serverTimestamp(),
-        // 6 flags de control para Laura:
-        pagado: false,
-        cuadernillos: false,
-        audio: false,
-        digital: false,
-        impreso: false,
-        entregado: false,
-        createdAt: new Date().toISOString(),
-      };
+      let primaryId = "";
+      const createdFolios: string[] = [];
 
-      // 2. Guardar en la colección requerida 'solicitudes'
-      const docRef = await addDoc(collection(db, "solicitudes"), payload);
+      for (let i = 0; i < diplomas.length; i++) {
+        const d = diplomas[i];
+        const itemCosto = d.tipoImpresion === "Primera Impresión" ? 100 : 50;
+        const payload = {
+          nombre: nombre.trim(),
+          rol: finalRol,
+          grupo: grupo.trim(),
+          zona: finalZona,
+          email: email.trim() || null,
+          telefono: telefono.trim() || null,
+          diplomado: d.diplomado || "Liderazgo I",
+          year: d.year,
+          tipoImpresion: d.tipoImpresion,
+          costo: itemCosto,
+          driveUrl: d.driveUrl?.trim() || null,
+          notas: notas.trim() || null,
+          timestamp: serverTimestamp(),
+          // 6 flags de control para Laura:
+          pagado: false,
+          cuadernillos: false,
+          audio: false,
+          digital: false,
+          impreso: false,
+          entregado: false,
+          createdAt: new Date().toISOString(),
+        };
 
-      // 3. Guardar también en 'reconocimientos' para sincronización garantizada con el dashboard de Laura
-      await addDoc(collection(db, "reconocimientos"), {
-        ...payload,
-        solicitudId: docRef.id,
-      }).catch(() => null);
+        // Guardar en la colección requerida 'solicitudes'
+        const docRef = await addDoc(collection(db, "solicitudes"), payload);
 
-      // 4. Notificar al backend Express y despachar aviso a Laura Cortazar
+        // Guardar en 'reconocimientos' con el MISMO docRef.id para que nunca se duplique
+        await setDoc(doc(db, "reconocimientos", docRef.id), {
+          ...payload,
+          solicitudId: docRef.id,
+        }).catch(() => null);
+
+        if (i === 0) primaryId = docRef.id;
+        createdFolios.push(docRef.id);
+      }
+
+      // Notificar al backend Express y despachar aviso a Laura Cortazar
       try {
         fetch("/api/reconocimientos/notify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            nombre: payload.nombre,
-            rol: payload.rol,
-            grupo: payload.grupo,
-            zona: payload.zona,
-            diplomado: payload.diplomado,
-            year: payload.year,
-            tipoImpresion: payload.tipoImpresion,
-            costo: payload.costo,
-            telefono: payload.telefono,
-            notas: payload.notas,
+            nombre: nombre.trim(),
+            rol: finalRol,
+            grupo: grupo.trim(),
+            zona: finalZona,
+            email: email.trim() || undefined,
+            diplomado: diplomas.map((d) => `${d.diplomado} (${d.year})`).join(", "),
+            year: diplomas.map((d) => d.year).join("/"),
+            tipoImpresion: diplomas.map((d) => `${d.tipoImpresion} ($${d.tipoImpresion === "Primera Impresión" ? 100 : 50})`).join(", "),
+            costo: costoTotal,
+            telefono: telefono.trim() || undefined,
+            notas: notas.trim() || undefined,
             targetEmail: "laurcortazar@gmail.com",
           }),
         }).catch(() => null);
@@ -239,11 +320,12 @@ export default function ReconocimientoFormModal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            solicitante: payload.nombre,
-            telefono: payload.telefono,
-            area: payload.zona,
-            titulo: `Solicitud de Reconocimiento • ${payload.diplomado} (${payload.year})`,
-            descripcion: `Solicitud de impresión para ${payload.nombre} (${payload.rol}, Grupo ${payload.grupo}, Zona ${payload.zona}). Tipo: ${payload.tipoImpresion} ($${payload.costo}).${payload.notas ? " Notas: " + payload.notas : ""}`,
+            solicitante: nombre.trim(),
+            telefono: telefono.trim() || undefined,
+            email: email.trim() || undefined,
+            area: finalZona,
+            titulo: `Solicitud de Reconocimiento • ${diplomas.map((d) => `${d.diplomado} ${d.year}`).join(", ")}`,
+            descripcion: `Solicitud de impresión para ${nombre.trim()} (${finalRol}, Grupo ${grupo.trim()}, Zona ${finalZona}). Diplomas: ${diplomas.map((d) => `${d.diplomado} (${d.year}) - ${d.tipoImpresion}`).join(", ")}. Total: $${costoTotal}.${notas ? " Notas: " + notas.trim() : ""}`,
             canal: "Web Reconocimientos",
             prioridad: "Alta",
             targetUserEmail: "laurcortazar@gmail.com",
@@ -251,19 +333,28 @@ export default function ReconocimientoFormModal({
         }).catch(() => null);
       } catch (_) {}
 
-      // 5. Estado de éxito
+      // Estado de éxito
       const ticketInfo = {
-        id: docRef.id,
-        nombre: payload.nombre,
-        rol: payload.rol,
-        grupo: payload.grupo,
-        zona: payload.zona,
-        diplomado: payload.diplomado,
-        year: payload.year,
-        tipoImpresion: payload.tipoImpresion,
-        costo: payload.costo,
-        telefono: payload.telefono || undefined,
-        notas: payload.notas || undefined,
+        id: primaryId,
+        nombre: nombre.trim(),
+        rol: finalRol,
+        grupo: grupo.trim(),
+        zona: finalZona,
+        email: email.trim() || undefined,
+        diplomado: diplomas[0]?.diplomado || "Liderazgo I",
+        year: diplomas[0]?.year || "2026",
+        tipoImpresion: diplomas[0]?.tipoImpresion || "Primera Impresión",
+        costo: costoTotal,
+        telefono: telefono.trim() || undefined,
+        driveUrl: diplomas[0]?.driveUrl?.trim() || undefined,
+        notas: notas.trim() || undefined,
+        items: diplomas.map((d) => ({
+          diplomado: d.diplomado,
+          year: d.year,
+          tipoImpresion: d.tipoImpresion,
+          costo: d.tipoImpresion === "Primera Impresión" ? 100 : 50,
+          driveUrl: d.driveUrl?.trim() || undefined,
+        })),
       };
 
       setSubmittedData(ticketInfo);
@@ -277,7 +368,7 @@ export default function ReconocimientoFormModal({
         });
       }, 600);
 
-      if (onSuccess) onSuccess(docRef.id);
+      if (onSuccess) onSuccess(primaryId);
     } catch (err: any) {
       console.error("Error al registrar solicitud:", err);
       setUiError(`No se pudo registrar la solicitud: ${err.message || "Error de conexión"}. Por favor intenta de nuevo.`);
@@ -298,12 +389,15 @@ export default function ReconocimientoFormModal({
       rol: submittedData.rol,
       grupo: submittedData.grupo,
       zona: submittedData.zona,
+      email: submittedData.email,
       diplomado: submittedData.diplomado,
       year: submittedData.year,
       tipoImpresion: submittedData.tipoImpresion,
       costo: submittedData.costo,
       telefono: submittedData.telefono,
+      driveUrl: submittedData.driveUrl,
       notas: submittedData.notas,
+      items: submittedData.items,
     });
     setIsDownloadingTicket(false);
     if (ok) {
@@ -319,11 +413,20 @@ export default function ReconocimientoFormModal({
     setRolOption("Líder");
     setOtroRol("");
     setGrupo("");
-    setZona("");
+    setZonaOption("Jaguar");
+    setOtraZona("");
+    setEmail("");
     setTelefono("");
     setNotas("");
-    setYear("2026");
-    setTipoImpresion(null);
+    setDiplomas([
+      {
+        id: `diploma-${Date.now()}`,
+        diplomado: "Liderazgo I",
+        year: "2026",
+        tipoImpresion: "Primera Impresión",
+        driveUrl: "",
+      },
+    ]);
     setIsSuccess(false);
     setSubmittedData(null);
     setUiError(null);
@@ -467,13 +570,55 @@ export default function ReconocimientoFormModal({
                           <strong className="text-gray-800">{submittedData.rol} • {submittedData.grupo}</strong>
                         </div>
                         <div>
-                          <span className="text-gray-400 block text-[10px]">Diplomado y Año:</span>
-                          <strong className="text-gray-800">{submittedData.diplomado} ({submittedData.year})</strong>
+                          <span className="text-gray-400 block text-[10px]">Zona / Centro:</span>
+                          <strong className="text-gray-800">{submittedData.zona}</strong>
                         </div>
                         <div>
-                          <span className="text-gray-400 block text-[10px]">Tipo e Importe:</span>
-                          <strong className="text-indigo-600 font-black">{submittedData.tipoImpresion} (${submittedData.costo})</strong>
+                          <span className="text-gray-400 block text-[10px]">Total a Pagar:</span>
+                          <strong className="text-indigo-600 font-black text-sm">${submittedData.costo} MXN</strong>
                         </div>
+                      </div>
+
+                      {submittedData.email && (
+                        <div className="pt-1 text-[11px] text-gray-600">
+                          <span className="text-gray-400 text-[10px] block">Correo:</span>
+                          <strong className="text-gray-700">{submittedData.email}</strong>
+                        </div>
+                      )}
+
+                      {/* Lista de diplomas solicitados */}
+                      <div className="pt-2 border-t border-gray-200 space-y-1.5">
+                        <span className="text-gray-400 block text-[10px] uppercase font-bold">
+                          Diplomas Solicitados ({submittedData.items?.length || 1}):
+                        </span>
+                        {(submittedData.items && submittedData.items.length > 0 ? submittedData.items : [{
+                          diplomado: submittedData.diplomado,
+                          year: submittedData.year,
+                          tipoImpresion: submittedData.tipoImpresion,
+                          costo: submittedData.costo,
+                          driveUrl: submittedData.driveUrl,
+                        }]).map((it, idx) => (
+                          <div key={idx} className="p-2 rounded-xl bg-white border border-gray-200 flex flex-col gap-0.5">
+                            <div className="flex items-center justify-between font-bold text-gray-800">
+                              <span>{idx + 1}. {it.diplomado} (Gen. {it.year})</span>
+                              <span className="text-indigo-600">${it.costo}</span>
+                            </div>
+                            <div className="text-[10px] text-gray-500 flex items-center justify-between">
+                              <span>{it.tipoImpresion}</span>
+                              {it.driveUrl && (
+                                <a
+                                  href={it.driveUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-blue-600 hover:underline flex items-center gap-1 font-semibold"
+                                >
+                                  <Link2 size={10} />
+                                  <span>Ver en Drive</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
 
                       {/* Notas en el resumen */}
@@ -499,7 +644,7 @@ export default function ReconocimientoFormModal({
                             </span>
                           </div>
                           <p className="text-[11px] text-emerald-800 leading-snug">
-                            Se ha descargado a tus fotos/archivos. Puedes volver a descargarlo si lo necesitas.
+                            Se ha descargado a tus fotos/archivos con todos tus diplomas y datos de pago.
                           </p>
                         </div>
                       </div>
@@ -617,17 +762,29 @@ export default function ReconocimientoFormModal({
 
                     {/* Enlace directo para enviar comprobante de pago */}
                     <div className="max-w-md mx-auto">
-                      <a
-                        href={`https://wa.me/19999011852?text=${encodeURIComponent(
-                          `Hola Laura, te comparto mi comprobante de pago para mi reconocimiento:\n\n*Nombre:* ${submittedData.nombre}\n*Rol:* ${submittedData.rol}\n*Grupo:* ${submittedData.grupo}\n*Zona:* ${submittedData.zona}\n*Diplomado:* ${submittedData.diplomado} (${submittedData.year})\n*Tipo:* ${submittedData.tipoImpresion}\n*Monto:* $${submittedData.costo} MXN\n*Folio:* ${submittedData.id.slice(0, 10).toUpperCase()}${submittedData.notas ? `\n*Notas:* ${submittedData.notas}` : ""}`
-                        )}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition transform active:scale-95 flex items-center justify-center gap-2"
-                      >
-                        <MessageCircle size={18} />
-                        <span>Mandar Comprobante de Pago por WhatsApp (Laura Cortazar)</span>
-                      </a>
+                      {(() => {
+                        const dipLines = (submittedData.items && submittedData.items.length > 0 ? submittedData.items : [{
+                          diplomado: submittedData.diplomado,
+                          year: submittedData.year,
+                          tipoImpresion: submittedData.tipoImpresion,
+                          costo: submittedData.costo,
+                          driveUrl: submittedData.driveUrl,
+                        }]).map((d, i) => `${i + 1}. ${d.diplomado} (${d.year}) - ${d.tipoImpresion} ($${d.costo})${d.driveUrl ? ` [Drive: ${d.driveUrl}]` : ""}`).join("\n");
+
+                        const waText = `Hola madrina Laura, te comparto mi comprobante de pago para mi reconocimiento:\n\n*Nombre:* ${submittedData.nombre}\n*Rol:* ${submittedData.rol}\n*Grupo:* ${submittedData.grupo}\n*Zona:* ${submittedData.zona}${submittedData.email ? `\n*Correo:* ${submittedData.email}` : ""}\n\n*Reconocimientos solicitados:*\n${dipLines}\n\n*Total:* $${submittedData.costo} MXN\n*Folio:* ${submittedData.id.slice(0, 10).toUpperCase()}${submittedData.notas ? `\n*Notas:* ${submittedData.notas}` : ""}`;
+
+                        return (
+                          <a
+                            href={`https://wa.me/19999011852?text=${encodeURIComponent(waText)}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full py-3.5 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs sm:text-sm shadow-md transition transform active:scale-95 flex items-center justify-center gap-2"
+                          >
+                            <MessageCircle size={18} />
+                            <span>Mandar Comprobante por WhatsApp a madrina Laura</span>
+                          </a>
+                        );
+                      })()}
                     </div>
 
                     {/* Action buttons */}
@@ -646,11 +803,11 @@ export default function ReconocimientoFormModal({
                   /* Formulario Activo */
                   <form onSubmit={handleSubmit} className="p-5 sm:p-7 space-y-6">
                     
-                    {/* 1. DATOS PERSONALES (Grid de 2 columnas) */}
+                    {/* 1. DATOS PERSONALES */}
                     <div>
                       <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
                         <User size={14} className="text-indigo-600" />
-                        <span>1. Datos Personales</span>
+                        <span>1. Datos Personales del Solicitante</span>
                       </h4>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -729,29 +886,77 @@ export default function ReconocimientoFormModal({
                           />
                         </div>
 
-                        {/* Zona */}
+                        {/* Zona (Jaguar, Tiburón, Delfín, Colibrí, Águila, Teocalli (centros), Otro) */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                            Zona / Sede *
+                          </label>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                            {[
+                              { label: "Jaguar", value: "Jaguar" },
+                              { label: "Tiburón", value: "Tiburón" },
+                              { label: "Delfín", value: "Delfín" },
+                              { label: "Colibrí", value: "Colibrí" },
+                              { label: "Águila", value: "Águila" },
+                              { label: "Teocalli (centros)", value: "Teocalli (centros)" },
+                              { label: "Otro", value: "Otro" },
+                            ].map((item) => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => setZonaOption(item.value)}
+                                className={`py-2 px-2 rounded-xl border text-center font-bold text-xs transition cursor-pointer shadow-2xs ${
+                                  zonaOption === item.value
+                                    ? "bg-indigo-50 border-indigo-600 text-indigo-950 ring-2 ring-indigo-600/30"
+                                    : "bg-white border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+                                }`}
+                              >
+                                {item.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Campo opcional si selecciona 'Otro' en Zona */}
+                          {zonaOption === "Otro" && (
+                            <div className="mt-2.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <label className="block text-[11px] font-semibold text-gray-600 mb-1">
+                                Especificar otra zona o centro (opcional):
+                              </label>
+                              <input
+                                type="text"
+                                placeholder="Escribe el nombre de tu zona o centro (opcional)"
+                                value={otraZona}
+                                onChange={(e) => setOtraZona(e.target.value)}
+                                className="w-full px-3.5 py-2 rounded-xl border border-indigo-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
+                              />
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Correo Electrónico (Opcional) */}
                         <div>
-                          <label className="block text-xs font-bold text-gray-800 mb-1">
-                            Zona *
+                          <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1">
+                            <Mail size={12} className="text-gray-500" />
+                            <span>Correo Electrónico (Opcional)</span>
                           </label>
                           <input
-                            type="text"
-                            required
-                            placeholder="Ej. Zona Tiburón, Centro, Norte"
-                            value={zona}
-                            onChange={(e) => setZona(e.target.value)}
+                            type="email"
+                            placeholder="ejemplo@correo.com"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
                             className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
                           />
                         </div>
 
                         {/* Teléfono (Opcional para avisos WhatsApp) */}
-                        <div className="sm:col-span-2">
-                          <label className="block text-xs font-bold text-gray-800 mb-1">
-                            Teléfono / WhatsApp (Opcional para avisarte cuando esté impreso)
+                        <div>
+                          <label className="block text-xs font-bold text-gray-800 mb-1 flex items-center gap-1">
+                            <Phone size={12} className="text-gray-500" />
+                            <span>Teléfono / WhatsApp (Opcional)</span>
                           </label>
                           <input
                             type="tel"
-                            placeholder="Ej. 999 123 4567"
+                            placeholder="Ej. 999 901 1852"
                             value={telefono}
                             onChange={(e) => setTelefono(e.target.value)}
                             className="w-full px-3.5 py-2.5 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold placeholder:text-gray-400 placeholder:font-normal focus:bg-white focus:text-gray-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 text-xs sm:text-sm shadow-xs transition"
@@ -782,198 +987,239 @@ export default function ReconocimientoFormModal({
 
                     <hr className="border-gray-200" />
 
-                    {/* 2. DETALLES DEL DIPLOMA */}
+                    {/* 2. DETALLES DE DIPLOMAS SOLICITADOS (Múltiples Diplomas) */}
                     <div>
-                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <Award size={14} className="text-indigo-600" />
-                        <span>2. Detalles del Diploma</span>
-                      </h4>
-
-                      <div className="space-y-3.5">
-                        {/* Campo estático de solo lectura que diga "Liderazgo I" */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
                         <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Diplomado
-                          </label>
-                          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-xl bg-gray-100 border border-gray-300 text-gray-800 text-xs sm:text-sm font-bold select-none">
-                            <span className="text-gray-400">🔒</span>
-                            <span>Liderazgo I</span>
-                            <span className="ml-auto text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
-                              Programa Oficial
-                            </span>
-                          </div>
+                          <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                            <Award size={14} className="text-indigo-600" />
+                            <span>2. Detalles de Diploma / Reconocimientos ({diplomas.length})</span>
+                          </h4>
+                          <p className="text-[11px] text-gray-500 mt-0.5">
+                            Puedes solicitar varios diplomas o de diferentes generaciones para esta misma persona.
+                          </p>
                         </div>
 
-                        {/* Selector de botones para Año/Generación: 2022, 2025, 2026 */}
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                            Año / Generación *
-                          </label>
-                          <div className="grid grid-cols-3 gap-2.5">
-                            {(["2022", "2025", "2026"] as const).map((y) => (
-                              <button
-                                key={y}
-                                type="button"
-                                onClick={() => setYear(y)}
-                                className={`py-2.5 px-3 rounded-xl border font-bold text-xs sm:text-sm transition shadow-2xs ${
-                                  year === y
-                                    ? "ring-2 ring-indigo-600 bg-indigo-50 text-indigo-900 border-indigo-500"
-                                    : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                                }`}
-                              >
-                                {y}
-                              </button>
-                            ))}
-                          </div>
-                        </div>
+                        {/* Botón para agregar otro diploma */}
+                        <button
+                          type="button"
+                          onClick={handleAddDiploma}
+                          className="px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs border border-indigo-200 shadow-2xs transition flex items-center gap-1.5 self-start sm:self-auto cursor-pointer"
+                        >
+                          <Plus size={14} className="text-indigo-600" />
+                          <span>Agregar otro diploma</span>
+                        </button>
                       </div>
+
+                      {/* Lista de diplomas */}
+                      <div className="space-y-4">
+                        {diplomas.map((dip, idx) => (
+                          <div
+                            key={dip.id}
+                            className="p-4 sm:p-5 rounded-2xl bg-gray-50/80 border-2 border-indigo-100 relative space-y-3.5 shadow-2xs"
+                          >
+                            <div className="flex items-center justify-between pb-2 border-b border-gray-200">
+                              <div className="flex items-center gap-2">
+                                <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white font-black text-xs flex items-center justify-center">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-bold text-gray-800 text-xs sm:text-sm">
+                                  Diploma #{idx + 1}
+                                </span>
+                              </div>
+
+                              {diplomas.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveDiploma(dip.id)}
+                                  className="text-gray-400 hover:text-rose-600 p-1 rounded-lg hover:bg-rose-50 transition"
+                                  title="Quitar este diploma"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                              {/* Diplomado */}
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                  Diplomado
+                                </label>
+                                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white border border-gray-300 text-gray-800 text-xs font-bold">
+                                  <span>Liderazgo I</span>
+                                  <span className="ml-auto text-[9px] uppercase font-extrabold px-1.5 py-0.5 rounded-md bg-indigo-100 text-indigo-800">
+                                    Oficial
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Año / Generación */}
+                              <div>
+                                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                  Año / Generación *
+                                </label>
+                                <div className="grid grid-cols-3 gap-1.5">
+                                  {(["2022", "2025", "2026"] as const).map((y) => (
+                                    <button
+                                      key={y}
+                                      type="button"
+                                      onClick={() => handleUpdateDiploma(dip.id, { year: y })}
+                                      className={`py-1.5 px-2 rounded-xl border font-bold text-xs transition ${
+                                        dip.year === y
+                                          ? "ring-2 ring-indigo-600 bg-indigo-50 text-indigo-900 border-indigo-500"
+                                          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                                      }`}
+                                    >
+                                      {y}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Tipo de Impresión ($100 primera / $50 re-impresión) */}
+                            <div>
+                              <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                                Tipo de Impresión *
+                              </label>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                <div
+                                  onClick={() => handleUpdateDiploma(dip.id, { tipoImpresion: "Primera Impresión" })}
+                                  className={`cursor-pointer p-3 rounded-xl border-2 transition-all flex items-center justify-between ${
+                                    dip.tipoImpresion === "Primera Impresión"
+                                      ? "border-indigo-600 bg-indigo-50/50 ring-2 ring-indigo-500/20"
+                                      : "border-gray-200 bg-white hover:border-indigo-300"
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="font-bold text-gray-900 text-xs">Primera Impresión</div>
+                                    <p className="text-[10px] text-gray-500">Diploma oficial inicial</p>
+                                  </div>
+                                  <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-lg">
+                                    $100
+                                  </span>
+                                </div>
+
+                                <div
+                                  onClick={() => handleUpdateDiploma(dip.id, { tipoImpresion: "Re-impresión" })}
+                                  className={`cursor-pointer p-3 rounded-xl border-2 transition-all flex items-center justify-between ${
+                                    dip.tipoImpresion === "Re-impresión"
+                                      ? "border-blue-600 bg-blue-50/50 ring-2 ring-blue-500/20"
+                                      : "border-gray-200 bg-white hover:border-blue-300"
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="font-bold text-gray-900 text-xs">Re-impresión</div>
+                                    <p className="text-[10px] text-gray-500">Reposición o copia extra</p>
+                                  </div>
+                                  <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">
+                                    $50
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Enlace Google Drive (Opcional) */}
+                            <div>
+                              <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                <Link2 size={12} className="text-indigo-600" />
+                                <span>Link hacia el reconocimiento en Google Drive (Opcional)</span>
+                              </label>
+                              <input
+                                type="url"
+                                placeholder="https://drive.google.com/..."
+                                value={dip.driveUrl || ""}
+                                onChange={(e) => handleUpdateDiploma(dip.id, { driveUrl: e.target.value })}
+                                className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:outline-hidden"
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Botón grande para agregar otro diploma */}
+                      <button
+                        type="button"
+                        onClick={handleAddDiploma}
+                        className="mt-3 w-full py-2.5 px-4 rounded-xl border-2 border-dashed border-indigo-300 hover:border-indigo-500 bg-indigo-50/40 hover:bg-indigo-50 text-indigo-700 font-bold text-xs transition flex items-center justify-center gap-2 cursor-pointer"
+                      >
+                        <Plus size={15} />
+                        <span>+ Agregar otro diploma / reconocimiento para esta persona</span>
+                      </button>
                     </div>
 
                     <hr className="border-gray-200" />
 
-                    {/* 3. TIPO DE IMPRESIÓN (Dos tarjetas clicables) */}
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-900 uppercase tracking-wider mb-3 flex items-center gap-2">
-                        <Printer size={14} className="text-indigo-600" />
-                        <span>3. Tipo de Impresión</span>
-                      </h4>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                        
-                        {/* Tarjeta 1: Primera Impresión ($100) */}
-                        <div
-                          onClick={() => setTipoImpresion("Primera Impresión")}
-                          className={`cursor-pointer p-4 rounded-2xl border-2 transition-all shadow-2xs flex flex-col justify-between h-full ${
-                            tipoImpresion === "Primera Impresión"
-                              ? "border-indigo-600 bg-indigo-50/40 ring-2 ring-indigo-500/20"
-                              : "border-gray-200 bg-white hover:border-indigo-300"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center text-sm font-bold">
-                                1ª
-                              </div>
-                              <div>
-                                <div className="font-bold text-gray-900 text-xs sm:text-sm">
-                                  Primera Impresión
-                                </div>
-                                <p className="text-[11px] text-gray-500">Diploma oficial inicial</p>
-                              </div>
-                            </div>
-                            <span className="text-sm font-black text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-lg">
-                              $100
-                            </span>
-                          </div>
-                          <div className="mt-3 text-[11px] text-gray-500 flex items-center gap-1">
-                            <Check size={13} className="text-indigo-500" />
-                            <span>Papel opalina premium con sellos oficiales</span>
-                          </div>
-                        </div>
-
-                        {/* Tarjeta 2: Re-impresión ($50) */}
-                        <div
-                          onClick={() => setTipoImpresion("Re-impresión")}
-                          className={`cursor-pointer p-4 rounded-2xl border-2 transition-all shadow-2xs flex flex-col justify-between h-full ${
-                            tipoImpresion === "Re-impresión"
-                              ? "border-blue-600 bg-blue-50/40 ring-2 ring-blue-500/20"
-                              : "border-gray-200 bg-white hover:border-blue-300"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-2.5">
-                              <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-bold">
-                                🔄
-                              </div>
-                              <div>
-                                <div className="font-bold text-gray-900 text-xs sm:text-sm">
-                                  Re-impresión
-                                </div>
-                                <p className="text-[11px] text-gray-500">Reposición o copia extra</p>
-                              </div>
-                            </div>
-                            <span className="text-sm font-black text-blue-600 bg-blue-50 px-2.5 py-0.5 rounded-lg">
-                              $50
-                            </span>
-                          </div>
-                          <div className="mt-3 text-[11px] text-gray-500 flex items-center gap-1">
-                            <Check size={13} className="text-blue-500" />
-                            <span>Reposición por extravío o copia adicional</span>
-                          </div>
-                        </div>
-
+                    {/* DATOS DE PAGO Y DEPÓSITO */}
+                    <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                          💳 Datos de Pago (Transferencia / Depósito SPIN OXXO)
+                        </span>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
+                          Laura Cortazar
+                        </span>
                       </div>
-
-                      {/* DATOS DE PAGO Y DEPÓSITO */}
-                      <div className="mt-4 p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                            💳 Datos de Pago (Transferencia / Depósito SPIN OXXO)
-                          </span>
-                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                            Laura Cortazar
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-                          <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
-                            <div>
-                              <span className="text-gray-400 block text-[9px] uppercase font-bold">CLABE SPIN</span>
-                              <span className="font-mono font-bold text-gray-900">728969000008838228</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText("728969000008838228", "clabe_form")}
-                              className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
-                              title="Copiar CLABE"
-                            >
-                              {copiedField === "clabe_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                            </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                        <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
+                          <div>
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">CLABE SPIN</span>
+                            <span className="font-mono font-bold text-gray-900">728969000008838228</span>
                           </div>
-
-                          <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
-                            <div>
-                              <span className="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta SPIN</span>
-                              <span className="font-mono font-bold text-gray-900">4217 4701 0045 4061</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText("4217470100454061", "tarjeta_form")}
-                              className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
-                              title="Copiar Tarjeta"
-                            >
-                              {copiedField === "tarjeta_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                            </button>
-                          </div>
-
-                          <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
-                            <div>
-                              <span className="text-gray-400 block text-[9px] uppercase font-bold">Depósito OXXO</span>
-                              <span className="font-mono font-bold text-gray-900">2242-1787-4421-1658</span>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyText("2242178744211658", "oxxo_form")}
-                              className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
-                              title="Copiar Código OXXO"
-                            >
-                              {copiedField === "oxxo_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
-                            </button>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <span className="text-[10px] text-gray-500">
-                            ¿Ya realizaste tu pago? Puedes enviar tu comprobante directamente:
-                          </span>
-                          <a
-                            href="https://wa.me/19999011852"
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText("728969000008838228", "clabe_form")}
+                            className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
+                            title="Copiar CLABE"
                           >
-                            <MessageCircle size={12} />
-                            <span>WhatsApp Comprobantes</span>
-                          </a>
+                            {copiedField === "clabe_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
                         </div>
+
+                        <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
+                          <div>
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta SPIN</span>
+                            <span className="font-mono font-bold text-gray-900">4217 4701 0045 4061</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText("4217470100454061", "tarjeta_form")}
+                            className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
+                            title="Copiar Tarjeta"
+                          >
+                            {copiedField === "tarjeta_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
+                        </div>
+
+                        <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
+                          <div>
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Depósito OXXO</span>
+                            <span className="font-mono font-bold text-gray-900">2242-1787-4421-1658</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyText("2242178744211658", "oxxo_form")}
+                            className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
+                            title="Copiar Código OXXO"
+                          >
+                            {copiedField === "oxxo_form" ? <Check size={12} className="text-emerald-600" /> : <Copy size={12} />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] text-gray-500">
+                          ¿Ya realizaste tu pago? Puedes enviar tu comprobante directamente:
+                        </span>
+                        <a
+                          href="https://wa.me/19999011852"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 hover:underline"
+                        >
+                          <MessageCircle size={12} />
+                          <span>WhatsApp Comprobantes</span>
+                        </a>
                       </div>
                     </div>
 
@@ -993,8 +1239,8 @@ export default function ReconocimientoFormModal({
                       {/* Botón de Registrar Solicitud con loader */}
                       <button
                         type="submit"
-                        disabled={isSubmitting || !tipoImpresion}
-                        className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-indigo-500/25 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        disabled={isSubmitting || diplomas.length === 0}
+                        className="w-full sm:w-auto px-7 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-indigo-500/25 transition-all transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
                       >
                         {isSubmitting ? (
                           <>
@@ -1003,7 +1249,7 @@ export default function ReconocimientoFormModal({
                           </>
                         ) : (
                           <>
-                            <span>Registrar Solicitud</span>
+                            <span>Registrar Solicitud ({diplomas.length})</span>
                             <ArrowRight size={15} />
                           </>
                         )}

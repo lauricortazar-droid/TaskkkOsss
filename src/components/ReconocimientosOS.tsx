@@ -34,6 +34,14 @@ import {
   CheckCircle,
   AlertCircle,
   Share2,
+  History,
+  Mail,
+  FolderOpen,
+  Link2,
+  LayoutDashboard,
+  Archive,
+  CheckCheck,
+  Eye,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -63,9 +71,13 @@ export interface ReconocimientoRecord {
   tipoImpresion: string;
   costo: number;
   telefono?: string;
+  email?: string;
+  driveUrl?: string;
   notas?: string;
   timestamp?: any;
   createdAt?: string;
+  updatedAt?: string;
+  entregadoAt?: string;
 
   // The 6 key tracking checkmarks for Laura:
   pagado: boolean;
@@ -76,6 +88,40 @@ export interface ReconocimientoRecord {
   entregado: boolean;
 }
 
+export const ZONAS_LISTA = [
+  "Jaguar",
+  "Tiburón",
+  "Delfín",
+  "Colibrí",
+  "Águila",
+  "Teocalli (centros)",
+  "Otro",
+];
+
+export const ROLES_LISTA = [
+  "Líder",
+  "Sublíder",
+  "Director centro",
+  "OSG",
+  "Otro",
+];
+
+export const MONTHS_MAP = [
+  { key: "todos", label: "Todos los meses" },
+  { key: "01", label: "01 - Enero" },
+  { key: "02", label: "02 - Febrero" },
+  { key: "03", label: "03 - Marzo" },
+  { key: "04", label: "04 - Abril" },
+  { key: "05", label: "05 - Mayo" },
+  { key: "06", label: "06 - Junio" },
+  { key: "07", label: "07 - Julio" },
+  { key: "08", label: "08 - Agosto" },
+  { key: "09", label: "09 - Septiembre" },
+  { key: "10", label: "10 - Octubre" },
+  { key: "11", label: "11 - Noviembre" },
+  { key: "12", label: "12 - Diciembre" },
+];
+
 export const SPIN_PAYMENT_INFO = {
   titular: "LAURA CORTAZAR",
   clabe: "728969000008838228",
@@ -83,6 +129,22 @@ export const SPIN_PAYMENT_INFO = {
   codigoOxxo: "2242-1787-4421-1658",
   whatsappUrl: "https://wa.me/19999011852",
 };
+
+export const HISTORY_MONTHS = [
+  { value: "todos", label: "Todos los meses" },
+  { value: "01", label: "01 - Enero" },
+  { value: "02", label: "02 - Febrero" },
+  { value: "03", label: "03 - Marzo" },
+  { value: "04", label: "04 - Abril" },
+  { value: "05", label: "05 - Mayo" },
+  { value: "06", label: "06 - Junio" },
+  { value: "07", label: "07 - Julio" },
+  { value: "08", label: "08 - Agosto" },
+  { value: "09", label: "09 - Septiembre" },
+  { value: "10", label: "10 - Octubre" },
+  { value: "11", label: "11 - Noviembre" },
+  { value: "12", label: "12 - Diciembre" },
+];
 
 interface ReconocimientosOSProps {
   userEmail?: string;
@@ -102,18 +164,32 @@ export default function ReconocimientosOS({
   const [filterPago, setFilterPago] = useState<"todos" | "pagados" | "pendientes">("todos");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
 
-  // View Mode: Dashboard | Tabla | Pagos
-  const [activeView, setActiveView] = useState<"dashboard" | "tabla" | "pagos">("dashboard");
+  // View Mode: Dashboard (Seguimiento Operativo) | Historial (Pagados y Entregados por Mes y Año)
+  const [activeView, setActiveView] = useState<"dashboard" | "historial">("dashboard");
   const [chartMode, setChartMode] = useState<"estados" | "operativo">("estados");
   const [copiedBankField, setCopiedBankField] = useState<string | null>(null);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null);
 
+  // Filtros específicos para la Vista de Historial (Solo Interno)
+  const [historyYear, setHistoryYear] = useState<string>("todos");
+  const [historyMonth, setHistoryMonth] = useState<string>("todos");
+  const [historySearch, setHistorySearch] = useState<string>("");
+
+  // Modal para ver / editar enlace a Google Drive
+  const [driveModalRecord, setDriveModalRecord] = useState<ReconocimientoRecord | null>(null);
+  const [editDriveUrl, setEditDriveUrl] = useState("");
+  const [isSavingDrive, setIsSavingDrive] = useState(false);
+
   // Modal for new manual recognition
   const [showAddModal, setShowAddModal] = useState(false);
   const [newNombre, setNewNombre] = useState("");
-  const [newRol, setNewRol] = useState("Alumno");
+  const [newRol, setNewRol] = useState("Líder");
+  const [newOtroRol, setNewOtroRol] = useState("");
   const [newGrupo, setNewGrupo] = useState("");
-  const [newZona, setNewZona] = useState("");
+  const [newZona, setNewZona] = useState("Jaguar");
+  const [newOtraZona, setNewOtraZona] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newDriveUrl, setNewDriveUrl] = useState("");
   const [newYear, setNewYear] = useState("2026");
   const [newTipo, setNewTipo] = useState<"Primera Impresión" | "Re-impresión">("Primera Impresión");
   const [newTelefono, setNewTelefono] = useState("");
@@ -124,6 +200,7 @@ export default function ReconocimientosOS({
   const [personForExtra, setPersonForExtra] = useState<ReconocimientoRecord | null>(null);
   const [extraYear, setExtraYear] = useState<string>("2022");
   const [extraTipo, setExtraTipo] = useState<"Primera Impresión" | "Re-impresión">("Re-impresión");
+  const [extraDriveUrl, setExtraDriveUrl] = useState("");
   const [extraNotas, setExtraNotas] = useState("");
   const [isSavingExtra, setIsSavingExtra] = useState(false);
 
@@ -165,6 +242,9 @@ export default function ReconocimientosOS({
             digital: base.digital || val.digital,
             impreso: base.impreso || val.impreso,
             entregado: base.entregado || val.entregado,
+            email: base.email || val.email,
+            driveUrl: base.driveUrl || val.driveUrl,
+            entregadoAt: base.entregadoAt || val.entregadoAt,
           });
         } else {
           byKey.set(id, val);
@@ -191,14 +271,7 @@ export default function ReconocimientosOS({
           const sameTipo = String(existing.tipoImpresion || "").trim() === normTipo;
 
           if (sameName && sameYear && sameTipo) {
-            const tA = item.timestamp?.toDate ? item.timestamp.toDate().getTime() : (item.createdAt ? new Date(item.createdAt).getTime() : 0);
-            const tB = existing.timestamp?.toDate ? existing.timestamp.toDate().getTime() : (existing.createdAt ? new Date(existing.createdAt).getTime() : 0);
-            if (tA && tB && Math.abs(tA - tB) < 48 * 60 * 60 * 1000) {
-              return true;
-            }
-            if (existing.grupo === item.grupo && existing.zona === item.zona) {
-              return true;
-            }
+            return true;
           }
           return false;
         });
@@ -214,7 +287,10 @@ export default function ReconocimientosOS({
           existing.impreso = existing.impreso || item.impreso;
           existing.entregado = existing.entregado || item.entregado;
           if (!existing.telefono && item.telefono) existing.telefono = item.telefono;
+          if (!existing.email && item.email) existing.email = item.email;
+          if (!existing.driveUrl && item.driveUrl) existing.driveUrl = item.driveUrl;
           if (!existing.notas && item.notas) existing.notas = item.notas;
+          if (!existing.entregadoAt && item.entregadoAt) existing.entregadoAt = item.entregadoAt;
         }
       }
 
@@ -231,7 +307,7 @@ export default function ReconocimientosOS({
             id: snap.id,
             solicitudId: d.solicitudId || undefined,
             nombre: d.nombre || "Sin nombre",
-            rol: d.rol || "Alumno",
+            rol: d.rol || "Líder",
             grupo: d.grupo || "G-1",
             zona: d.zona || "General",
             diplomado: d.diplomado || "Liderazgo I",
@@ -239,9 +315,13 @@ export default function ReconocimientosOS({
             tipoImpresion: d.tipoImpresion || "Primera Impresión",
             costo: Number(d.costo || (d.tipoImpresion === "Primera Impresión" ? 100 : 50)),
             telefono: d.telefono || undefined,
+            email: d.email || undefined,
+            driveUrl: d.driveUrl || undefined,
             notas: d.notas || undefined,
             timestamp: d.timestamp,
             createdAt: d.createdAt || new Date().toISOString(),
+            updatedAt: d.updatedAt || undefined,
+            entregadoAt: d.entregadoAt || undefined,
             pagado: Boolean(d.pagado),
             cuadernillos: Boolean(d.cuadernillos),
             audio: Boolean(d.audio),
@@ -268,7 +348,7 @@ export default function ReconocimientosOS({
               id: snap.id,
               solicitudId: snap.id,
               nombre: d.nombre,
-              rol: d.rol || "Alumno",
+              rol: d.rol || "Líder",
               grupo: d.grupo || "G-1",
               zona: d.zona || "General",
               diplomado: d.diplomado || "Liderazgo I",
@@ -276,9 +356,13 @@ export default function ReconocimientosOS({
               tipoImpresion: d.tipoImpresion || "Primera Impresión",
               costo: Number(d.costo || (d.tipoImpresion === "Primera Impresión" ? 100 : 50)),
               telefono: d.telefono || undefined,
+              email: d.email || undefined,
+              driveUrl: d.driveUrl || undefined,
               notas: d.notas || undefined,
               timestamp: d.timestamp,
               createdAt: d.createdAt || new Date().toISOString(),
+              updatedAt: d.updatedAt || undefined,
+              entregadoAt: d.entregadoAt || undefined,
               pagado: Boolean(d.pagado),
               cuadernillos: Boolean(d.cuadernillos),
               audio: Boolean(d.audio),
@@ -311,14 +395,26 @@ export default function ReconocimientosOS({
 
     // Optimistic UI update
     setRecords((prev) =>
-      prev.map((r) => (r.id === record.id ? { ...r, [field]: nextVal } : r))
+      prev.map((r) => {
+        if (r.id === record.id) {
+          const updated = { ...r, [field]: nextVal };
+          if (field === "entregado") {
+            updated.entregadoAt = nextVal ? new Date().toISOString() : undefined;
+          }
+          return updated;
+        }
+        return r;
+      })
     );
 
     try {
-      const updates = {
+      const updates: any = {
         [field]: nextVal,
         updatedAt: new Date().toISOString(),
       };
+      if (field === "entregado") {
+        updates.entregadoAt = nextVal ? new Date().toISOString() : null;
+      }
 
       await Promise.allSettled([
         updateDoc(doc(db, "reconocimientos", record.id), updates),
@@ -350,6 +446,30 @@ export default function ReconocimientosOS({
     }
   };
 
+  // Guardar / Actualizar enlace de Google Drive
+  const handleSaveDriveUrl = async () => {
+    if (!driveModalRecord) return;
+    setIsSavingDrive(true);
+    try {
+      const url = editDriveUrl.trim();
+      setRecords((prev) =>
+        prev.map((r) => (r.id === driveModalRecord.id ? { ...r, driveUrl: url || undefined } : r))
+      );
+      await Promise.allSettled([
+        updateDoc(doc(db, "reconocimientos", driveModalRecord.id), { driveUrl: url || null }),
+        updateDoc(doc(db, "solicitudes", driveModalRecord.id), { driveUrl: url || null }),
+        driveModalRecord.solicitudId ? updateDoc(doc(db, "solicitudes", driveModalRecord.solicitudId), { driveUrl: url || null }) : Promise.resolve(),
+        driveModalRecord.solicitudId ? updateDoc(doc(db, "reconocimientos", driveModalRecord.solicitudId), { driveUrl: url || null }) : Promise.resolve(),
+      ]);
+      playChime("success");
+      setDriveModalRecord(null);
+    } catch (err) {
+      console.error("Error saving drive URL:", err);
+    } finally {
+      setIsSavingDrive(false);
+    }
+  };
+
   // 4. Create new manual record with single primary key across collections
   const handleCreateManualRecord = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -357,16 +477,21 @@ export default function ReconocimientosOS({
 
     setIsSaving(true);
     const costo = newTipo === "Primera Impresión" ? 100 : 50;
+    const finalRol = newRol === "Otro" ? (newOtroRol.trim() || "Otro") : newRol;
+    const finalZona = newZona === "Otro" ? (newOtraZona.trim() || "Otro") : newZona;
+
     try {
       const payload = {
         nombre: newNombre.trim(),
-        rol: newRol.trim(),
+        rol: finalRol.trim() || "Líder",
         grupo: newGrupo.trim() || "G-1",
-        zona: newZona.trim() || "Zona Tiburón",
+        zona: finalZona.trim() || "Jaguar",
+        email: newEmail.trim() || undefined,
         diplomado: "Liderazgo I",
         year: newYear,
         tipoImpresion: newTipo,
         costo,
+        driveUrl: newDriveUrl.trim() || undefined,
         telefono: newTelefono.trim() || undefined,
         notas: newNotas.trim() || undefined,
         pagado: false,
@@ -389,8 +514,13 @@ export default function ReconocimientosOS({
       playChime("work_done");
       setShowAddModal(false);
       setNewNombre("");
+      setNewRol("Líder");
+      setNewOtroRol("");
       setNewGrupo("");
-      setNewZona("");
+      setNewZona("Jaguar");
+      setNewOtraZona("");
+      setNewEmail("");
+      setNewDriveUrl("");
       setNewTelefono("");
       setNewNotas("");
     } catch (err) {
@@ -413,10 +543,12 @@ export default function ReconocimientosOS({
         rol: personForExtra.rol,
         grupo: personForExtra.grupo,
         zona: personForExtra.zona,
+        email: personForExtra.email || undefined,
         diplomado: "Liderazgo I",
         year: extraYear,
         tipoImpresion: extraTipo,
         costo,
+        driveUrl: extraDriveUrl.trim() || undefined,
         telefono: personForExtra.telefono || undefined,
         notas: extraNotas.trim() || undefined,
         pagado: false,
@@ -438,6 +570,7 @@ export default function ReconocimientosOS({
       playChime("work_done");
       setPersonForExtra(null);
       setExtraNotas("");
+      setExtraDriveUrl("");
     } catch (err) {
       console.error("Error creating extra recognition:", err);
     } finally {
@@ -448,13 +581,19 @@ export default function ReconocimientosOS({
   // 5. Send status message to student via WhatsApp
   const handleSendWhatsAppStatus = (rec: ReconocimientoRecord) => {
     if (!rec.telefono) {
-      alert("Este alumno no tiene registrado su número de teléfono.");
-      return;
+      const phoneInput = prompt(`Ingresa el número de WhatsApp para ${rec.nombre} (ej. 9999011852):`);
+      if (phoneInput && phoneInput.trim()) {
+        rec.telefono = phoneInput.trim();
+        updateDoc(doc(db, "reconocimientos", rec.id), { telefono: phoneInput.trim() }).catch(() => null);
+        updateDoc(doc(db, "solicitudes", rec.id), { telefono: phoneInput.trim() }).catch(() => null);
+      } else {
+        return;
+      }
     }
 
     const clean = cleanPhoneNumber(rec.telefono);
     const text =
-      `Hola ${rec.nombre}, te saludo de parte de Laura Cortazar (Universidad FGDLL).\n\n` +
+      `Hola ${rec.nombre}, te saluda tu madrina Laura (Universidad FGDLL).\n\n` +
       `📋 *Estado de tu Reconocimiento (${rec.diplomado} - Generación ${rec.year})*:\n` +
       `• Tipo: ${rec.tipoImpresion} ($${rec.costo})\n` +
       `• Pago: ${rec.pagado ? "✅ Confirmado" : "⏳ Pendiente ($" + rec.costo + ")"}\n` +
@@ -716,7 +855,7 @@ export default function ReconocimientosOS({
     }
     const clean = cleanPhoneNumber(rec.telefono);
     const msg =
-      `Hola ${rec.nombre}, te saludo de parte de Laura Cortazar (Universidad FGDLL).\n\n` +
+      `Hola ${rec.nombre}, te saluda tu madrina Laura (Universidad FGDLL).\n\n` +
       `Aquí tienes los datos para realizar el pago de tu reconocimiento (${rec.tipoImpresion} • $${rec.costo}):\n\n` +
       `👤 *Titular:* ${SPIN_PAYMENT_INFO.titular}\n` +
       `💳 *CLABE SPIN:* ${SPIN_PAYMENT_INFO.clabe}\n` +
@@ -728,56 +867,238 @@ export default function ReconocimientosOS({
     window.open(url, "_blank");
   };
 
-  // Export CSV
+  // Historial de solicitudes Pagadas y Entregadas (Solo Interno)
+  const historyAvailableYears = useMemo(() => {
+    const setY = new Set<string>(["2026", "2025", "2024", "2023", "2022"]);
+    records.forEach((r) => {
+      if (r.year) setY.add(String(r.year));
+      if (r.createdAt) {
+        try {
+          const y = new Date(r.createdAt).getFullYear();
+          if (!isNaN(y)) setY.add(String(y));
+        } catch (_) {}
+      }
+      if (r.entregadoAt) {
+        try {
+          const y = new Date(r.entregadoAt).getFullYear();
+          if (!isNaN(y)) setY.add(String(y));
+        } catch (_) {}
+      }
+    });
+    return Array.from(setY).sort((a, b) => b.localeCompare(a));
+  }, [records]);
+
+  const historyRecords = useMemo(() => {
+    return records.filter((r) => {
+      // Requisito estricto: Solicitudes pagadas Y entregadas
+      if (!r.pagado || !r.entregado) return false;
+
+      // Obtener fecha representativa (entrega o registro)
+      let itemDate: Date | null = null;
+      if (r.entregadoAt) {
+        try {
+          const d = new Date(r.entregadoAt);
+          if (!isNaN(d.getTime())) itemDate = d;
+        } catch (_) {}
+      }
+      if (!itemDate && r.timestamp?.toDate) {
+        try {
+          itemDate = r.timestamp.toDate();
+        } catch (_) {}
+      }
+      if (!itemDate && r.createdAt) {
+        try {
+          const d = new Date(r.createdAt);
+          if (!isNaN(d.getTime())) itemDate = d;
+        } catch (_) {}
+      }
+
+      // Filtrado por Año
+      if (historyYear !== "todos") {
+        const yearFromDate = itemDate ? String(itemDate.getFullYear()) : null;
+        const yearFromProp = String(r.year || "").trim();
+        if (yearFromDate !== historyYear && yearFromProp !== historyYear) {
+          return false;
+        }
+      }
+
+      // Filtrado por Mes
+      if (historyMonth !== "todos") {
+        if (!itemDate) return false;
+        const monthNum = String(itemDate.getMonth() + 1).padStart(2, "0");
+        if (monthNum !== historyMonth) return false;
+      }
+
+      // Filtro de texto
+      if (historySearch.trim()) {
+        const q = historySearch.toLowerCase().trim();
+        const matches =
+          r.nombre.toLowerCase().includes(q) ||
+          r.rol.toLowerCase().includes(q) ||
+          r.grupo.toLowerCase().includes(q) ||
+          r.zona.toLowerCase().includes(q) ||
+          r.diplomado.toLowerCase().includes(q) ||
+          String(r.year).includes(q) ||
+          (r.telefono && r.telefono.includes(q)) ||
+          (r.email && r.email.toLowerCase().includes(q)) ||
+          (r.notas && r.notas.toLowerCase().includes(q));
+        if (!matches) return false;
+      }
+
+      return true;
+    });
+  }, [records, historyYear, historyMonth, historySearch]);
+
+  const historyStats = useMemo(() => {
+    const totalEntregados = historyRecords.length;
+    const totalMontoRecaudado = historyRecords.reduce((sum, r) => sum + (r.costo || 0), 0);
+    const primeraImpresionCount = historyRecords.filter((r) => r.tipoImpresion === "Primera Impresión").length;
+    const reimpresionCount = historyRecords.filter((r) => r.tipoImpresion === "Re-impresión").length;
+    return {
+      totalEntregados,
+      totalMontoRecaudado,
+      primeraImpresionCount,
+      reimpresionCount,
+    };
+  }, [historyRecords]);
+
+  // Export CSV del listado operativo general
   const handleExportCSV = () => {
+    const dataToExport = filteredRecords.length > 0 ? filteredRecords : records;
+    if (dataToExport.length === 0) {
+      alert("No hay registros para exportar.");
+      return;
+    }
+
     const headers = [
-      "ID",
       "Nombre",
+      "Tipo de Impresion",
+      "Diplomado",
+      "Costo Total",
+      "Generacion",
       "Rol",
       "Grupo",
       "Zona",
-      "Diplomado",
-      "Generacion",
-      "TipoImpresion",
-      "Costo",
-      "Telefono",
+      "Estado Pago",
       "Pagado",
       "Cuadernillos",
       "Audio",
       "DigitalEnviado",
       "Impreso",
       "Entregado",
+      "Telefono",
+      "Email",
+      "Link Google Drive",
+      "Notas",
       "FechaRegistro",
+      "ID",
     ];
 
-    const rows = records.map((r) => [
-      `"${r.id}"`,
-      `"${r.nombre}"`,
-      `"${r.rol}"`,
-      `"${r.grupo}"`,
-      `"${r.zona}"`,
-      `"${r.diplomado}"`,
-      `"${r.year}"`,
-      `"${r.tipoImpresion}"`,
-      r.costo,
-      `"${r.telefono || ""}"`,
-      r.pagado ? "SI" : "NO",
-      r.cuadernillos ? "SI" : "NO",
-      r.audio ? "SI" : "NO",
-      r.digital ? "SI" : "NO",
-      r.impreso ? "SI" : "NO",
-      r.entregado ? "SI" : "NO",
-      `"${r.createdAt || ""}"`,
+    const escapeCSV = (val: any) => {
+      if (val === undefined || val === null) return '""';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
+    const rows = dataToExport.map((r) => [
+      escapeCSV(r.nombre),
+      escapeCSV(r.tipoImpresion),
+      escapeCSV(r.diplomado),
+      escapeCSV(r.costo),
+      escapeCSV(r.year),
+      escapeCSV(r.rol),
+      escapeCSV(r.grupo),
+      escapeCSV(r.zona),
+      escapeCSV(r.pagado ? "PAGADO" : "PENDIENTE"),
+      escapeCSV(r.pagado ? "SI" : "NO"),
+      escapeCSV(r.cuadernillos ? "SI" : "NO"),
+      escapeCSV(r.audio ? "SI" : "NO"),
+      escapeCSV(r.digital ? "SI" : "NO"),
+      escapeCSV(r.impreso ? "SI" : "NO"),
+      escapeCSV(r.entregado ? "SI" : "NO"),
+      escapeCSV(r.telefono || ""),
+      escapeCSV(r.email || ""),
+      escapeCSV(r.driveUrl || ""),
+      escapeCSV(r.notas || ""),
+      escapeCSV(r.createdAt || ""),
+      escapeCSV(r.id),
     ]);
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `reconocimientos_liderazgo_${new Date().toISOString().split("T")[0]}.csv`);
+    link.href = url;
+    link.download = `reconocimientos_solicitudes_${new Date().toISOString().split("T")[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    playChime("success");
+  };
+
+  // Export CSV específico para la vista de Historial (Pagados y Entregados por Mes y Año)
+  const handleExportHistoryCSV = () => {
+    if (historyRecords.length === 0) {
+      alert("No hay registros en el historial para exportar con los filtros seleccionados.");
+      return;
+    }
+
+    const headers = [
+      "Nombre",
+      "Tipo de Impresion",
+      "Diplomado",
+      "Costo Total",
+      "Generacion",
+      "Rol",
+      "Grupo",
+      "Zona",
+      "Estado Pago",
+      "Estado Entrega",
+      "Telefono",
+      "Email",
+      "Link Google Drive",
+      "Fecha Registro",
+      "Fecha Entrega",
+      "Notas",
+      "ID",
+    ];
+
+    const escapeCSV = (val: any) => {
+      if (val === undefined || val === null) return '""';
+      return `"${String(val).replace(/"/g, '""')}"`;
+    };
+
+    const rows = historyRecords.map((r) => [
+      escapeCSV(r.nombre),
+      escapeCSV(r.tipoImpresion),
+      escapeCSV(r.diplomado),
+      escapeCSV(r.costo),
+      escapeCSV(r.year),
+      escapeCSV(r.rol),
+      escapeCSV(r.grupo),
+      escapeCSV(r.zona),
+      escapeCSV("PAGADO"),
+      escapeCSV("ENTREGADO"),
+      escapeCSV(r.telefono || ""),
+      escapeCSV(r.email || ""),
+      escapeCSV(r.driveUrl || ""),
+      escapeCSV(r.createdAt ? new Date(r.createdAt).toLocaleDateString("es-MX") : ""),
+      escapeCSV(r.entregadoAt ? new Date(r.entregadoAt).toLocaleDateString("es-MX") : (r.createdAt ? new Date(r.createdAt).toLocaleDateString("es-MX") : "")),
+      escapeCSV(r.notas || ""),
+      escapeCSV(r.id),
+    ]);
+
+    const csvContent = "\uFEFF" + [headers.join(","), ...rows.map((e) => e.join(","))].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `historial_entregados_${historyYear}_mes_${historyMonth}_${new Date().toISOString().split("T")[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    playChime("success");
   };
 
   return (
@@ -829,6 +1150,70 @@ export default function ReconocimientosOS({
         </div>
       </div>
 
+      {/* SELECTOR DE VISTAS: SEGUIMIENTO OPERATIVO VS HISTORIAL DE ENTREGADOS (SOLO INTERNO) */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-2 bg-stone-100 dark:bg-stone-800/90 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-white/70 dark:bg-stone-900/70 rounded-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView("dashboard");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "dashboard"
+                ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <LayoutDashboard size={15} />
+            <span>Seguimiento Operativo</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "dashboard"
+                ? "bg-white/20 text-white"
+                : "bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
+            }`}>
+              {records.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView("historial");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "historial"
+                ? "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <Archive size={15} />
+            <span>Vista de Historial (Solo Interno)</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "historial"
+                ? "bg-white/20 text-white"
+                : "bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300"
+            }`}>
+              {historyRecords.length}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 text-xs text-stone-500 dark:text-stone-400 font-medium">
+          {activeView === "dashboard" ? (
+            <span>Modo operativo con control de pagos, audios, cuadernillos y entrega en vivo.</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold">
+              <CheckCheck size={14} />
+              <span>Archivo de solicitudes pagadas y entregadas por mes y año</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {activeView === "dashboard" && (
+        <>
       {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA BANCARIA (LAURA CORTAZAR) */}
       <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-emerald-500/5 border-2 border-amber-400/40 dark:border-amber-500/30 bg-white dark:bg-stone-900 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-amber-200/60 dark:border-stone-800">
@@ -1619,8 +2004,349 @@ export default function ReconocimientosOS({
         )}
 
       </div>
+      </>
+      )}
 
-      {/* MODAL: AGREGAR OTRA GENERACIÓN / RECONOCIMIENTO PARA LA MISMA PERSONA */}
+      {/* VISTA 2: HISTORIAL DE PAGADOS Y ENTREGADOS (SOLO INTERNO) */}
+      {activeView === "historial" && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          
+          {/* Header Banner del Historial Interno */}
+          <div className="p-6 rounded-3xl bg-gradient-to-r from-emerald-800 via-teal-900 to-stone-900 text-white shadow-lg relative overflow-hidden border border-emerald-500/30">
+            <div className="absolute right-0 top-0 w-80 h-80 bg-white/5 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-white/20 backdrop-blur-md text-white text-base">
+                    🏛️
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 border border-emerald-400/30">
+                    Solo Interno • Archivo Histórico
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Historial de Reconocimientos Pagados y Entregados
+                </h3>
+                <p className="text-xs text-emerald-100/90 max-w-2xl leading-relaxed">
+                  Registro exclusivo para administración interna: Solicitudes pagadas y entregadas, archivadas por mes y año con comprobantes, enlaces a Google Drive y exportación CSV.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={handleExportHistoryCSV}
+                  className="px-4 py-2.5 rounded-2xl bg-white text-emerald-950 hover:bg-emerald-50 font-black text-xs transition shadow-md flex items-center gap-2 active:scale-95 cursor-pointer"
+                  title="Exportar archivo CSV con las solicitudes filtradas del historial"
+                >
+                  <Download size={14} />
+                  <span>Exportar Historial CSV</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* KPI Cards del Historial */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
+              <span className="text-xs text-stone-500 font-semibold flex items-center justify-between">
+                <span>Total Entregados</span>
+                <PackageCheck size={14} className="text-emerald-600" />
+              </span>
+              <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
+                {historyStats.totalEntregados}
+              </div>
+              <span className="text-[10px] text-stone-400 font-medium">100% Pagados y Entregados</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
+              <span className="text-xs text-stone-500 font-semibold flex items-center justify-between">
+                <span>Monto Recaudado</span>
+                <DollarSign size={14} className="text-indigo-600" />
+              </span>
+              <div className="text-2xl font-black text-stone-900 dark:text-stone-100">
+                ${historyStats.totalMontoRecaudado} <span className="text-xs text-stone-400 font-normal">MXN</span>
+              </div>
+              <span className="text-[10px] text-stone-400 font-medium">Ingresos totales cobrados</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
+              <span className="text-xs text-stone-500 font-semibold flex items-center justify-between">
+                <span>Primeras Impresiones</span>
+                <Printer size={14} className="text-blue-600" />
+              </span>
+              <div className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                {historyStats.primeraImpresionCount}
+              </div>
+              <span className="text-[10px] text-stone-400 font-medium">$100 MXN c/u (${historyStats.primeraImpresionCount * 100})</span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
+              <span className="text-xs text-stone-500 font-semibold flex items-center justify-between">
+                <span>Re-impresiones</span>
+                <Layers size={14} className="text-purple-600" />
+              </span>
+              <div className="text-2xl font-black text-purple-600 dark:text-purple-400">
+                {historyStats.reimpresionCount}
+              </div>
+              <span className="text-[10px] text-stone-400 font-medium">$50 MXN c/u (${historyStats.reimpresionCount * 50})</span>
+            </div>
+          </div>
+
+          {/* Barra de Filtros del Historial: Año, Mes, Búsqueda y Botón CSV */}
+          <div className="p-4 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-3">
+            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+              
+              {/* Buscador */}
+              <div className="relative flex-1 max-w-md">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar en historial por alumno, grupo, zona, notas..."
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-900 dark:text-stone-100 placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              {/* Filtros de Mes y Año */}
+              <div className="flex flex-wrap items-center gap-2">
+                
+                {/* Selector de Año */}
+                <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold">
+                  <Calendar size={13} className="text-stone-400" />
+                  <span className="text-stone-500 text-[11px]">Año:</span>
+                  <select
+                    value={historyYear}
+                    onChange={(e) => setHistoryYear(e.target.value)}
+                    className="bg-transparent font-black text-stone-900 dark:text-stone-100 focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="todos">Todos los Años</option>
+                    {historyAvailableYears.map((y) => (
+                      <option key={y} value={y}>{y}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Selector de Mes */}
+                <div className="flex items-center gap-1.5 bg-stone-100 dark:bg-stone-800 px-3 py-1.5 rounded-2xl border border-stone-200 dark:border-stone-700 text-xs font-bold">
+                  <Clock size={13} className="text-stone-400" />
+                  <span className="text-stone-500 text-[11px]">Mes:</span>
+                  <select
+                    value={historyMonth}
+                    onChange={(e) => setHistoryMonth(e.target.value)}
+                    className="bg-transparent font-black text-stone-900 dark:text-stone-100 focus:outline-hidden cursor-pointer"
+                  >
+                    {HISTORY_MONTHS.map((m) => (
+                      <option key={m.value} value={m.value}>{m.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Botón Exportar CSV */}
+                <button
+                  type="button"
+                  onClick={handleExportHistoryCSV}
+                  className="px-3.5 py-2 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/80 text-emerald-900 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                  title="Descargar reporte del historial filtrado en formato CSV"
+                >
+                  <Download size={13} />
+                  <span>Descargar CSV</span>
+                </button>
+
+              </div>
+            </div>
+          </div>
+
+          {/* Tabla Detallada del Historial */}
+          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-sm overflow-hidden">
+            {isLoading ? (
+              <div className="p-16 text-center text-stone-400 space-y-3">
+                <RefreshCw size={28} className="animate-spin text-emerald-600 mx-auto" />
+                <p className="text-sm font-semibold">Cargando archivo histórico...</p>
+              </div>
+            ) : historyRecords.length === 0 ? (
+              <div className="p-16 text-center space-y-3">
+                <div className="w-16 h-16 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 mx-auto flex items-center justify-center text-2xl">
+                  🏛️
+                </div>
+                <h4 className="text-base font-bold text-stone-800 dark:text-stone-200">
+                  No hay solicitudes entregadas y pagadas con estos filtros
+                </h4>
+                <p className="text-xs text-stone-500 max-w-md mx-auto">
+                  Asegúrate de haber marcado como Pagado y Entregado a los alumnos en el Seguimiento Operativo, o ajusta los filtros de año ({historyYear === "todos" ? "Todos" : historyYear}) y mes ({historyMonth === "todos" ? "Todos" : historyMonth}).
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-800/50 text-[11px] font-bold text-stone-500 uppercase tracking-wider">
+                      <th className="py-3 px-4">Alumno / Datos</th>
+                      <th className="py-3 px-3">Diplomado & Gen.</th>
+                      <th className="py-3 px-3">Impresión & Costo</th>
+                      <th className="py-3 px-3">Fecha Entrega</th>
+                      <th className="py-3 px-3">Reconocimiento Drive</th>
+                      <th className="py-3 px-3">Notas</th>
+                      <th className="py-3 px-3 text-center">Estado</th>
+                      <th className="py-3 px-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80">
+                    {historyRecords.map((r) => {
+                      const fechaEntrega = r.entregadoAt
+                        ? new Date(r.entregadoAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+                        : r.createdAt
+                        ? new Date(r.createdAt).toLocaleDateString("es-MX", { day: "2-digit", month: "short", year: "numeric" })
+                        : "Completado";
+
+                      return (
+                        <tr key={r.id} className="hover:bg-emerald-50/20 dark:hover:bg-emerald-950/10 transition">
+                          {/* Alumno */}
+                          <td className="py-3.5 px-4 min-w-[200px]">
+                            <div className="font-bold text-stone-900 dark:text-stone-100 text-sm">
+                              {r.nombre}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[11px]">
+                              <span className="px-1.5 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 font-semibold text-stone-600 dark:text-stone-400">
+                                {r.rol}
+                              </span>
+                              <span className="text-stone-400">•</span>
+                              <span className="text-stone-600 dark:text-stone-300 font-medium">
+                                {r.grupo}
+                              </span>
+                              <span className="text-stone-400">•</span>
+                              <span className="text-stone-600 dark:text-stone-300 font-medium">
+                                {r.zona}
+                              </span>
+                            </div>
+                            {r.email && (
+                              <div className="flex items-center gap-1 text-[10px] text-stone-500 mt-0.5">
+                                <Mail size={10} />
+                                <span className="truncate">{r.email}</span>
+                              </div>
+                            )}
+                            {r.telefono && (
+                              <div className="flex items-center gap-1 text-[10px] text-emerald-600 font-mono mt-0.5">
+                                <span>WA: {r.telefono}</span>
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Diplomado */}
+                          <td className="py-3.5 px-3 min-w-[130px]">
+                            <div className="font-bold text-stone-800 dark:text-stone-200">
+                              {r.diplomado}
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 mt-1 inline-block">
+                              Gen. {r.year}
+                            </span>
+                          </td>
+
+                          {/* Tipo & Costo */}
+                          <td className="py-3.5 px-3 min-w-[130px]">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md inline-block ${
+                              r.tipoImpresion === "Primera Impresión"
+                                ? "bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200"
+                                : "bg-blue-100 dark:bg-blue-950/60 text-blue-900 dark:text-blue-200"
+                            }`}>
+                              {r.tipoImpresion}
+                            </span>
+                            <div className="font-black text-stone-900 dark:text-stone-100 mt-1 text-sm font-mono">
+                              ${r.costo} MXN
+                            </div>
+                          </td>
+
+                          {/* Fecha */}
+                          <td className="py-3.5 px-3 min-w-[110px] text-stone-600 dark:text-stone-400 font-medium">
+                            <div className="flex items-center gap-1">
+                              <Calendar size={12} className="text-stone-400" />
+                              <span>{fechaEntrega}</span>
+                            </div>
+                          </td>
+
+                          {/* Google Drive Link */}
+                          <td className="py-3.5 px-3 min-w-[140px]">
+                            {r.driveUrl ? (
+                              <a
+                                href={r.driveUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-bold transition"
+                                title="Abrir reconocimiento en Google Drive"
+                              >
+                                <FolderOpen size={13} />
+                                <span>Ver en Drive</span>
+                                <ExternalLink size={11} />
+                              </a>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDriveModalRecord(r);
+                                  setEditDriveUrl("");
+                                }}
+                                className="inline-flex items-center gap-1 text-[11px] text-stone-400 hover:text-stone-600 underline font-medium"
+                              >
+                                <Link2 size={11} />
+                                <span>Asignar link</span>
+                              </button>
+                            )}
+                          </td>
+
+                          {/* Notas */}
+                          <td className="py-3.5 px-3 max-w-[160px] text-stone-500 text-[11px] truncate" title={r.notas || ""}>
+                            {r.notas || <span className="text-stone-300 dark:text-stone-700">—</span>}
+                          </td>
+
+                          {/* Estado */}
+                          <td className="py-3.5 px-3 text-center">
+                            <div className="inline-flex flex-col gap-1">
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 text-[10px] font-black tracking-wide inline-flex items-center gap-1">
+                                <Check size={10} /> Pagado
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-200 text-[10px] font-black tracking-wide inline-flex items-center gap-1">
+                                <PackageCheck size={10} /> Entregado
+                              </span>
+                            </div>
+                          </td>
+
+                          {/* Acciones */}
+                          <td className="py-3.5 px-4 text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {r.telefono && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleSendWhatsAppStatus(r)}
+                                  className="p-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 transition"
+                                  title="Enviar mensaje de felicitación por WhatsApp"
+                                >
+                                  <MessageCircle size={14} />
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDriveModalRecord(r);
+                                  setEditDriveUrl(r.driveUrl || "");
+                                }}
+                                className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 transition"
+                                title="Editar enlace de Google Drive"
+                              >
+                                <Link2 size={14} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
       {personForExtra && (
         <div
           className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
@@ -1804,107 +2530,206 @@ export default function ReconocimientosOS({
 
             <form onSubmit={handleCreateManualRecord} className="space-y-4 text-xs font-medium">
               
+              {/* Nombre Completo */}
               <div>
-                <label className="block text-stone-700 dark:text-stone-300 mb-1">Nombre Completo *</label>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Nombre Completo *</label>
                 <input
                   type="text"
                   required
                   placeholder="Ej. María Elena Sánchez"
                   value={newNombre}
                   onChange={(e) => setNewNombre(e.target.value)}
-                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Rol *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej. Alumno, Instructor"
-                    value={newRol}
-                    onChange={(e) => setNewRol(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  />
+              {/* Rol (opción múltiple: Líder, Sublíder, Director centro, OSG, Otro) */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1.5">Rol / Función *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {[
+                    { label: "Líder", value: "Líder" },
+                    { label: "Sublíder", value: "Sublíder" },
+                    { label: "Director centro", value: "Director centro" },
+                    { label: "OSG", value: "OSG" },
+                    { label: "Otro", value: "Otro" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setNewRol(item.value)}
+                      className={`py-2 px-2 rounded-xl border text-center font-bold text-xs transition cursor-pointer ${
+                        newRol === item.value
+                          ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                          : "bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Grupo *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej. Grupo 1, Matutino"
-                    value={newGrupo}
-                    onChange={(e) => setNewGrupo(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  />
-                </div>
+                {newRol === "Otro" && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      placeholder="Especificar otro rol (opcional)"
+                      value={newOtroRol}
+                      onChange={(e) => setNewOtroRol(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-indigo-300 dark:border-indigo-600 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Zona / Sede *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ej. Zona Tiburón"
-                    value={newZona}
-                    onChange={(e) => setNewZona(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-                  />
+              {/* Grupo */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Grupo *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Grupo 1, Matutino, G-2"
+                  value={newGrupo}
+                  onChange={(e) => setNewGrupo(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Zona (Jaguar, Tiburón, Delfín, Colibrí, Águila, Teocalli (centros), Otro) */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1.5">Zona / Centro *</label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5">
+                  {[
+                    { label: "Jaguar", value: "Jaguar" },
+                    { label: "Tiburón", value: "Tiburón" },
+                    { label: "Delfín", value: "Delfín" },
+                    { label: "Colibrí", value: "Colibrí" },
+                    { label: "Águila", value: "Águila" },
+                    { label: "Teocalli (centros)", value: "Teocalli (centros)" },
+                    { label: "Otro", value: "Otro" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setNewZona(item.value)}
+                      className={`py-2 px-1.5 rounded-xl border text-center font-bold text-[11px] transition cursor-pointer truncate ${
+                        newZona === item.value
+                          ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                          : "bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
                 </div>
+                {newZona === "Otro" && (
+                  <div className="mt-2">
+                    <input
+                      type="text"
+                      placeholder="Especificar otra zona o centro (opcional)"
+                      value={newOtraZona}
+                      onChange={(e) => setNewOtraZona(e.target.value)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-indigo-300 dark:border-indigo-600 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Generación y Tipo de Impresión */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Generación / Año *</label>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Generación / Año *</label>
                   <select
                     value={newYear}
                     onChange={(e) => setNewYear(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                   >
                     <option value="2026">2026</option>
                     <option value="2025">2025</option>
                     <option value="2022">2022</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Tipo de Impresión *</label>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Tipo de Impresión *</label>
                   <select
                     value={newTipo}
                     onChange={(e) => setNewTipo(e.target.value as any)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="Primera Impresión">Primera Impresión ($100)</option>
-                    <option value="Re-impresión">Re-impresión ($50)</option>
+                    <option value="Primera Impresión">Primera Impresión ($100 MXN)</option>
+                    <option value="Re-impresión">Re-impresión ($50 MXN)</option>
                   </select>
                 </div>
+              </div>
+
+              {/* Correo Electrónico y Teléfono */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-stone-700 dark:text-stone-300 mb-1">Teléfono / WhatsApp</label>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1 flex items-center gap-1">
+                    <Mail size={12} className="text-stone-400" />
+                    <span>Correo Electrónico (Opcional)</span>
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="ejemplo@correo.com"
+                    value={newEmail}
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Teléfono / WhatsApp (Opcional)</label>
                   <input
                     type="tel"
-                    placeholder="Ej. 999 123 4567"
+                    placeholder="Ej. 999 901 1852"
                     value={newTelefono}
                     onChange={(e) => setNewTelefono(e.target.value)}
-                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+              {/* Link Google Drive */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1 flex items-center gap-1">
+                  <FolderOpen size={12} className="text-stone-400" />
+                  <span>Enlace a Google Drive (Opcional)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://drive.google.com/file/d/..."
+                  value={newDriveUrl}
+                  onChange={(e) => setNewDriveUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Notas u Observaciones */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">Notas u Observaciones (Opcional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Indicaciones particulares de entrega o comprobante..."
+                  value={newNotas}
+                  onChange={(e) => setNewNotas(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-medium placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500 resize-y"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
                 <button
                   type="button"
                   onClick={() => setShowAddModal(false)}
-                  className="px-4 py-2 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold"
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition disabled:opacity-50"
+                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
                 >
-                  {isSaving ? "Guardando..." : "Guardar en Firestore"}
+                  <Plus size={14} />
+                  <span>{isSaving ? "Guardando..." : `Guardar en Firestore ($${newTipo === "Primera Impresión" ? 100 : 50})`}</span>
                 </button>
               </div>
 
