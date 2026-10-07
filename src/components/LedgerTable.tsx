@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Star,
   Timer,
@@ -20,11 +20,13 @@ import {
   LayoutGrid,
   Table as TableIcon,
   Calendar as CalendarIcon,
+  Flame,
 } from "lucide-react";
 import { TaskItem, StatusFilter, DomainType, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { buildWhatsAppUrl } from "../utils/whatsapp";
 import { playChime } from "../utils/audio";
+import { calculateUrgencyScore } from "../utils/urgencyScore";
 import TaskItemRow from "./TaskItemRow";
 import TaskCardMobile from "./TaskCardMobile";
 import TaskCalendarView from "./TaskCalendarView";
@@ -66,6 +68,7 @@ export default function LedgerTable({
   const [domainFilter, setDomainFilter] = useState<DomainType>("Todos");
   const [tagFilter, setTagFilter] = useState<string>("Todas");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortByUrgency, setSortByUrgency] = useState(false);
   const [copiedMd, setCopiedMd] = useState(false);
   const [viewingImage, setViewingImage] = useState<{ src: string; title: string } | null>(null);
   const [viewMode, setViewMode] = useState<"cards" | "table" | "calendar">(() => {
@@ -114,6 +117,22 @@ export default function LedgerTable({
 
     return true;
   });
+
+  // Sort tasks by Urgency Score if enabled
+  const displayedTasks = useMemo(() => {
+    if (!sortByUrgency) return filteredTasks;
+    return [...filteredTasks].sort((a, b) => {
+      const scoreA = calculateUrgencyScore(a);
+      const scoreB = calculateUrgencyScore(b);
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+      // Essential task first as tie breaker
+      if (a.id === esencialTaskId) return -1;
+      if (b.id === esencialTaskId) return 1;
+      return a.id - b.id;
+    });
+  }, [filteredTasks, sortByUrgency, esencialTaskId]);
 
   // Export raw markdown table (matching exactly Ley 1)
   const handleCopyMarkdown = async () => {
@@ -237,6 +256,46 @@ export default function LedgerTable({
               <span className="text-[11px]">Calendario</span>
             </button>
           </div>
+
+          {/* Sort by Urgency Toggle Button */}
+          <button
+            type="button"
+            id="ledger-sort-urgency-toggle-btn"
+            onClick={() => {
+              setSortByUrgency((prev) => !prev);
+              playChime("tick");
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all shrink-0 min-h-[36px] ${
+              sortByUrgency
+                ? "bg-amber-500 text-stone-950 border-amber-600 shadow-xs ring-2 ring-amber-500/30 font-bold"
+                : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-600 hover:text-amber-600 font-medium"
+            }`}
+            title={
+              sortByUrgency
+                ? "Desactivar orden por Urgencia"
+                : "Ordenar por Urgencia: prioriza tareas con fechas límite próximas/vencidas y etiquetas de urgencia"
+            }
+          >
+            <Flame
+              size={14}
+              className={
+                sortByUrgency
+                  ? "text-stone-950 fill-stone-950 animate-pulse"
+                  : "text-amber-500"
+              }
+            />
+            <span className="hidden xs:inline">{sortByUrgency ? "⚡ Por Urgencia" : "Ordenar por Urgencia"}</span>
+            <span className="xs:hidden">Urgencia</span>
+            <span
+              className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                sortByUrgency
+                  ? "bg-stone-950 text-amber-400"
+                  : "bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400"
+              }`}
+            >
+              {sortByUrgency ? "ON" : "OFF"}
+            </span>
+          </button>
 
           <button
             id="copy-markdown-ledger-btn"
@@ -373,11 +432,43 @@ export default function LedgerTable({
         </div>
       )}
 
+      {/* Urgency Sort Active Notification Banner */}
+      {sortByUrgency && (
+        <div
+          id="ledger-urgency-active-banner"
+          className="px-4 py-2 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-800/80 flex items-center justify-between gap-2 text-xs text-amber-950 dark:text-amber-200 animate-in fade-in duration-150"
+        >
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex h-2 w-2 relative shrink-0">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+            </span>
+            <span className="font-bold flex items-center gap-1 shrink-0 text-amber-900 dark:text-amber-300">
+              <Flame size={13} className="text-amber-600 dark:text-amber-400 fill-amber-500" />
+              <span>Orden por Urgencia Activo:</span>
+            </span>
+            <span className="text-stone-600 dark:text-stone-300 text-[11px] sm:text-xs">
+              Tareas ordenadas por <strong>Urgency Score</strong> según proximidad de fecha límite (vencidas, hoy, próximos días) y etiquetas clave (Urgente, Crítico, Importante).
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setSortByUrgency(false);
+              playChime("tick");
+            }}
+            className="text-[11px] font-semibold text-amber-800 dark:text-amber-300 hover:underline shrink-0 ml-2"
+          >
+            Restablecer orden
+          </button>
+        </div>
+      )}
+
       {/* Tasks Content: Cards, Table, or Monthly Drag-and-Drop Calendar */}
       {viewMode === "calendar" ? (
         <div className="bg-stone-50/30 dark:bg-stone-950/20">
           <TaskCalendarView
-            tasks={filteredTasks}
+            tasks={displayedTasks}
             esencialTaskId={esencialTaskId}
             secundariasTaskIds={secundariasTaskIds}
             availableTags={availableTags}
@@ -391,19 +482,20 @@ export default function LedgerTable({
         </div>
       ) : viewMode === "cards" ? (
         <div className="p-3 sm:p-4 bg-stone-50/40 dark:bg-stone-950/20">
-          {filteredTasks.length === 0 ? (
+          {displayedTasks.length === 0 ? (
             <div className="py-12 text-center text-stone-400 text-xs">
               No hay tareas registradas que coincidan con el filtro.
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {filteredTasks.map((task) => (
+              {displayedTasks.map((task) => (
                 <TaskCardMobile
                   key={task.id}
                   task={task}
                   isEsencial={task.id === esencialTaskId}
                   isSecundaria={secundariasTaskIds.includes(task.id)}
                   availableTags={availableTags}
+                  showUrgencyScore={sortByUrgency}
                   onSetStatus={onSetStatus}
                   onStartFocus={onStartFocus}
                   onSetEsencial={onSetEsencial}
@@ -426,25 +518,54 @@ export default function LedgerTable({
                 <th className="py-3 px-3 sm:px-4 w-32 sm:w-44">Solicitante</th>
                 <th className="py-3 px-3 sm:px-4">Tarea</th>
                 <th className="py-3 px-3 sm:px-4 w-36 text-center">Estado</th>
-                <th className="py-3 px-3 sm:px-4 w-28 text-center">Fecha de Ingreso</th>
+                <th className="py-3 px-3 sm:px-4 w-32 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSortByUrgency((prev) => !prev);
+                      playChime("tick");
+                    }}
+                    className={`inline-flex items-center gap-1 mx-auto transition-colors font-semibold ${
+                      sortByUrgency
+                        ? "text-amber-600 dark:text-amber-400 font-bold"
+                        : "hover:text-amber-600 dark:hover:text-amber-400"
+                    }`}
+                    title={
+                      sortByUrgency
+                        ? "Desactivar orden por urgencia"
+                        : "Ordenar por Urgencia (Fecha Límite + Etiquetas)"
+                    }
+                  >
+                    <span>{sortByUrgency ? "Urgencia / Fecha" : "Fecha de Ingreso"}</span>
+                    <Flame
+                      size={12}
+                      className={
+                        sortByUrgency
+                          ? "text-amber-500 fill-amber-500 animate-pulse"
+                          : "text-stone-400"
+                      }
+                    />
+                  </button>
+                </th>
                 <th className="py-3 px-3 sm:px-4 w-24 text-right">Acción</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
-              {filteredTasks.length === 0 ? (
+              {displayedTasks.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-8 text-center text-stone-400">
                     No hay tareas registradas que coincidan con el filtro.
                   </td>
                 </tr>
               ) : (
-                filteredTasks.map((task) => (
+                displayedTasks.map((task) => (
                   <TaskItemRow
                     key={task.id}
                     task={task}
                     isEsencial={task.id === esencialTaskId}
                     isSecundaria={secundariasTaskIds.includes(task.id)}
                     availableTags={availableTags}
+                    showUrgencyScore={sortByUrgency}
                     onToggleStatus={onToggleStatus}
                     onSetStatus={onSetStatus}
                     onStartFocus={onStartFocus}

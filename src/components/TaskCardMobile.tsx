@@ -15,10 +15,12 @@ import {
   Check,
   Link2,
   ExternalLink,
+  Flame,
 } from "lucide-react";
 import { TaskItem, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { playChime } from "../utils/audio";
+import { getTaskUrgencyDetails } from "../utils/urgencyScore";
 import TaskResourceCard from "./TaskResourceCard";
 
 interface TaskCardMobileProps {
@@ -26,6 +28,7 @@ interface TaskCardMobileProps {
   isEsencial: boolean;
   isSecundaria: boolean;
   availableTags?: TagItem[];
+  showUrgencyScore?: boolean;
   onSetStatus: (id: number, newStatus: "Pendiente" | "En Proceso" | "Completado") => void;
   onStartFocus: (task: TaskItem) => void;
   onSetEsencial: (id: number) => void;
@@ -40,6 +43,7 @@ export default function TaskCardMobile({
   isEsencial,
   isSecundaria,
   availableTags = [],
+  showUrgencyScore = false,
   onSetStatus,
   onStartFocus,
   onSetEsencial,
@@ -49,6 +53,7 @@ export default function TaskCardMobile({
   onToggleTaskTag,
 }: TaskCardMobileProps) {
   const isDone = task.estado === "Completado";
+  const urgency = getTaskUrgencyDetails(task);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState(task.notas || "");
   const [isSavingNotes, setIsSavingNotes] = useState(false);
@@ -112,6 +117,17 @@ export default function TaskCardMobile({
           <span className="text-xs font-medium text-stone-600 dark:text-stone-300">
             De: <strong className="text-stone-900 dark:text-stone-100">{task.solicitante}</strong>
           </span>
+
+          {/* Urgency Badge if requested */}
+          {showUrgencyScore && urgency.score > 0 && (
+            <span
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${urgency.badgeClass}`}
+              title={`Urgency Score: ${urgency.score} pts\n${urgency.reasons.join(" • ")}`}
+            >
+              <Flame size={11} className={urgency.level === "critica" ? "animate-pulse" : ""} />
+              <span>Score: {urgency.score}</span>
+            </span>
+          )}
         </div>
 
         {/* Priority Star Touch Button (min 44x44px touch target) */}

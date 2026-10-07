@@ -152,6 +152,11 @@ service cloud.firestore {
       allow create, read, update, delete: if true;
     }
 
+    // Alumnos y Participantes Pendientes (Portal Interno)
+    match /alumnos_pendientes/{id} {
+      allow create, read, update, delete: if true;
+    }
+
     // Device pairing pin codes
     match /pair_codes/{codeId} {
       allow create, update, read, delete: if isValidId(codeId);

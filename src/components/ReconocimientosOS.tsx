@@ -42,7 +42,9 @@ import {
   Archive,
   CheckCheck,
   Eye,
+  UserCheck,
 } from "lucide-react";
+import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
 import {
   ResponsiveContainer,
   BarChart,
@@ -164,8 +166,18 @@ export default function ReconocimientosOS({
   const [filterPago, setFilterPago] = useState<"todos" | "pagados" | "pendientes">("todos");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
 
-  // View Mode: Dashboard (Seguimiento Operativo) | Historial (Pagados y Entregados por Mes y Año)
-  const [activeView, setActiveView] = useState<"dashboard" | "historial">("dashboard");
+  // View Mode: Dashboard (Seguimiento Operativo) | Pendientes (Admitidos y Trámites) | Historial (Pagados y Entregados por Mes y Año)
+  const [activeView, setActiveView] = useState<"dashboard" | "pendientes" | "historial">("dashboard");
+  const [pendientesCount, setPendientesCount] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("reconocimientos_alumnos_pendientes_v1");
+      if (saved) {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return arr.length;
+      }
+    } catch (e) {}
+    return 1;
+  });
   const [chartMode, setChartMode] = useState<"estados" | "operativo">("estados");
   const [copiedBankField, setCopiedBankField] = useState<string | null>(null);
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string | null>(null);
@@ -379,9 +391,20 @@ export default function ReconocimientosOS({
       }
     );
 
+    const unsubAlumnosPendientes = onSnapshot(
+      collection(db, "alumnos_pendientes"),
+      (snapshot) => {
+        setPendientesCount(Math.max(1, snapshot.size));
+      },
+      (err) => {
+        // Fallback to localStorage count
+      }
+    );
+
     return () => {
       unsubReconocimientos();
       unsubSolicitudes();
+      unsubAlumnosPendientes();
     };
   }, []);
 
@@ -1101,6 +1124,19 @@ export default function ReconocimientosOS({
     playChime("success");
   };
 
+  const handlePromoteAlumno = (alumno: AlumnoPendiente) => {
+    setNewNombre(alumno.nombre);
+    setNewRol(alumno.rol || "Participante");
+    setNewGrupo(alumno.casa || "Gladiadores Casa Martha Sangerman");
+    setNewZona("Jaguar");
+    setNewEmail(alumno.email || "");
+    setNewTelefono(alumno.telefono || "");
+    setNewNotas(`Promovido desde pendientes (${alumno.estatus}). ${alumno.notas || ""}`);
+    setShowAddModal(true);
+    setActiveView("dashboard");
+    playChime("tick");
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
@@ -1179,6 +1215,29 @@ export default function ReconocimientosOS({
           <button
             type="button"
             onClick={() => {
+              setActiveView("pendientes");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "pendientes"
+                ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <UserCheck size={15} />
+            <span>Alumnos Pendientes</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "pendientes"
+                ? "bg-white/20 text-white"
+                : "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300"
+            }`}>
+              {pendientesCount}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
               setActiveView("historial");
               playChime("tick");
             }}
@@ -1203,6 +1262,11 @@ export default function ReconocimientosOS({
         <div className="flex items-center gap-2 px-3 text-xs text-stone-500 dark:text-stone-400 font-medium">
           {activeView === "dashboard" ? (
             <span>Modo operativo con control de pagos, audios, cuadernillos y entrega en vivo.</span>
+          ) : activeView === "pendientes" ? (
+            <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
+              <UserCheck size={14} />
+              <span>Candidatos admitidos, seguimiento de datos y contacto personal por WhatsApp</span>
+            </span>
           ) : (
             <span className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-bold">
               <CheckCheck size={14} />
@@ -1214,6 +1278,33 @@ export default function ReconocimientosOS({
 
       {activeView === "dashboard" && (
         <>
+      {/* ALERTA / ACCESO DIRECTO A ALUMNOS PENDIENTES */}
+      <div className="p-4 rounded-3xl bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-indigo-500/10 border border-amber-400/40 dark:border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-2xs">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center shrink-0">
+            <UserCheck size={16} />
+          </div>
+          <div>
+            <span className="font-black text-stone-900 dark:text-stone-100">
+              Alumnos Pendientes ({pendientesCount}):
+            </span>{" "}
+            <span className="text-stone-600 dark:text-stone-300">
+              Edgar Jose Batun Alpuche (Admitido • Gladiadores Casa Martha Sangerman) y postulantes registrados.
+            </span>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveView("pendientes");
+            playChime("tick");
+          }}
+          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs transition flex items-center gap-1.5 shrink-0 shadow-xs cursor-pointer active:scale-95"
+        >
+          <span>Ver Alumnos Pendientes</span>
+          <ArrowRight size={13} />
+        </button>
+      </div>
       {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA BANCARIA (LAURA CORTAZAR) */}
       <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-emerald-500/5 border-2 border-amber-400/40 dark:border-amber-500/30 bg-white dark:bg-stone-900 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-amber-200/60 dark:border-stone-800">
@@ -2005,6 +2096,13 @@ export default function ReconocimientosOS({
 
       </div>
       </>
+      )}
+
+      {/* VISTA: ALUMNOS Y PARTICIPANTES PENDIENTES (SOLO INTERNO) */}
+      {activeView === "pendientes" && (
+        <AlumnosPendientesSection
+          onPromoteToReconocimiento={handlePromoteAlumno}
+        />
       )}
 
       {/* VISTA 2: HISTORIAL DE PAGADOS Y ENTREGADOS (SOLO INTERNO) */}

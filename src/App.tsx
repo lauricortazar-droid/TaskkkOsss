@@ -25,6 +25,8 @@ import NotificationsModal from "./components/NotificationsModal";
 import PublicRequestPortal from "./components/PublicRequestPortal";
 import ReconocimientosOS from "./components/ReconocimientosOS";
 import ReconocimientoFormModal from "./components/ReconocimientoFormModal";
+import PendientesHubOS from "./components/PendientesHubOS";
+import MiniPomodoroWidget from "./components/MiniPomodoroWidget";
 import {
   notifyTaskCompleted,
   notifyClientMessageReceived,
@@ -2469,6 +2471,34 @@ export default function App() {
               )}
             </button>
 
+            {/* Centro de Pendientes: ⚡ (Tasks, Lonas, Reconocimientos, Pagos) */}
+            <button
+              type="button"
+              id="ws-tab-pendientes"
+              onClick={() => {
+                setCurrentWorkspace("pendientes");
+                playChime("tick");
+              }}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "pendientes"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Centro de Pendientes: ⚡ (Tasks, Lonas, Reconocimientos y Pagos)"
+              aria-label="Pendientes: ⚡"
+            >
+              <span>⚡</span>
+              {(tasks.filter((t) => t.estado !== "Completado").length +
+                lonasOrders.filter((o) => o.estado !== "Entregado" && o.estado !== "Cancelado").length +
+                pendingReconocimientosCount) > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-stone-950 text-[9px] font-black leading-tight shadow-xs">
+                  {tasks.filter((t) => t.estado !== "Completado").length +
+                    lonasOrders.filter((o) => o.estado !== "Entregado" && o.estado !== "Cancelado").length +
+                    pendingReconocimientosCount}
+                </span>
+              )}
+            </button>
+
             {/* URLs: 🔗 */}
             <button
               type="button"
@@ -2652,6 +2682,35 @@ export default function App() {
               onGoToAdminDashboard={() => setCurrentWorkspace("task-os")}
             />
           </div>
+        ) : currentWorkspace === "pendientes" ? (
+          <PendientesHubOS
+            tasks={tasks}
+            lonasOrders={lonasOrders}
+            onNavigateToWorkspace={(ws) => {
+              setCurrentWorkspace(ws);
+              playChime("tick");
+            }}
+            onCompleteTask={(taskId) => {
+              handleToggleStatus(taskId);
+            }}
+            onUpdateLonasOrderStatus={(orderId, newStatus) => {
+              setLonasOrders((prev) =>
+                prev.map((o) => (o.id === orderId ? { ...o, estado: newStatus } : o))
+              );
+            }}
+            onSendToPrint={(title, desc, cost) => {
+              handleSendToPrint({
+                id: `hub-print-${Date.now()}`,
+                tipo: "recibo_general",
+                titulo: title,
+                clienteNombre: desc,
+                total: cost,
+                fecha: new Date().toISOString().split("T")[0],
+                estado: "Listo para Impresión",
+                createdAt: new Date().toISOString(),
+              });
+            }}
+          />
         ) : currentWorkspace === "urls" ? (
           <UrlLibraryOS
             urls={urlLibrary}
@@ -3193,6 +3252,15 @@ export default function App() {
           const tone = notifConfig.soundType || "bell";
           playChime(tone as any, { volume: notifConfig.soundVolume });
         }}
+      />
+
+      {/* Floating Persistent Mini Pomodoro Widget (Never restarts on tab switch, sleek & non-intrusive) */}
+      <MiniPomodoroWidget
+        onNavigateToPomodoro={() => {
+          setCurrentWorkspace("pomodoro");
+          playChime("tick");
+        }}
+        isFullPomodoroOpen={currentWorkspace === "pomodoro"}
       />
 
       {/* Footer */}

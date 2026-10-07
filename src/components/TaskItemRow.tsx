@@ -16,10 +16,12 @@ import {
   ChevronUp,
   Link2,
   ExternalLink,
+  Flame,
 } from "lucide-react";
 import { TaskItem, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { playChime } from "../utils/audio";
+import { getTaskUrgencyDetails } from "../utils/urgencyScore";
 import TaskResourceCard from "./TaskResourceCard";
 
 interface TaskItemRowProps {
@@ -27,6 +29,7 @@ interface TaskItemRowProps {
   isEsencial: boolean;
   isSecundaria: boolean;
   availableTags?: TagItem[];
+  showUrgencyScore?: boolean;
   onToggleStatus: (id: number) => void;
   onSetStatus: (id: number, newStatus: "Pendiente" | "En Proceso" | "Completado") => void;
   onStartFocus: (task: TaskItem) => void;
@@ -43,6 +46,7 @@ export default function TaskItemRow({
   isEsencial,
   isSecundaria,
   availableTags = [],
+  showUrgencyScore = false,
   onToggleStatus,
   onSetStatus,
   onStartFocus,
@@ -54,6 +58,7 @@ export default function TaskItemRow({
   onUpdateNotes,
 }: TaskItemRowProps) {
   const isDone = task.estado === "Completado";
+  const urgency = getTaskUrgencyDetails(task);
 
   // State for sub-notes textarea
   const [isNotesOpen, setIsNotesOpen] = useState(false);
@@ -191,6 +196,17 @@ export default function TaskItemRow({
           {isSecundaria && !isEsencial && (
             <span className="mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 shrink-0">
               Secundaria
+            </span>
+          )}
+
+          {showUrgencyScore && urgency.score > 0 && (
+            <span
+              className={`mt-0.5 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold border ${urgency.badgeClass} shrink-0`}
+              title={`Urgency Score: ${urgency.score} pts\n${urgency.reasons.join(" • ")}`}
+            >
+              <Flame size={11} className={urgency.level === "critica" ? "animate-pulse" : ""} />
+              <span>Score: {urgency.score}</span>
+              <span className="opacity-75 font-normal hidden sm:inline">({urgency.label})</span>
             </span>
           )}
 

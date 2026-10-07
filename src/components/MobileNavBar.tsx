@@ -41,7 +41,8 @@ export default function MobileNavBar({
     currentWorkspace === "urls" ||
     currentWorkspace === "print" ||
     currentWorkspace === "analytics" ||
-    currentWorkspace === "reconocimientos";
+    currentWorkspace === "reconocimientos" ||
+    currentWorkspace === "pendientes";
 
   return (
     <nav

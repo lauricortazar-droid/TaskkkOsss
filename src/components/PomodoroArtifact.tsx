@@ -1,156 +1,55 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useEffect } from "react";
 import { Play, Pause, RotateCcw, SkipForward, CheckCircle2, Volume2, VolumeX, X, Flame } from "lucide-react";
-import { playChime } from "../utils/audio";
-import { addPomodoroLog } from "../lib/pomodoroService";
+import { usePomodoro, PomodoroMode } from "../context/PomodoroContext";
 
 interface PomodoroArtifactProps {
-  taskName: string;
+  taskName?: string;
   taskId?: number | null;
   initialMinutes?: number;
   onCompleteTask?: (taskId: number | null, taskName: string) => void;
   onClose?: () => void;
 }
 
-type Mode = "work" | "shortBreak" | "longBreak";
-
 export default function PomodoroArtifact({
-  taskName,
-  taskId,
-  initialMinutes = 25,
+  taskName: propTaskName,
+  taskId: propTaskId,
+  initialMinutes,
   onCompleteTask,
   onClose,
 }: PomodoroArtifactProps) {
-  const [workDuration, setWorkDuration] = useState(initialMinutes * 60);
-  const shortBreakDuration = 5 * 60;
-  const longBreakDuration = 15 * 60;
+  const {
+    timeLeft,
+    isRunning,
+    mode,
+    workDuration,
+    shortBreakDuration,
+    longBreakDuration,
+    completedCycles,
+    soundEnabled,
+    taskName: contextTaskName,
+    taskId: contextTaskId,
+    toggleStartPause,
+    resetTimer,
+    skipBlock,
+    switchMode,
+    setTask,
+    toggleSound,
+    formattedTime,
+    progressRatio,
+  } = usePomodoro();
 
-  const [mode, setMode] = useState<Mode>("work");
-  const [timeLeft, setTimeLeft] = useState(initialMinutes * 60);
-  const [isRunning, setIsRunning] = useState(false);
-  const [completedCycles, setCompletedCycles] = useState(0);
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const activeTaskName = propTaskName || contextTaskName;
+  const activeTaskId = propTaskId !== undefined ? propTaskId : contextTaskId;
 
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Update if initialMinutes prop changes
   useEffect(() => {
-    const secs = initialMinutes * 60;
-    setWorkDuration(secs);
-    if (mode === "work" && !isRunning) {
-      setTimeLeft(secs);
+    if (propTaskName && propTaskName !== contextTaskName) {
+      setTask(propTaskName, propTaskId, initialMinutes);
     }
-  }, [initialMinutes]);
+  }, [propTaskName, propTaskId, initialMinutes, contextTaskName, setTask]);
 
-  // Main countdown loop
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            handleTimerComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } else if (timerRef.current) {
-      clearInterval(timerRef.current);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [isRunning, mode, completedCycles]);
-
-  const handleTimerComplete = () => {
-    if (soundEnabled) {
-      playChime(mode === "work" ? "work_done" : "break_done");
-    }
-
-    // Emit event so work music player can stop music if configured
-    try {
-      window.dispatchEvent(
-        new CustomEvent("pomodoro-alarm-fired", {
-          detail: { mode, completedCycles },
-        })
-      );
-    } catch (_) {}
-
-    if (mode === "work") {
-      try {
-        addPomodoroLog({
-          taskId: taskId ?? null,
-          taskName: taskName || "Sesión de Enfoque",
-          durationMinutes: Math.round(workDuration / 60) || 25,
-          mode: "work",
-        });
-      } catch (_) {}
-
-      const nextCount = completedCycles + 1;
-      setCompletedCycles(nextCount);
-      if (nextCount % 4 === 0) {
-        setMode("longBreak");
-        setTimeLeft(longBreakDuration);
-      } else {
-        setMode("shortBreak");
-        setTimeLeft(shortBreakDuration);
-      }
-    } else {
-      setMode("work");
-      setTimeLeft(workDuration);
-    }
-    setIsRunning(false);
-  };
-
-  const toggleStartPause = () => {
-    if (!isRunning && soundEnabled) {
-      playChime("tick");
-    }
-    setIsRunning(!isRunning);
-  };
-
-  const resetTimer = () => {
-    setIsRunning(false);
-    if (mode === "work") setTimeLeft(workDuration);
-    else if (mode === "shortBreak") setTimeLeft(shortBreakDuration);
-    else setTimeLeft(longBreakDuration);
-  };
-
-  const skipBlock = () => {
-    setIsRunning(false);
-    if (mode === "work") {
-      const nextCount = completedCycles + 1;
-      setCompletedCycles(nextCount);
-      if (nextCount % 4 === 0) {
-        setMode("longBreak");
-        setTimeLeft(longBreakDuration);
-      } else {
-        setMode("shortBreak");
-        setTimeLeft(shortBreakDuration);
-      }
-    } else {
-      setMode("work");
-      setTimeLeft(workDuration);
-    }
-  };
-
-  const switchMode = (newMode: Mode) => {
-    setIsRunning(false);
-    setMode(newMode);
-    if (newMode === "work") setTimeLeft(workDuration);
-    else if (newMode === "shortBreak") setTimeLeft(shortBreakDuration);
-    else setTimeLeft(longBreakDuration);
-  };
-
-  // Format mm:ss
-  const minutes = Math.floor(timeLeft / 60);
-  const seconds = timeLeft % 60;
-  const timeFormatted = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-  // Progress percentage
+  const strokeDashoffset = 283 - 283 * progressRatio; // 2 * PI * 45 ≈ 283
   const totalForCurrentMode =
     mode === "work" ? workDuration : mode === "shortBreak" ? shortBreakDuration : longBreakDuration;
-  const progressRatio = (totalForCurrentMode - timeLeft) / totalForCurrentMode;
-  const strokeDashoffset = 283 - 283 * progressRatio; // 2 * PI * 45 ≈ 283
 
   const modeTheme = {
     work: {
@@ -224,7 +123,7 @@ export default function PomodoroArtifact({
         <div className="flex items-center gap-2">
           <button
             id="pomodoro-sound-toggle"
-            onClick={() => setSoundEnabled(!soundEnabled)}
+            onClick={toggleSound}
             className="p-1.5 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 transition-colors"
             title={soundEnabled ? "Silenciar sonido" : "Activar sonido"}
           >
@@ -253,7 +152,7 @@ export default function PomodoroArtifact({
           id="pomodoro-task-name"
           className="text-base sm:text-lg font-semibold text-stone-100 max-w-md mx-auto line-clamp-2 tracking-tight"
         >
-          {taskName || "Sesión de Enfoque Principal"}
+          {activeTaskName || "Sesión de Enfoque Principal"}
         </h3>
       </div>
 
@@ -291,7 +190,7 @@ export default function PomodoroArtifact({
               id="pomodoro-timer-digits"
               className="font-mono text-5xl sm:text-6xl font-bold tracking-tighter text-stone-50 select-none"
             >
-              {timeFormatted}
+              {formattedTime}
             </span>
             <span className="text-xs uppercase tracking-widest text-stone-400 mt-1 font-medium">
               {modeTheme.label}
@@ -367,7 +266,7 @@ export default function PomodoroArtifact({
         {onCompleteTask && (
           <button
             id="pomodoro-complete-task-btn"
-            onClick={() => onCompleteTask(taskId ?? null, taskName)}
+            onClick={() => onCompleteTask(activeTaskId ?? null, activeTaskName)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-950/80 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-800/80 transition-all active:scale-95 font-medium"
           >
             <CheckCircle2 size={14} />
