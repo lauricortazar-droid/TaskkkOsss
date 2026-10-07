@@ -1436,6 +1436,86 @@ app.post("/api/sync/email-summary", (req: Request, res: Response) => {
 });
 
 // ==========================================
+// GOOGLE DRIVE & SHEETS CSV PROXY FETCHER
+// Permite importar bases de datos desde Google Drive y Sheets
+// sin problemas de CORS en el navegador.
+// ==========================================
+app.post("/api/drive/fetch-sheet", async (req: Request, res: Response) => {
+  try {
+    const { url, accessToken } = req.body;
+    if (!url || typeof url !== "string") {
+      return res.status(400).json({ error: "Se requiere la URL de Google Drive o Google Sheets." });
+    }
+
+    const trimmed = url.trim();
+    let fetchUrl = trimmed;
+    let detectedType = "generic";
+
+    // 1. Detect Google Sheets URL: https://docs.google.com/spreadsheets/d/{id}/...
+    const sheetsMatch = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (sheetsMatch) {
+      detectedType = "google_sheets";
+      const sheetId = sheetsMatch[1];
+      const gidMatch = trimmed.match(/[#&?]gid=([0-9]+)/);
+      const gid = gidMatch ? gidMatch[1] : "0";
+      fetchUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+    } else {
+      // 2. Detect Google Drive file URL: https://drive.google.com/file/d/{id}/...
+      const driveMatch = trimmed.match(/\/file\/d\/([a-zA-Z0-9-_]+)/);
+      if (driveMatch) {
+        detectedType = "google_drive_file";
+        const fileId = driveMatch[1];
+        fetchUrl = `https://drive.google.com/uc?export=download&id=${fileId}`;
+      }
+    }
+
+    const headers: Record<string, string> = {
+      "User-Agent": "Task-OS-Drive-Importer/1.0",
+      "Accept": "text/csv, text/plain, */*",
+    };
+    if (accessToken && typeof accessToken === "string") {
+      headers["Authorization"] = `Bearer ${accessToken}`;
+    }
+
+    const response = await fetch(fetchUrl, {
+      headers,
+      redirect: "follow",
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        return res.status(403).json({
+          error: "No se pudo acceder a la hoja de Google Drive. Asegúrate de que el documento tenga permisos de lectura ('Cualquier persona con el enlace puede ver') o descarga el archivo como CSV y súbelo directamente.",
+          status: response.status,
+        });
+      }
+      return res.status(response.status).json({
+        error: `Error al obtener el documento (${response.status}). Verifica el enlace o permisos de Google Drive.`,
+      });
+    }
+
+    const csvText = await response.text();
+
+    // Validate if it is an HTML login redirection
+    if (csvText.includes("<!DOCTYPE html>") && (csvText.includes("accounts.google.com") || csvText.includes("<html"))) {
+      return res.status(403).json({
+        error: "El enlace proporcionado requiere inicio de sesión privado de Google. Por favor cambia el permiso en Google Drive a 'Cualquier persona que tenga el vínculo puede ver' o descarga el archivo en formato CSV y súbelo.",
+      });
+    }
+
+    return res.json({
+      success: true,
+      csvText,
+      detectedType,
+      sourceUrl: fetchUrl,
+    });
+  } catch (err: any) {
+    console.error("[Drive Fetch] Error:", err);
+    return res.status(500).json({ error: err.message || "Error al conectar con Google Drive" });
+  }
+});
+
+// ==========================================
 // MODEL CONTEXT PROTOCOL (MCP) SERVER
 // Permite conectar Google Gemini y asistentes IA
 // directamente con el sistema ejecutivo Task-OS

@@ -43,8 +43,11 @@ import {
   CheckCheck,
   Eye,
   UserCheck,
+  Database,
 } from "lucide-react";
 import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
+import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
+import { ImportTarget } from "../utils/driveImportParser";
 import {
   ResponsiveContainer,
   BarChart,
@@ -218,6 +221,28 @@ export default function ReconocimientosOS({
 
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Modal para importar bases de datos desde Google Drive / Sheets
+  const [showDriveImportModal, setShowDriveImportModal] = useState(false);
+  const [driveImportTarget, setDriveImportTarget] = useState<ImportTarget>("solicitudes");
+  const [alumnosList, setAlumnosList] = useState<AlumnoPendiente[]>([]);
+
+  // Sincronización de alumnos pendientes para verificación de duplicados
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(collection(db, "alumnos_pendientes"), (snapshot) => {
+        const arr: AlumnoPendiente[] = [];
+        snapshot.forEach((snap) => {
+          arr.push({ ...(snap.data() as AlumnoPendiente), id: snap.id });
+        });
+        setAlumnosList(arr);
+        setPendientesCount(arr.length || 1);
+      });
+      return () => unsub();
+    } catch (e) {
+      console.warn("Could not subscribe to alumnos_pendientes:", e);
+    }
+  }, []);
 
   // 1. Sincronización en tiempo real con Firestore y deduplicación robusta
   useEffect(() => {
@@ -1163,6 +1188,26 @@ export default function ReconocimientosOS({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                setDriveImportTarget(
+                  activeView === "pendientes"
+                    ? "alumnos"
+                    : activeView === "historial"
+                    ? "historial"
+                    : "solicitudes"
+                );
+                setShowDriveImportModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs font-black transition flex items-center gap-2 shadow-xs active:scale-95 cursor-pointer"
+              title="Importar base de datos masiva desde Google Drive o archivos"
+            >
+              <Database size={15} />
+              <span>Subir BD de Drive</span>
+            </button>
+
             <a
               href="/reconocimientos.html"
               target="_blank"
@@ -1177,7 +1222,7 @@ export default function ReconocimientosOS({
             <button
               type="button"
               onClick={() => setShowAddModal(true)}
-              className="px-4 py-2.5 rounded-2xl bg-white text-indigo-950 font-black text-xs transition shadow-md hover:bg-indigo-50 flex items-center gap-2 active:scale-95"
+              className="px-4 py-2.5 rounded-2xl bg-white text-indigo-950 font-black text-xs transition shadow-md hover:bg-indigo-50 flex items-center gap-2 active:scale-95 cursor-pointer"
             >
               <Plus size={15} />
               <span>Registrar Alumno</span>
@@ -1813,11 +1858,26 @@ export default function ReconocimientosOS({
               <option value="entregados">Completados / Entregados</option>
             </select>
 
+            {/* Subir BD Solicitudes desde Drive */}
+            <button
+              type="button"
+              onClick={() => {
+                setDriveImportTarget("solicitudes");
+                setShowDriveImportModal(true);
+                playChime("tick");
+              }}
+              className="px-3 py-1.5 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 text-xs font-bold transition flex items-center gap-1.5 border border-indigo-200 dark:border-indigo-800 cursor-pointer shadow-2xs"
+              title="Importar base de datos de solicitudes desde Google Drive / Sheets"
+            >
+              <Database size={13} />
+              <span>Subir BD Drive</span>
+            </button>
+
             {/* Export CSV button */}
             <button
               type="button"
               onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold transition flex items-center gap-1.5"
+              className="px-3 py-1.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
               title="Descargar lista de reconocimientos en formato CSV / Excel"
             >
               <Download size={13} />
@@ -2102,6 +2162,11 @@ export default function ReconocimientosOS({
       {activeView === "pendientes" && (
         <AlumnosPendientesSection
           onPromoteToReconocimiento={handlePromoteAlumno}
+          onOpenDriveImport={() => {
+            setDriveImportTarget("alumnos");
+            setShowDriveImportModal(true);
+            playChime("tick");
+          }}
         />
       )}
 
@@ -2131,6 +2196,20 @@ export default function ReconocimientosOS({
               </div>
 
               <div className="flex items-center gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDriveImportTarget("historial");
+                    setShowDriveImportModal(true);
+                    playChime("tick");
+                  }}
+                  className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white font-black text-xs transition flex items-center gap-2 shadow-xs active:scale-95 cursor-pointer"
+                  title="Subir base de datos histórica desde Google Drive"
+                >
+                  <Database size={14} />
+                  <span>Subir BD Historial</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={handleExportHistoryCSV}
@@ -2835,6 +2914,22 @@ export default function ReconocimientosOS({
           </div>
         </div>
       )}
+
+      {/* MODAL PARA SUBIR BASES DE DATOS DESDE GOOGLE DRIVE / ARCHIVOS */}
+      <DriveDatabaseImportModal
+        isOpen={showDriveImportModal}
+        onClose={() => setShowDriveImportModal(false)}
+        initialTarget={driveImportTarget}
+        existingAlumnos={alumnosList}
+        existingRecords={records}
+        onImportAlumnosSuccess={(newAlumnos) => {
+          setAlumnosList((prev) => [...prev, ...newAlumnos]);
+          setPendientesCount((prev) => prev + newAlumnos.length);
+        }}
+        onImportReconocimientosSuccess={(newRecs) => {
+          setRecords((prev) => [...newRecs, ...prev]);
+        }}
+      />
 
     </div>
   );

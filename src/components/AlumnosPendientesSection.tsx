@@ -27,6 +27,7 @@ import {
   ChevronDown,
   X,
   Smartphone,
+  Database,
 } from "lucide-react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -108,10 +109,12 @@ const ROLES_SUGERIDOS = [
 
 interface AlumnosPendientesSectionProps {
   onPromoteToReconocimiento?: (alumno: AlumnoPendiente) => void;
+  onOpenDriveImport?: () => void;
 }
 
 export default function AlumnosPendientesSection({
   onPromoteToReconocimiento,
+  onOpenDriveImport,
 }: AlumnosPendientesSectionProps) {
   const [alumnos, setAlumnos] = useState<AlumnoPendiente[]>(() => {
     try {
@@ -527,6 +530,21 @@ export default function AlumnosPendientesSection({
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 self-start md:self-auto">
+            {onOpenDriveImport && (
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenDriveImport();
+                  playChime("tick");
+                }}
+                className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white font-black text-xs transition border border-white/30 flex items-center gap-2 active:scale-95 cursor-pointer backdrop-blur-sm shadow-xs"
+                title="Subir base de datos de alumnos desde Google Drive o archivos"
+              >
+                <Database size={15} />
+                <span>Subir BD de Drive</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleExportCSV}
@@ -688,13 +706,25 @@ export default function AlumnosPendientesSection({
                 ? "No hay resultados que coincidan con los filtros aplicados."
                 : "Agrega a los alumnos admitidos o pendientes de trámite para darles seguimiento y enviarles WhatsApp."}
             </p>
-            <button
-              type="button"
-              onClick={handleOpenCreateModal}
-              className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition"
-            >
-              + Registrar Primer Alumno Pendiente
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleOpenCreateModal}
+                className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition"
+              >
+                + Registrar Primer Alumno Pendiente
+              </button>
+              {onOpenDriveImport && (
+                <button
+                  type="button"
+                  onClick={onOpenDriveImport}
+                  className="px-4 py-2 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs transition border border-stone-300 dark:border-stone-700 flex items-center gap-1.5"
+                >
+                  <Database size={13} />
+                  <span>Subir BD desde Drive</span>
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="overflow-x-auto">
