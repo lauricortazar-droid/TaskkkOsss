@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   Star,
   Timer,
@@ -21,6 +21,8 @@ import {
   Table as TableIcon,
   Calendar as CalendarIcon,
   Flame,
+  ChevronsDown,
+  ChevronsUp,
 } from "lucide-react";
 import { TaskItem, StatusFilter, DomainType, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
@@ -77,6 +79,21 @@ export default function LedgerTable({
     }
     return "table";
   });
+
+  const [isMobileScreen, setIsMobileScreen] = useState(() => {
+    return typeof window !== "undefined" ? window.innerWidth < 768 : false;
+  });
+
+  const [forceExpandedAll, setForceExpandedAll] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const isMobile = window.innerWidth < 768;
+      setIsMobileScreen(isMobile);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Filter tasks
   const filteredTasks = tasks.filter((task) => {
@@ -480,14 +497,60 @@ export default function LedgerTable({
             onMessageContact={openWhatsAppContact}
           />
         </div>
-      ) : viewMode === "cards" ? (
+      ) : (viewMode === "cards" || isMobileScreen) ? (
         <div className="p-3 sm:p-4 bg-stone-50/40 dark:bg-stone-950/20">
+          {/* Mobile Collapsible Header Bar: Expand/Collapse All and Tasks count */}
+          <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-stone-200/60 dark:border-stone-800/60 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+                <LayoutGrid size={14} className="text-amber-500" />
+                <span>Tarjetas Colapsables</span>
+              </span>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-200/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
+                {displayedTasks.length} {displayedTasks.length === 1 ? "tarea" : "tareas"}
+              </span>
+              {isMobileScreen && viewMode === "table" && (
+                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-950/40 px-2 py-0.5 rounded-md hidden xs:inline">
+                  Vista móvil adaptada (&lt; 768px)
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setForceExpandedAll(true);
+                  playChime("tick");
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
+                title="Expandir todas las tarjetas para ver todos los detalles"
+              >
+                <ChevronsDown size={13} />
+                <span>Expandir</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setForceExpandedAll(false);
+                  playChime("tick");
+                }}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
+                title="Colapsar todas las tarjetas para vista ultra compacta"
+              >
+                <ChevronsUp size={13} />
+                <span>Colapsar</span>
+              </button>
+            </div>
+          </div>
+
           {displayedTasks.length === 0 ? (
             <div className="py-12 text-center text-stone-400 text-xs">
               No hay tareas registradas que coincidan con el filtro.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {displayedTasks.map((task) => (
                 <TaskCardMobile
                   key={task.id}
@@ -496,6 +559,8 @@ export default function LedgerTable({
                   isSecundaria={secundariasTaskIds.includes(task.id)}
                   availableTags={availableTags}
                   showUrgencyScore={sortByUrgency}
+                  sortByUrgency={sortByUrgency}
+                  forceExpanded={forceExpandedAll}
                   onSetStatus={onSetStatus}
                   onStartFocus={onStartFocus}
                   onSetEsencial={onSetEsencial}
@@ -503,6 +568,7 @@ export default function LedgerTable({
                   onViewImage={(src, title) => setViewingImage({ src, title })}
                   onUpdateNotes={(id, notes) => onUpdateTaskNotes?.(id, notes)}
                   onToggleTaskTag={onToggleTaskTag}
+                  onToggleUrgencySort={() => setSortByUrgency(!sortByUrgency)}
                 />
               ))}
             </div>
