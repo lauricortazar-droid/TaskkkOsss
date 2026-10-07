@@ -21,13 +21,18 @@ import {
   ChevronUp,
   ChevronDown,
   Timer,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { MusicPlatform, WorkPlaylist, WorkspaceTab } from "../types";
 import { playChime } from "../utils/audio";
+import { usePomodoro } from "../context/PomodoroContext";
 
 const STORAGE_KEY_MUSIC_STATE = "task_os_work_music_v2";
 const STORAGE_KEY_CUSTOM_PLAYLISTS = "task_os_custom_playlists_v2";
 const STORAGE_KEY_PAUSE_ON_POMODORO = "task_os_pause_music_on_pomodoro";
+const STORAGE_KEY_MINI_MUSIC_MINIMIZED = "task_os_mini_music_minimized";
+const STORAGE_KEY_MINI_MUSIC_VISIBLE = "task_os_mini_music_visible";
 
 interface LocalAudioTrack {
   id: string;
@@ -156,10 +161,49 @@ export default function WorkMusicPlayer({
   const [newPlatform, setNewPlatform] = useState<MusicPlatform>("spotify");
   const [isAddingFeedback, setIsAddingFeedback] = useState<string | null>(null);
 
+  // Mini Floating Widget State (mirrors MiniPomodoroWidget)
+  const [isMiniPlayerMinimized, setIsMiniPlayerMinimized] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_MINI_MUSIC_MINIMIZED);
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch (_) {
+      return false;
+    }
+  });
+
+  const [isMiniPlayerVisible, setIsMiniPlayerVisible] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_MINI_MUSIC_VISIBLE);
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch (_) {
+      return true;
+    }
+  });
+
+  const [isExternalPlaying, setIsExternalPlaying] = useState<boolean>(true);
+
+  // Pomodoro Context connection for harmonic non-blocking positioning
+  const pomodoroCtx = usePomodoro();
+  const isPomodoroMiniVisible = pomodoroCtx?.isMiniWidgetVisible ?? false;
+  const isPomodoroMiniMinimized = pomodoroCtx?.isMiniWidgetMinimized ?? false;
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const isPomodoroTab = currentWorkspace === "pomodoro" || isPomodoroActive;
+
+  // Persist mini widget state
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_MINI_MUSIC_MINIMIZED, JSON.stringify(isMiniPlayerMinimized));
+    } catch (_) {}
+  }, [isMiniPlayerMinimized]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_MINI_MUSIC_VISIBLE, JSON.stringify(isMiniPlayerVisible));
+    } catch (_) {}
+  }, [isMiniPlayerVisible]);
 
   // Load saved state
   useEffect(() => {
@@ -426,6 +470,96 @@ export default function WorkMusicPlayer({
 
   const allPlaylists = [...DEFAULT_PRESETS, ...customPlaylists];
   const filteredPlaylists = allPlaylists.filter((p) => p.platform === activePlatform);
+
+  const isPlaying = activePlatform === "local" ? isLocalPlaying : isExternalPlaying;
+
+  const currentTrackTitle =
+    activePlatform === "local" && localTracks[currentLocalTrackIndex]
+      ? localTracks[currentLocalTrackIndex].name
+      : currentPlaylist.title;
+
+  const platformBadge = {
+    spotify: {
+      bg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+      label: "Spotify",
+    },
+    youtube: {
+      bg: "bg-rose-500/20 text-rose-300 border-rose-500/30",
+      label: "YouTube",
+    },
+    suno: {
+      bg: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+      label: "Suno AI",
+    },
+    gdrive: {
+      bg: "bg-blue-500/20 text-blue-300 border-blue-500/30",
+      label: "Drive",
+    },
+    local: {
+      bg: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+      label: "Local",
+    },
+    web: {
+      bg: "bg-sky-500/20 text-sky-300 border-sky-500/30",
+      label: "Audio",
+    },
+  }[activePlatform] || {
+    bg: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+    label: "Música",
+  };
+
+  const handleTogglePlay = () => {
+    if (activePlatform === "local") {
+      toggleLocalPlayPause();
+    } else {
+      setIsExternalPlaying((prev) => !prev);
+      playChime("tick");
+    }
+  };
+
+  const handleNextPreset = () => {
+    if (activePlatform === "local" && localTracks.length > 0) {
+      handleNextLocalTrack();
+      return;
+    }
+    const all = [...DEFAULT_PRESETS, ...customPlaylists];
+    const currentIndex = all.findIndex((p) => p.id === currentPlaylist.id);
+    const nextIdx = (currentIndex + 1) % all.length;
+    const nextItem = all[nextIdx];
+    setCurrentPlaylist(nextItem);
+    setActivePlatform(nextItem.platform);
+    setIsExternalPlaying(true);
+    playChime("tick");
+  };
+
+  const handlePrevPreset = () => {
+    if (activePlatform === "local" && localTracks.length > 0) {
+      handlePrevLocalTrack();
+      return;
+    }
+    const all = [...DEFAULT_PRESETS, ...customPlaylists];
+    const currentIndex = all.findIndex((p) => p.id === currentPlaylist.id);
+    const prevIdx = (currentIndex - 1 + all.length) % all.length;
+    const prevItem = all[prevIdx];
+    setCurrentPlaylist(prevItem);
+    setActivePlatform(prevItem.platform);
+    setIsExternalPlaying(true);
+    playChime("tick");
+  };
+
+  // Harmonious position calculation so it stacks cleanly with MiniPomodoroWidget without colliding
+  const floatingPositionClass = (() => {
+    if (isPomodoroMiniVisible && !isPomodoroTab) {
+      if (!isPomodoroMiniMinimized) {
+        // Pomodoro standard card is open (~62px height): position music player right above it
+        return "bottom-[154px] md:bottom-[88px] right-4";
+      } else {
+        // Pomodoro micro-pill is open (~32px height): position music player right above it
+        return "bottom-[122px] md:bottom-[56px] right-4";
+      }
+    }
+    return "bottom-20 md:bottom-5 right-4";
+  })();
 
   return (
     <>
@@ -884,63 +1018,142 @@ export default function WorkMusicPlayer({
       </div>
       ) : (
         /* 3. When in Other Tabs (Task-OS, Lonas, Finanzas, URLs, Print, Analytics):
-              The music continues playing! Renders a persistent, elegant Mini-Dock Bar */
-        <div className="fixed bottom-16 sm:bottom-4 right-3 sm:right-5 z-40 max-w-sm sm:max-w-md w-full animate-in slide-in-from-bottom-2 duration-200">
-          <div className="bg-stone-900/95 dark:bg-stone-900/95 backdrop-blur-md text-stone-100 border border-stone-700/80 rounded-2xl shadow-2xl p-3 flex items-center justify-between gap-3">
-            {/* Spinning Disc & Track Info */}
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
-                <Disc
-                  size={18}
-                  className="animate-spin"
-                  style={{ animationDuration: "4s" }}
-                />
-              </div>
-
-              <div className="min-w-0">
-                <div className="font-bold text-xs truncate text-stone-100 flex items-center gap-1.5">
-                  <span className="truncate">
-                    {activePlatform === "local" && localTracks[currentLocalTrackIndex]
-                      ? localTracks[currentLocalTrackIndex].name
-                      : currentPlaylist.title}
-                  </span>
+              Renders floating mini widget identical to MiniPomodoroWidget, keeping music playing continuously! */
+        <>
+          {/* ULTRA-MINIMIZED MICRO-PILL (Identical to MiniPomodoroWidget micro-pill) */}
+          {isMiniPlayerMinimized ? (
+            <div
+              id="mini-music-widget-pill"
+              className={`fixed ${floatingPositionClass} z-40 animate-in fade-in zoom-in-95 duration-200`}
+              title={`Música (${currentTrackTitle}): ${platformBadge.label}. Clic para expandir controles.`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMiniPlayerMinimized(false);
+                  playChime("tick");
+                }}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-900/90 dark:bg-stone-950/90 text-white backdrop-blur-md border border-stone-700/60 shadow-xl hover:scale-105 active:scale-95 transition cursor-pointer select-none ${
+                  isPlaying ? "ring-2 ring-amber-500/40" : ""
+                }`}
+              >
+                {/* Equalizer soundwave indicator */}
+                <span className="flex items-center gap-0.5 h-2.5">
+                  <span className={`w-0.5 rounded-full bg-amber-400 transition-all ${isPlaying ? "h-2.5 animate-pulse" : "h-1"}`} />
+                  <span className={`w-0.5 rounded-full bg-amber-400 transition-all ${isPlaying ? "h-2 animate-bounce" : "h-1.5"}`} />
+                  <span className={`w-0.5 rounded-full bg-amber-400 transition-all ${isPlaying ? "h-2.5 animate-pulse delay-75" : "h-1"}`} />
+                </span>
+                <span className="font-mono text-xs font-black tracking-wider truncate max-w-[110px] sm:max-w-[140px]">
+                  {currentTrackTitle}
+                </span>
+                <span className="text-[10px] text-stone-400">🎵</span>
+              </button>
+            </div>
+          ) : (
+            /* STANDARD COMPACT FLOATING WIDGET (Identical to MiniPomodoroWidget standard card) */
+            <div
+              id="mini-music-widget"
+              className={`fixed ${floatingPositionClass} z-40 max-w-[320px] sm:max-w-[360px] w-full animate-in fade-in slide-in-from-bottom-3 duration-300`}
+            >
+              <div className="relative rounded-2xl bg-stone-900/95 dark:bg-stone-950/95 text-stone-100 backdrop-blur-md border border-stone-700/60 shadow-2xl p-2.5 sm:p-3 overflow-hidden">
+                {/* Subtle top progress / audio wave accent bar */}
+                <div className="absolute top-0 left-0 right-0 h-1 bg-stone-800">
+                  <div
+                    className={`h-full transition-all duration-300 ${
+                      isPlaying ? "bg-amber-500" : "bg-stone-600"
+                    }`}
+                    style={{ width: isPlaying ? "100%" : "30%" }}
+                  />
                 </div>
-                <div className="text-[10px] text-stone-400 flex items-center gap-1.5">
-                  <span className="uppercase text-amber-400 font-extrabold text-[9px]">
-                    {activePlatform === "local" ? "Local" : currentPlaylist.platform}
-                  </span>
-                  <span>·</span>
-                  <span className="text-emerald-400 font-medium">Música Activa</span>
+
+                <div className="flex items-center justify-between gap-2.5 pt-0.5">
+                  {/* Left: Play/Pause Button + Track Info & Platform Badge */}
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button
+                      type="button"
+                      onClick={handleTogglePlay}
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition shadow-xs cursor-pointer active:scale-95 ${
+                        isPlaying
+                          ? "bg-amber-500 hover:bg-amber-400 text-stone-950"
+                          : "bg-white/10 hover:bg-white/20 text-white"
+                      }`}
+                      title={isPlaying ? "Pausar música" : "Reproducir música"}
+                      aria-label={isPlaying ? "Pausar" : "Reproducir"}
+                    >
+                      {isPlaying ? (
+                        <Pause size={14} className="fill-current" />
+                      ) : (
+                        <Play size={14} className="fill-current ml-0.5" />
+                      )}
+                    </button>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-sm sm:text-base font-black tracking-tight text-white truncate max-w-[120px] sm:max-w-[150px]">
+                          {currentTrackTitle}
+                        </span>
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[9px] font-black uppercase tracking-wider border shrink-0 ${platformBadge.bg}`}
+                        >
+                          {platformBadge.label}
+                        </span>
+                      </div>
+                      <p
+                        className="text-[11px] text-stone-400 truncate max-w-[150px] sm:max-w-[180px]"
+                        title={currentPlaylist.title}
+                      >
+                        {currentPlaylist.title}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Actions (Prev, Next, Maximize, Minimize) */}
+                  <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handlePrevPreset}
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                      title="Pista anterior"
+                    >
+                      <SkipBack size={13} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={handleNextPreset}
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                      title="Siguiente pista"
+                    >
+                      <SkipForward size={13} />
+                    </button>
+
+                    {onNavigateToPomodoro && (
+                      <button
+                        type="button"
+                        onClick={onNavigateToPomodoro}
+                        className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                        title="Abrir vista completa Pomodoro y Música"
+                      >
+                        <Maximize2 size={13} />
+                      </button>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsMiniPlayerMinimized(true);
+                        playChime("tick");
+                      }}
+                      className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                      title="Minimizar a cápsula pequeña"
+                    >
+                      <Minimize2 size={13} />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-
-            {/* Quick Actions & Pomodoro Switcher */}
-            <div className="flex items-center gap-2 shrink-0">
-              {activePlatform === "local" && (
-                <button
-                  type="button"
-                  onClick={toggleLocalPlayPause}
-                  className="p-1.5 rounded-lg bg-amber-500 text-stone-950 hover:bg-amber-400"
-                  title={isLocalPlaying ? "Pausar" : "Reanudar"}
-                >
-                  {isLocalPlaying ? <Pause size={14} /> : <Play size={14} className="ml-0.5" />}
-                </button>
-              )}
-
-              {onNavigateToPomodoro && (
-                <button
-                  type="button"
-                  onClick={onNavigateToPomodoro}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-xs transition-transform active:scale-95"
-                  title="Abrir reproductor completo en Pomodoro"
-                >
-                  <Timer size={13} />
-                  <span>Pomodoro</span>
-                </button>
-              )}
-            </div>
-          </div>
+          )}
 
           {/* Hidden persistent iframe container when in other tabs so audio does not reload or stop */}
           <div className="sr-only pointer-events-none" aria-hidden="true">
@@ -965,7 +1178,7 @@ export default function WorkMusicPlayer({
               />
             )}
           </div>
-        </div>
+        </>
       )}
     </>
   );
