@@ -44,9 +44,19 @@ import {
   Eye,
   UserCheck,
   Database,
+  Radio,
+  CheckSquare,
+  Square,
+  StickyNote,
+  ChevronRight,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
 import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
+import WhatsAppComposerModal from "./WhatsAppComposerModal";
+import ReconocimientoFormModal from "./ReconocimientoFormModal";
+import PublicReconocimientosImpresosModal from "./PublicReconocimientosImpresosModal";
 import { ImportTarget } from "../utils/driveImportParser";
 import {
   ResponsiveContainer,
@@ -67,6 +77,7 @@ import { cleanPhoneNumber, buildWhatsAppUrl } from "../utils/whatsapp";
 export interface ReconocimientoRecord {
   id: string;
   solicitudId?: string;
+  folio?: string;
   nombre: string;
   rol: string;
   grupo: string;
@@ -169,8 +180,43 @@ export default function ReconocimientosOS({
   const [filterPago, setFilterPago] = useState<"todos" | "pagados" | "pendientes">("todos");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
 
-  // View Mode: Dashboard (Seguimiento Operativo) | Pendientes (Admitidos y Trámites) | Historial (Pagados y Entregados por Mes y Año)
-  const [activeView, setActiveView] = useState<"dashboard" | "pendientes" | "historial">("dashboard");
+  // View Mode: Dashboard | En Vivo | Tablero Impresos & Drive | Pendientes | Historial
+  const [activeView, setActiveView] = useState<"dashboard" | "pendientes" | "historial" | "en_vivo" | "impresos">("dashboard");
+
+  // Selección múltiple para eliminar varios registros o aplicar cambios en lote
+  const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
+
+  // Estados para Tablero de Reconocimientos Impresos & Enlaces a Drive
+  const [impresosSearch, setImpresosSearch] = useState("");
+  const [impresosYear, setImpresosYear] = useState<string>("todos");
+  const [impresosDriveFilter, setImpresosDriveFilter] = useState<"todos" | "con_drive" | "sin_drive">("todos");
+  const [impresosGroupBy, setImpresosGroupBy] = useState<"none" | "generacion" | "diplomado" | "entrega">("none");
+  const [collapsedImpresosGroups, setCollapsedImpresosGroups] = useState<string[]>([]);
+
+  // Campo editable directo de enlace a Google Drive en el tablero
+  const [editingDriveRecordId, setEditingDriveRecordId] = useState<string | null>(null);
+  const [editingDriveValue, setEditingDriveValue] = useState("");
+  const [savingDriveRecordId, setSavingDriveRecordId] = useState<string | null>(null);
+
+  // Edición directa de notas u observaciones en registros
+  const [editingRecordNoteId, setEditingRecordNoteId] = useState<string | null>(null);
+  const [editingRecordNoteText, setEditingRecordNoteText] = useState("");
+
+  // Modal para previsualizar la consulta pública de Drive de los impresos
+  const [showPublicDrivePreviewModal, setShowPublicDrivePreviewModal] = useState(false);
+
+  // Estados para Registro en Vivo (Todos los Medios)
+  const [liveChannelFilter, setLiveChannelFilter] = useState<string>("todos");
+  const [liveSearchQuery, setLiveSearchQuery] = useState("");
+  const [liveYearFilter, setLiveYearFilter] = useState<string>("todos");
+
+  // Modal para Redactar WhatsApp con Plantillas Personalizadas (Poner, Quitar, Editar)
+  const [showWhatsappComposerModal, setShowWhatsappComposerModal] = useState(false);
+  const [whatsappRecipientData, setWhatsappRecipientData] = useState<any | null>(null);
+
+  // Modal para Editar Manualmente Datos del Solicitante / Reconocimiento
+  const [showEditRecordModal, setShowEditRecordModal] = useState(false);
+  const [editingRecordData, setEditingRecordData] = useState<ReconocimientoRecord | null>(null);
   const [pendientesCount, setPendientesCount] = useState<number>(() => {
     try {
       const saved = localStorage.getItem("reconocimientos_alumnos_pendientes_v1");
@@ -518,6 +564,161 @@ export default function ReconocimientosOS({
     }
   };
 
+  // Guardar enlace de Google Drive directamente desde el campo editable del tablero
+  const handleSaveInlineDriveUrl = async (record: ReconocimientoRecord, newUrl: string) => {
+    const cleanUrl = newUrl.trim();
+    setSavingDriveRecordId(record.id);
+    setRecords((prev) =>
+      prev.map((r) => (r.id === record.id ? { ...r, driveUrl: cleanUrl || undefined } : r))
+    );
+    try {
+      await Promise.allSettled([
+        updateDoc(doc(db, "reconocimientos", record.id), { driveUrl: cleanUrl || null }),
+        updateDoc(doc(db, "solicitudes", record.id), { driveUrl: cleanUrl || null }),
+        record.solicitudId ? updateDoc(doc(db, "solicitudes", record.solicitudId), { driveUrl: cleanUrl || null }) : Promise.resolve(),
+        record.solicitudId ? updateDoc(doc(db, "reconocimientos", record.solicitudId), { driveUrl: cleanUrl || null }) : Promise.resolve(),
+      ]);
+      playChime("success");
+      setEditingDriveRecordId(null);
+    } catch (err) {
+      console.error("Error saving drive link:", err);
+    } finally {
+      setSavingDriveRecordId(null);
+    }
+  };
+
+  // Guardar nota u observación directamente en el registro
+  const handleSaveInlineRecordNote = async (record: ReconocimientoRecord, noteText: string) => {
+    setRecords((prev) =>
+      prev.map((r) => (r.id === record.id ? { ...r, notas: noteText } : r))
+    );
+    setEditingRecordNoteId(null);
+    playChime("tick");
+    try {
+      await Promise.allSettled([
+        updateDoc(doc(db, "reconocimientos", record.id), { notas: noteText }),
+        updateDoc(doc(db, "solicitudes", record.id), { notas: noteText }),
+        record.solicitudId ? updateDoc(doc(db, "solicitudes", record.solicitudId), { notas: noteText }) : Promise.resolve(),
+      ]);
+    } catch (err) {
+      console.error("Error saving record note:", err);
+    }
+  };
+
+  // Selección múltiple para registros
+  const handleToggleSelectRecord = (id: string) => {
+    setSelectedRecordIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+    playChime("tick");
+  };
+
+  const handleSelectAllVisibleRecords = (visibleList: ReconocimientoRecord[]) => {
+    const visibleIds = visibleList.map((r) => r.id);
+    const areAllSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedRecordIds.includes(id));
+    if (areAllSelected) {
+      setSelectedRecordIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedRecordIds(Array.from(new Set([...selectedRecordIds, ...visibleIds])));
+    }
+    playChime("tick");
+  };
+
+  // Eliminar varios registros seleccionándolos (Bulk delete)
+  const handleBulkDeleteRecords = async () => {
+    if (selectedRecordIds.length === 0) return;
+    const count = selectedRecordIds.length;
+    if (!window.confirm(`¿Estás seguro de eliminar los ${count} registros seleccionados permanentemente?`)) {
+      return;
+    }
+    const idsToDelete = [...selectedRecordIds];
+    setRecords((prev) => prev.filter((r) => !idsToDelete.includes(r.id)));
+    setSelectedRecordIds([]);
+    playChime("tick");
+
+    idsToDelete.forEach(async (id) => {
+      try {
+        await Promise.allSettled([
+          deleteDoc(doc(db, "reconocimientos", id)),
+          deleteDoc(doc(db, "solicitudes", id)),
+        ]);
+      } catch (err) {
+        console.warn("Error deleting record in Firestore:", id, err);
+      }
+    });
+  };
+
+  // Asignar generación en lote para los seleccionados
+  const handleBulkChangeRecordGeneracion = async (year: string) => {
+    if (selectedRecordIds.length === 0 || !year) return;
+    const idsToUpdate = [...selectedRecordIds];
+    setRecords((prev) =>
+      prev.map((r) => (idsToUpdate.includes(r.id) ? { ...r, year } : r))
+    );
+    playChime("success");
+
+    idsToUpdate.forEach(async (id) => {
+      try {
+        await Promise.allSettled([
+          updateDoc(doc(db, "reconocimientos", id), { year }),
+          updateDoc(doc(db, "solicitudes", id), { year, generacion: `Generación ${year}` }),
+        ]);
+      } catch (err) {}
+    });
+  };
+
+  // Marcar como impresos en lote
+  const handleBulkMarkRecordsImpreso = async () => {
+    if (selectedRecordIds.length === 0) return;
+    const idsToUpdate = [...selectedRecordIds];
+    setRecords((prev) =>
+      prev.map((r) => (idsToUpdate.includes(r.id) ? { ...r, impreso: true } : r))
+    );
+    playChime("success");
+
+    idsToUpdate.forEach(async (id) => {
+      try {
+        await Promise.allSettled([
+          updateDoc(doc(db, "reconocimientos", id), { impreso: true }),
+          updateDoc(doc(db, "solicitudes", id), { impreso: true }),
+        ]);
+      } catch (err) {}
+    });
+  };
+
+  // Lista de impresos para el tablero
+  const printedRecords = useMemo(() => {
+    return records.filter((r) => r.impreso === true);
+  }, [records]);
+
+  const filteredImpresosRecords = useMemo(() => {
+    return printedRecords.filter((r) => {
+      const q = impresosSearch.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        r.nombre.toLowerCase().includes(q) ||
+        (r.folio && r.folio.toLowerCase().includes(q)) ||
+        (r.diplomado && r.diplomado.toLowerCase().includes(q)) ||
+        (r.grupo && r.grupo.toLowerCase().includes(q));
+
+      const matchYear = impresosYear === "todos" || r.year === impresosYear;
+      const matchDrive =
+        impresosDriveFilter === "todos" ||
+        (impresosDriveFilter === "con_drive" && Boolean(r.driveUrl && r.driveUrl.trim())) ||
+        (impresosDriveFilter === "sin_drive" && (!r.driveUrl || !r.driveUrl.trim()));
+
+      return matchSearch && matchYear && matchDrive;
+    });
+  }, [printedRecords, impresosSearch, impresosYear, impresosDriveFilter]);
+
+  // Grupos colapsables para impresos
+  const handleToggleImpresosGroup = (groupKey: string) => {
+    setCollapsedImpresosGroups((prev) =>
+      prev.includes(groupKey) ? prev.filter((g) => g !== groupKey) : [...prev, groupKey]
+    );
+    playChime("tick");
+  };
+
   // 4. Create new manual record with single primary key across collections
   const handleCreateManualRecord = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -626,34 +827,38 @@ export default function ReconocimientosOS({
     }
   };
 
-  // 5. Send status message to student via WhatsApp
+  // 5. Send status message to student via WhatsApp con plantillas personalizadas (Poner, Quitar, Editar)
   const handleSendWhatsAppStatus = (rec: ReconocimientoRecord) => {
-    if (!rec.telefono) {
-      const phoneInput = prompt(`Ingresa el número de WhatsApp para ${rec.nombre} (ej. 9999011852):`);
-      if (phoneInput && phoneInput.trim()) {
-        rec.telefono = phoneInput.trim();
-        updateDoc(doc(db, "reconocimientos", rec.id), { telefono: phoneInput.trim() }).catch(() => null);
-        updateDoc(doc(db, "solicitudes", rec.id), { telefono: phoneInput.trim() }).catch(() => null);
-      } else {
-        return;
-      }
-    }
+    setWhatsappRecipientData({
+      nombre: rec.nombre,
+      telefono: rec.telefono,
+      diplomado: rec.diplomado,
+      year: rec.year,
+      costo: rec.costo,
+      tipo: rec.tipoImpresion,
+      folio: rec.id,
+      driveUrl: rec.driveUrl,
+      pagado: rec.pagado,
+      cuadernillos: rec.cuadernillos,
+      audio: rec.audio,
+      digital: rec.digital,
+      impreso: rec.impreso,
+      entregado: rec.entregado,
+      rol: rec.rol,
+      zona: rec.zona,
+      grupo: rec.grupo,
+    });
+    setShowWhatsappComposerModal(true);
+    playChime("tick");
+  };
 
-    const clean = cleanPhoneNumber(rec.telefono);
-    const text =
-      `Hola ${rec.nombre}, te saluda tu madrina Laura (Universidad FGDLL).\n\n` +
-      `📋 *Estado de tu Reconocimiento (${rec.diplomado} - Generación ${rec.year})*:\n` +
-      `• Tipo: ${rec.tipoImpresion} ($${rec.costo})\n` +
-      `• Pago: ${rec.pagado ? "✅ Confirmado" : "⏳ Pendiente ($" + rec.costo + ")"}\n` +
-      `• Cuadernillos: ${rec.cuadernillos ? "✅ Entregados" : "⏳ Pendiente"}\n` +
-      `• Audio: ${rec.audio ? "✅ Recibido" : "⏳ Pendiente"}\n` +
-      `• Reconocimiento Digital: ${rec.digital ? "✅ Enviado" : "⏳ En preparación"}\n` +
-      `• Impresión Física: ${rec.impreso ? "✅ Impreso" : "⏳ En cola"}\n` +
-      `• Entrega: ${rec.entregado ? "✅ ENTREGADO" : "⏳ Pendiente de entrega"}\n\n` +
-      `Cualquier duda quedo a tus órdenes. ¡Muchas felicidades!`;
+  const handleOpenWhatsAppComposer = handleSendWhatsAppStatus;
 
-    const url = buildWhatsAppUrl(clean, text);
-    window.open(url, "_blank");
+  // 5.1 Abrir modal de modificación manual del participante o solicitud
+  const handleOpenEditRecord = (rec: ReconocimientoRecord) => {
+    setEditingRecordData(rec);
+    setShowEditRecordModal(true);
+    playChime("tick");
   };
 
   // 6. Filtered records calculation
@@ -688,6 +893,144 @@ export default function ReconocimientosOS({
       return true;
     });
   }, [records, searchQuery, selectedYear, filterPago, filterStatus]);
+
+  // 6.1 Lista en Vivo y en Orden Cronológico Estricto (Del Más Nuevo al Más Viejo) de Todos los Medios
+  const liveRecordsList = useMemo(() => {
+    const list: (ReconocimientoRecord & {
+      sourceChannel: string;
+      sourceBadgeColor: string;
+      timeLabel: string;
+      sortTime: number;
+    })[] = [];
+
+    records.forEach((r) => {
+      const isFromDrive = (r.notas || "").toLowerCase().includes("importado") || (r.notas || "").toLowerCase().includes("drive");
+      const isFromPortal = Boolean(r.solicitudId) || (r.id && r.id.startsWith("sol-"));
+      const channel = isFromDrive
+        ? "Importación Drive/CSV"
+        : isFromPortal
+        ? "Portal Público Web"
+        : "Registro Manual";
+      
+      const badgeColor = isFromDrive
+        ? "bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 border-purple-200 dark:border-purple-800"
+        : isFromPortal
+        ? "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+        : "bg-stone-100 dark:bg-stone-850 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700";
+
+      const sortTime = r.timestamp?.toDate
+        ? r.timestamp.toDate().getTime()
+        : r.createdAt
+        ? new Date(r.createdAt).getTime()
+        : 0;
+
+      let timeLabel = "Fecha reciente";
+      if (r.createdAt) {
+        try {
+          const d = new Date(r.createdAt);
+          timeLabel = d.toLocaleString("es-MX", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+        } catch (_) {}
+      }
+
+      list.push({
+        ...r,
+        sourceChannel: channel,
+        sourceBadgeColor: badgeColor,
+        timeLabel,
+        sortTime,
+      });
+    });
+
+    // Consolidar también alumnos registrados en el diplomado
+    alumnosList.forEach((a) => {
+      const exists = list.some(
+        (x) => x.id === a.id || (x.email && a.email && x.email.toLowerCase() === a.email.toLowerCase())
+      );
+      if (!exists) {
+        const sortTime = a.createdAt
+          ? new Date(a.createdAt).getTime()
+          : a.fechaRegistro
+          ? new Date(a.fechaRegistro).getTime()
+          : 0;
+
+        let timeLabel = a.fechaRegistro || "Fecha reciente";
+        if (a.createdAt) {
+          try {
+            const d = new Date(a.createdAt);
+            timeLabel = d.toLocaleString("es-MX", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+          } catch (_) {}
+        }
+
+        list.push({
+          id: a.id,
+          nombre: a.nombre,
+          rol: a.rol || "Participante",
+          grupo: a.casa ? a.casa.replace("Gladiadores Casa ", "") : "G-1",
+          zona: "General",
+          diplomado: "Diplomado de Liderazgo",
+          year: a.generacion?.replace(/[^0-9]/g, "") || "2026",
+          tipoImpresion: "Primera Impresión",
+          costo: 100,
+          telefono: a.telefono,
+          email: a.email,
+          notas: a.notas,
+          createdAt: a.createdAt || (a.fechaRegistro ? new Date(a.fechaRegistro).toISOString() : new Date().toISOString()),
+          pagado: Boolean(a.contactadoWhatsApp),
+          cuadernillos: false,
+          audio: false,
+          digital: false,
+          impreso: false,
+          entregado: false,
+          sourceChannel: "Diplomado Liderazgo",
+          sourceBadgeColor: "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border-amber-200 dark:border-amber-800",
+          timeLabel,
+          sortTime,
+        });
+      }
+    });
+
+    // Ordenar estrictamente del más nuevo al más viejo
+    list.sort((a, b) => b.sortTime - a.sortTime);
+
+    return list;
+  }, [records, alumnosList]);
+
+  // Filtro en vivo para la vista En Vivo
+  const filteredLiveRecords = useMemo(() => {
+    return liveRecordsList.filter((r) => {
+      if (liveChannelFilter !== "todos") {
+        if (liveChannelFilter === "web" && r.sourceChannel !== "Portal Público Web") return false;
+        if (liveChannelFilter === "diplomado" && r.sourceChannel !== "Diplomado Liderazgo") return false;
+        if (liveChannelFilter === "interno" && r.sourceChannel !== "Registro Manual") return false;
+        if (liveChannelFilter === "drive" && r.sourceChannel !== "Importación Drive/CSV") return false;
+      }
+      if (liveYearFilter !== "todos" && r.year !== liveYearFilter) {
+        return false;
+      }
+      if (liveSearchQuery.trim()) {
+        const q = liveSearchQuery.toLowerCase().trim();
+        const mName = r.nombre.toLowerCase().includes(q);
+        const mDip = r.diplomado.toLowerCase().includes(q);
+        const mTel = (r.telefono || "").includes(q);
+        const mMail = (r.email || "").toLowerCase().includes(q);
+        const mZona = (r.zona || "").toLowerCase().includes(q);
+        return mName || mDip || mTel || mMail || mZona;
+      }
+      return true;
+    });
+  }, [liveRecordsList, liveChannelFilter, liveYearFilter, liveSearchQuery]);
 
   // 7. Computed Stats
   const stats = useMemo(() => {
@@ -1162,6 +1505,289 @@ export default function ReconocimientosOS({
     playChime("tick");
   };
 
+  // Renderizar fila en el Tablero de Impresos con campo editable de Google Drive
+  const renderImpresoRow = (r: ReconocimientoRecord) => {
+    const isSelected = selectedRecordIds.includes(r.id);
+    const isEditingDrive = editingDriveRecordId === r.id;
+    const isSavingThisDrive = savingDriveRecordId === r.id;
+    const hasDrive = Boolean(r.driveUrl && r.driveUrl.trim());
+    const isEditingNote = editingRecordNoteId === r.id;
+
+    return (
+      <tr
+        key={r.id}
+        className={`hover:bg-purple-50/40 dark:hover:bg-purple-950/20 transition-colors group ${
+          isSelected ? "bg-purple-100/50 dark:bg-purple-950/40" : ""
+        }`}
+      >
+        {/* Checkbox de selección individual */}
+        <td className="py-4 px-4 text-center">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => handleToggleSelectRecord(r.id)}
+            className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+          />
+        </td>
+
+        {/* Alumno y Folio */}
+        <td className="py-4 px-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm text-stone-900 dark:text-stone-100">
+                {r.nombre}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border border-stone-200 dark:border-stone-700">
+                {r.folio || "SIN FOLIO"}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
+              <span className="font-semibold text-stone-700 dark:text-stone-300">
+                {r.rol}
+              </span>
+              {r.telefono && (
+                <span className="font-mono text-stone-400 text-[10px]">
+                  • {r.telefono}
+                </span>
+              )}
+            </div>
+
+            {/* Notas u observaciones */}
+            {isEditingNote ? (
+              <div className="flex items-center gap-1.5 pt-1">
+                <input
+                  type="text"
+                  value={editingRecordNoteText}
+                  onChange={(e) => setEditingRecordNoteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveInlineRecordNote(r, editingRecordNoteText);
+                    if (e.key === "Escape") setEditingRecordNoteId(null);
+                  }}
+                  placeholder="Nota u observación..."
+                  className="text-xs px-2.5 py-1 rounded-xl border border-purple-500 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 w-full max-w-sm focus:outline-hidden"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveInlineRecordNote(r, editingRecordNoteText)}
+                  className="px-2 py-1 rounded-lg bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 cursor-pointer"
+                >
+                  <Check size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingRecordNoteId(null)}
+                  className="p-1 rounded-lg bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 text-xs cursor-pointer"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {r.notas ? (
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 italic max-w-md flex items-center gap-1 bg-purple-500/10 px-2 py-0.5 rounded-lg border border-purple-200/50 dark:border-purple-800/50">
+                    <StickyNote size={11} className="text-purple-600 shrink-0" />
+                    <span>"{r.notas}"</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingRecordNoteId(r.id);
+                        setEditingRecordNoteText(r.notas || "");
+                      }}
+                      className="p-0.5 text-stone-400 hover:text-purple-600 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                      title="Editar nota"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingRecordNoteId(r.id);
+                      setEditingRecordNoteText("");
+                    }}
+                    className="text-[10px] text-stone-400 hover:text-purple-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                  >
+                    <Plus size={10} />
+                    <span>Poner nota</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </td>
+
+        {/* Diplomado y Gen */}
+        <td className="py-4 px-4">
+          <div className="space-y-1">
+            <div className="font-bold text-stone-800 dark:text-stone-200">
+              {r.diplomado || "Diplomado de Liderazgo"}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                Gen {r.year}
+              </span>
+              <span className="text-[11px] text-stone-400">
+                {r.tipoImpresion}
+              </span>
+            </div>
+          </div>
+        </td>
+
+        {/* Enlace Google Drive (Campo Editable Directo en el Tablero) */}
+        <td className="py-4 px-4 min-w-[320px]">
+          <div className="space-y-1.5">
+            {isEditingDrive ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="url"
+                  value={editingDriveValue}
+                  onChange={(e) => setEditingDriveValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveInlineDriveUrl(r, editingDriveValue);
+                    if (e.key === "Escape") setEditingDriveRecordId(null);
+                  }}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full px-2.5 py-1.5 rounded-xl border border-purple-500 bg-white dark:bg-stone-800 text-xs text-stone-900 dark:text-stone-100 font-mono focus:outline-hidden"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={isSavingThisDrive}
+                  onClick={() => handleSaveInlineDriveUrl(r, editingDriveValue)}
+                  className="px-2.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shrink-0 cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {isSavingThisDrive ? "..." : "Guardar"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingDriveRecordId(null)}
+                  className="p-1.5 rounded-xl bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 text-xs cursor-pointer"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <div
+                  onClick={() => {
+                    setEditingDriveRecordId(r.id);
+                    setEditingDriveValue(r.driveUrl || "");
+                  }}
+                  className={`flex-1 flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl border transition cursor-pointer text-xs ${
+                    hasDrive
+                      ? "bg-purple-50/70 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800/60 text-purple-900 dark:text-purple-200 hover:border-purple-400"
+                      : "bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 hover:border-amber-500"
+                  }`}
+                  title="Clic para editar enlace de Google Drive directamente"
+                >
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <FolderOpen size={13} className={hasDrive ? "text-purple-600 shrink-0" : "text-amber-500 shrink-0"} />
+                    <span className="truncate font-mono text-[11px]">
+                      {hasDrive ? r.driveUrl : "⚠️ Sin link (Clic para colocar)"}
+                    </span>
+                  </div>
+                  <Edit2 size={12} className="opacity-60 group-hover:opacity-100 shrink-0" />
+                </div>
+
+                {hasDrive && (
+                  <div className="flex items-center gap-1 shrink-0">
+                    <a
+                      href={r.driveUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-purple-600 dark:text-purple-400 hover:bg-purple-100 transition shadow-2xs"
+                      title="Abrir enlace en Google Drive"
+                    >
+                      <ExternalLink size={13} />
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(r.driveUrl || "");
+                        playChime("tick");
+                      }}
+                      className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-500 hover:text-stone-800 transition shadow-2xs cursor-pointer"
+                      title="Copiar enlace"
+                    >
+                      <Copy size={13} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Badges de estado público */}
+            <div className="flex items-center gap-2">
+              {hasDrive ? (
+                <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                  <CheckCircle2 size={11} /> Disponible en Consulta Pública
+                </span>
+              ) : (
+                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                  <AlertCircle size={11} /> Requiere enlace para consulta digital pública
+                </span>
+              )}
+            </div>
+          </div>
+        </td>
+
+        {/* Entrega */}
+        <td className="py-4 px-4 text-center">
+          <button
+            type="button"
+            onClick={() => handleToggleStatus(r, "entregado")}
+            className={`px-3 py-1.5 rounded-xl font-bold text-xs transition border cursor-pointer ${
+              r.entregado
+                ? "bg-teal-100 dark:bg-teal-950/70 text-teal-800 dark:text-teal-300 border-teal-300"
+                : "bg-stone-100 dark:bg-stone-800 text-stone-500 border-stone-200 dark:border-stone-700 hover:bg-stone-200"
+            }`}
+            title="Clic para cambiar estatus de entrega"
+          >
+            {r.entregado ? "✅ Entregado" : "⏳ Pendiente"}
+          </button>
+        </td>
+
+        {/* WhatsApp Personalizado con plantilla de Drive */}
+        <td className="py-4 px-4 text-center">
+          <button
+            type="button"
+            onClick={() => handleOpenWhatsAppComposer(r)}
+            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 mx-auto cursor-pointer"
+            title="Enviar mensaje de WhatsApp con enlace de Drive"
+          >
+            <MessageCircle size={13} />
+            <span>Notificar</span>
+          </button>
+        </td>
+
+        {/* Acciones */}
+        <td className="py-4 px-4 text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleOpenEditRecord(r)}
+              className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 hover:bg-amber-100 transition shadow-2xs cursor-pointer"
+              title="Modificar datos del participante manualmente"
+            >
+              <Edit2 size={13} />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDeleteRecord(r)}
+              className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+              title="Eliminar registro"
+            >
+              <Trash2 size={13} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       
@@ -1221,6 +1847,20 @@ export default function ReconocimientosOS({
 
             <button
               type="button"
+              onClick={() => {
+                setWhatsappRecipientData(null);
+                setShowWhatsappComposerModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs font-black transition flex items-center gap-2 shadow-xs active:scale-95 cursor-pointer"
+              title="Administrar, agregar, editar y eliminar plantillas de WhatsApp"
+            >
+              <MessageCircle size={15} />
+              <span>Plantillas WhatsApp</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowAddModal(true)}
               className="px-4 py-2.5 rounded-2xl bg-white text-indigo-950 font-black text-xs transition shadow-md hover:bg-indigo-50 flex items-center gap-2 active:scale-95 cursor-pointer"
             >
@@ -1233,7 +1873,7 @@ export default function ReconocimientosOS({
 
       {/* SELECTOR DE VISTAS: SEGUIMIENTO OPERATIVO VS HISTORIAL DE ENTREGADOS (SOLO INTERNO) */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-2 bg-stone-100 dark:bg-stone-800/90 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-xs">
-        <div className="flex items-center gap-1.5 p-1 bg-white/70 dark:bg-stone-900/70 rounded-xl">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white/70 dark:bg-stone-900/70 rounded-xl">
           <button
             type="button"
             onClick={() => {
@@ -1254,6 +1894,55 @@ export default function ReconocimientosOS({
                 : "bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
             }`}>
               {records.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView("en_vivo");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "en_vivo"
+                ? "bg-rose-600 text-white shadow-sm ring-2 ring-rose-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+            </span>
+            <span>Registro en Vivo</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "en_vivo"
+                ? "bg-white/20 text-white"
+                : "bg-rose-100 dark:bg-rose-950/60 text-rose-800 dark:text-rose-300"
+            }`}>
+              {liveRecordsList.length}
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setActiveView("impresos");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "impresos"
+                ? "bg-purple-600 text-white shadow-sm ring-2 ring-purple-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <Printer size={15} />
+            <span>Tablero Impresos & Drive</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "impresos"
+                ? "bg-white/20 text-white"
+                : "bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300"
+            }`}>
+              {printedRecords.length}
             </span>
           </button>
 
@@ -1307,6 +1996,16 @@ export default function ReconocimientosOS({
         <div className="flex items-center gap-2 px-3 text-xs text-stone-500 dark:text-stone-400 font-medium">
           {activeView === "dashboard" ? (
             <span>Modo operativo con control de pagos, audios, cuadernillos y entrega en vivo.</span>
+          ) : activeView === "en_vivo" ? (
+            <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-bold">
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
+              <span>Lista en vivo de todos los medios del más nuevo al más viejo con edición manual</span>
+            </span>
+          ) : activeView === "impresos" ? (
+            <span className="flex items-center gap-1.5 text-purple-700 dark:text-purple-300 font-bold">
+              <Printer size={14} />
+              <span>Tablero con reconocimientos impresos, enlace editable a Google Drive y consulta pública</span>
+            </span>
           ) : activeView === "pendientes" ? (
             <span className="flex items-center gap-1.5 text-amber-700 dark:text-amber-400 font-bold">
               <UserCheck size={14} />
@@ -2134,6 +2833,16 @@ export default function ReconocimientosOS({
                             </button>
                           )}
 
+                          {/* Edit Button */}
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditRecord(r)}
+                            className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 hover:bg-amber-100 transition shadow-2xs cursor-pointer"
+                            title="Modificar datos del participante manualmente"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+
                           {/* Delete */}
                           <button
                             type="button"
@@ -2156,6 +2865,390 @@ export default function ReconocimientosOS({
 
       </div>
       </>
+      )}
+
+      {/* VISTA: REGISTRO EN VIVO (TODOS LOS MEDIOS - DEL MÁS NUEVO AL MÁS VIEJO) */}
+      {activeView === "en_vivo" && (
+        <div className="space-y-5 animate-in fade-in duration-200">
+          
+          {/* Header Banner */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-r from-rose-900 via-stone-900 to-indigo-950 text-white shadow-xl relative overflow-hidden border border-rose-500/30">
+            <div className="absolute right-0 top-0 w-80 h-80 bg-rose-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-xl bg-rose-500/30 text-rose-300 text-sm flex items-center justify-center">
+                    <Radio size={16} className="animate-pulse" />
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-200 border border-rose-500/30 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-rose-400 animate-ping inline-block" />
+                    <span>Transmisión en Tiempo Real</span>
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Registro en Vivo • Todos los Medios
+                </h3>
+                <p className="text-xs text-rose-100/90 max-w-2xl leading-relaxed">
+                  Lista en vivo y en orden cronológico estricto del <strong>más nuevo al más viejo</strong> de todas las personas registradas desde cualquier canal: Portal Público Web, Formulario de Reconocimiento, Diplomado y Cargas Drive/CSV.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="px-4 py-2.5 rounded-2xl bg-white text-stone-950 font-black text-xs transition shadow-md hover:bg-stone-100 flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <Plus size={14} />
+                  <span>Nuevo Registro Manual</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDriveImportTarget("solicitudes");
+                    setShowDriveImportModal(true);
+                  }}
+                  className="px-4 py-2.5 rounded-2xl bg-rose-500/30 hover:bg-rose-500/40 border border-rose-400/30 text-white font-black text-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                >
+                  <Database size={14} />
+                  <span>Subir BD de Drive</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Filtros Rápidos de la Lista en Vivo */}
+          <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-3">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              {/* Buscador */}
+              <div className="relative flex-1">
+                <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  value={liveSearchQuery}
+                  onChange={(e) => setLiveSearchQuery(e.target.value)}
+                  placeholder="Buscar en vivo por nombre, teléfono, correo, diplomado o zona..."
+                  className="w-full pl-10 pr-4 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-medium focus:ring-2 focus:ring-rose-500 outline-none"
+                />
+              </div>
+
+              {/* Filtro de Año */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-stone-500">Generación:</span>
+                <select
+                  value={liveYearFilter}
+                  onChange={(e) => setLiveYearFilter(e.target.value)}
+                  className="px-3 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold focus:ring-2 focus:ring-rose-500 outline-none"
+                >
+                  <option value="todos">Todos los Años</option>
+                  <option value="2026">2026</option>
+                  <option value="2025">2025</option>
+                  <option value="2024">2024</option>
+                  <option value="2023">2023</option>
+                  <option value="2022">2022</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Canal Filter Chips */}
+            <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-stone-100 dark:border-stone-800">
+              <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider">
+                Medio de Registro:
+              </span>
+              {[
+                { key: "todos", label: "Todos los Medios", count: liveRecordsList.length },
+                { key: "web", label: "🌐 Portal Web", count: liveRecordsList.filter((r) => r.sourceChannel === "Portal Público Web").length },
+                { key: "diplomado", label: "🎓 Diplomado", count: liveRecordsList.filter((r) => r.sourceChannel === "Diplomado Liderazgo").length },
+                { key: "interno", label: "✍️ Registro Manual", count: liveRecordsList.filter((r) => r.sourceChannel === "Registro Manual").length },
+                { key: "drive", label: "📊 Importación Drive/CSV", count: liveRecordsList.filter((r) => r.sourceChannel === "Importación Drive/CSV").length },
+              ].map((btn) => (
+                <button
+                  key={btn.key}
+                  type="button"
+                  onClick={() => setLiveChannelFilter(btn.key)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    liveChannelFilter === btn.key
+                      ? "bg-rose-600 text-white shadow-xs"
+                      : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200"
+                  }`}
+                >
+                  <span>{btn.label}</span>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${liveChannelFilter === btn.key ? "bg-white/20 text-white" : "bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300"}`}>
+                    {btn.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tabla de Registros en Vivo */}
+          <div className="bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 shadow-md overflow-hidden">
+            <div className="p-4 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-black uppercase tracking-wider text-stone-500">
+                  Secuencia Cronológica en Vivo (Más Nuevo ➔ Más Viejo)
+                </span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950 text-rose-700 dark:text-rose-300 font-bold text-[10px]">
+                  {filteredLiveRecords.length} registros
+                </span>
+              </div>
+              <span className="text-[11px] text-stone-400">
+                ⚡ Sincronización continua de Firestore
+              </span>
+            </div>
+
+            {filteredLiveRecords.length === 0 ? (
+              <div className="py-16 text-center space-y-2">
+                <p className="text-sm font-bold text-stone-500">No hay registros que coincidan con los filtros seleccionados.</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLiveChannelFilter("todos");
+                    setLiveSearchQuery("");
+                    setLiveYearFilter("todos");
+                  }}
+                  className="text-xs text-rose-600 font-bold hover:underline"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-stone-50 dark:bg-stone-850 text-stone-500 dark:text-stone-400 font-extrabold uppercase tracking-wider border-b border-stone-200 dark:border-stone-800 text-[10px]">
+                    <tr>
+                      <th className="py-3 px-4">Hora & Medio de Registro</th>
+                      <th className="py-3 px-4">Solicitante / Participante</th>
+                      <th className="py-3 px-4">Diplomado & Gen</th>
+                      <th className="py-3 px-2 text-center" title="Pago Confirmado">Pago</th>
+                      <th className="py-3 px-2 text-center" title="Cuadernillos">Cuad.</th>
+                      <th className="py-3 px-2 text-center" title="Audio">Audio</th>
+                      <th className="py-3 px-2 text-center" title="Digital">Digital</th>
+                      <th className="py-3 px-2 text-center" title="Impreso">Impreso</th>
+                      <th className="py-3 px-2 text-center" title="Entregado">Entregado</th>
+                      <th className="py-3 px-3 text-center">Google Drive</th>
+                      <th className="py-3 px-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-stone-100 dark:divide-stone-800/80 font-medium">
+                    {filteredLiveRecords.map((r, idx) => (
+                      <tr
+                        key={r.id + "-live-" + idx}
+                        className="hover:bg-rose-50/20 dark:hover:bg-rose-950/10 transition group"
+                      >
+                        {/* Hora y Medio */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="space-y-1">
+                            <span className="font-mono text-[11px] font-bold text-stone-700 dark:text-stone-300 block">
+                              {r.timeLabel}
+                            </span>
+                            <span className={`inline-block px-2 py-0.5 rounded-full text-[9px] font-black uppercase border ${r.sourceBadgeColor}`}>
+                              {r.sourceChannel}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Solicitante */}
+                        <td className="py-3 px-4">
+                          <div className="space-y-0.5">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-black text-stone-900 dark:text-stone-100 text-xs">
+                                {r.nombre}
+                              </span>
+                              <span className="text-[10px] px-1.5 py-0.2 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-500 font-bold">
+                                {r.rol}
+                              </span>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400">
+                              {r.telefono && (
+                                <span className="font-mono font-bold text-stone-700 dark:text-stone-300">
+                                  📱 {r.telefono}
+                                </span>
+                              )}
+                              {r.zona && <span>Zona {r.zona}</span>}
+                              {r.grupo && <span>• {r.grupo}</span>}
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Diplomado */}
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-stone-800 dark:text-stone-200 block text-xs">
+                              {r.diplomado}
+                            </span>
+                            <div className="flex items-center gap-1.5 text-[10px] text-stone-500">
+                              <span>Gen. {r.year}</span>
+                              <span>•</span>
+                              <span className="font-bold text-indigo-600 dark:text-indigo-400">
+                                {r.tipoImpresion} (${r.costo})
+                              </span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* 6 Checks */}
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "pagado")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.pagado
+                                ? "bg-emerald-500 border-emerald-600 text-white"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.pagado ? "Pagado" : "Pendiente de pago"}
+                          >
+                            <DollarSign size={13} />
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "cuadernillos")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.cuadernillos
+                                ? "bg-blue-600 border-blue-700 text-white"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.cuadernillos ? "Cuadernillos OK" : "Pendiente"}
+                          >
+                            <BookOpen size={13} />
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "audio")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.audio
+                                ? "bg-amber-500 border-amber-600 text-stone-950 font-black"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.audio ? "Audio OK" : "Pendiente"}
+                          >
+                            <Mic size={13} />
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "digital")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.digital
+                                ? "bg-indigo-600 border-indigo-700 text-white"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.digital ? "Digital OK" : "Pendiente"}
+                          >
+                            <Send size={13} />
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "impreso")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.impreso
+                                ? "bg-emerald-600 border-emerald-700 text-white"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.impreso ? "Ya Impreso" : "Pendiente de imprimir"}
+                          >
+                            <Printer size={13} />
+                          </button>
+                        </td>
+
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleStatus(r, "entregado")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                              r.entregado
+                                ? "bg-purple-600 border-purple-700 text-white"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
+                            }`}
+                            title={r.entregado ? "Entregado" : "Pendiente de entrega"}
+                          >
+                            <PackageCheck size={13} />
+                          </button>
+                        </td>
+
+                        {/* Drive Button */}
+                        <td className="py-3 px-3 text-center whitespace-nowrap">
+                          {r.driveUrl ? (
+                            <a
+                              href={r.driveUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[10px] border border-indigo-200 transition"
+                              title="Abrir en Google Drive"
+                            >
+                              <ExternalLink size={12} />
+                              <span>Ver Drive</span>
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDriveModalRecord(r);
+                                setEditDriveUrl("");
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-500 font-bold text-[10px] transition"
+                              title="Asignar enlace de Drive"
+                            >
+                              <Link2 size={12} />
+                              <span>+ Enlazar</span>
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Acciones */}
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {/* WhatsApp Composer con plantillas */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWhatsAppComposer(r)}
+                              className="p-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 hover:bg-emerald-100 transition shadow-2xs cursor-pointer"
+                              title="Enviar mensaje personalizado por WhatsApp (con plantillas)"
+                            >
+                              <MessageCircle size={14} />
+                            </button>
+
+                            {/* Modificar Manualmente */}
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditRecord(r)}
+                              className="p-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 hover:bg-amber-100 transition shadow-2xs cursor-pointer"
+                              title="Modificar datos del participante manualmente"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+
+                            {/* Eliminar */}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteRecord(r)}
+                              className="p-1.5 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-rose-600 hover:bg-rose-50 transition cursor-pointer"
+                              title="Eliminar registro"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* VISTA: ALUMNOS Y PARTICIPANTES PENDIENTES (SOLO INTERNO) */}
@@ -2507,10 +3600,20 @@ export default function ReconocimientosOS({
                                   setDriveModalRecord(r);
                                   setEditDriveUrl(r.driveUrl || "");
                                 }}
-                                className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 transition"
+                                className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 transition cursor-pointer"
                                 title="Editar enlace de Google Drive"
                               >
                                 <Link2 size={14} />
+                              </button>
+
+                              {/* Modificar Manualmente */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEditRecord(r)}
+                                className="p-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 transition cursor-pointer"
+                                title="Modificar datos del participante manualmente"
+                              >
+                                <Edit2 size={14} />
                               </button>
                             </div>
                           </td>
@@ -2928,6 +4031,28 @@ export default function ReconocimientosOS({
         }}
         onImportReconocimientosSuccess={(newRecs) => {
           setRecords((prev) => [...newRecs, ...prev]);
+        }}
+      />
+
+      {/* MODAL REDACTOR DE WHATSAPP CON PLANTILLAS PERSONALIZADAS (PONER, QUITAR, EDITAR) */}
+      <WhatsAppComposerModal
+        isOpen={showWhatsappComposerModal}
+        onClose={() => setShowWhatsappComposerModal(false)}
+        recipient={whatsappRecipientData}
+      />
+
+      {/* MODAL PARA MODIFICAR MANUALMENTE DATOS DEL SOLICITANTE / RECONOCIMIENTO */}
+      <ReconocimientoFormModal
+        isOpen={showEditRecordModal}
+        onClose={() => {
+          setShowEditRecordModal(false);
+          setEditingRecordData(null);
+        }}
+        initialData={editingRecordData}
+        onUpdated={(updated) => {
+          setRecords((prev) =>
+            prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r))
+          );
         }}
       />
 

@@ -27,6 +27,7 @@ import ReconocimientosOS from "./components/ReconocimientosOS";
 import ReconocimientoFormModal from "./components/ReconocimientoFormModal";
 import PendientesHubOS from "./components/PendientesHubOS";
 import MiniPomodoroWidget from "./components/MiniPomodoroWidget";
+import MiniTasksBlocWidget from "./components/MiniTasksBlocWidget";
 import {
   notifyTaskCompleted,
   notifyClientMessageReceived,
@@ -3251,6 +3252,14 @@ export default function App() {
         onSendTestNotification={() => {
           const tone = notifConfig.soundType || "bell";
           playChime(tone as any, { volume: notifConfig.soundVolume });
+        }}
+      />
+
+      {/* Mini Bloc Google Tasks (Notas rápidas al instante, ubicado del otro lado: esquina inferior izquierda) */}
+      <MiniTasksBlocWidget
+        onPromoteToTaskOS={(texto) => {
+          handleProcessInput(texto);
+          playChime("success");
         }}
       />
 

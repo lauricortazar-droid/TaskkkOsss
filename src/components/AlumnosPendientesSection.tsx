@@ -25,6 +25,13 @@ import {
   Calendar,
   Building2,
   ChevronDown,
+  ChevronRight,
+  ChevronsUpDown,
+  CheckSquare,
+  Square,
+  Layers,
+  StickyNote,
+  SlidersHorizontal,
   X,
   Smartphone,
   Database,
@@ -33,6 +40,7 @@ import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "fireb
 import { db } from "../lib/firebase";
 import { playChime } from "../utils/audio";
 import { SPIN_PAYMENT_INFO } from "./ReconocimientosOS";
+import WhatsAppComposerModal from "./WhatsAppComposerModal";
 
 export interface AlumnoPendiente {
   id: string;
@@ -145,6 +153,20 @@ export default function AlumnosPendientesSection({
   const [selectedCasa, setSelectedCasa] = useState("todos");
   const [selectedGeneracion, setSelectedGeneracion] = useState("todos");
   const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Selección múltiple para eliminar varios estudiantes en lote o cambiar generación
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+
+  // Agrupamiento colapsable: none | generacion | casa | estatus
+  const [groupBy, setGroupBy] = useState<"none" | "generacion" | "casa" | "estatus">("none");
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
+
+  // Edición rápida de notas por alumno
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState("");
+
+  // Modal dedicado de administración de plantillas de WhatsApp
+  const [showTemplatesModal, setShowTemplatesModal] = useState(false);
 
   // Modal para Enviar Mensaje Personal por WhatsApp
   const [whatsappModalAlumno, setWhatsappModalAlumno] = useState<AlumnoPendiente | null>(null);
@@ -431,11 +453,111 @@ export default function AlumnosPendientesSection({
       return;
     }
     setAlumnos((prev) => prev.filter((a) => a.id !== id));
+    setSelectedStudentIds((prev) => prev.filter((i) => i !== id));
     try {
       await deleteDoc(doc(db, "alumnos_pendientes", id));
     } catch (err) {
       // offline handled
     }
+    playChime("tick");
+  };
+
+  // Toggle selection
+  const handleToggleSelect = (id: string) => {
+    setSelectedStudentIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+    playChime("tick");
+  };
+
+  // Select / Deselect all visible
+  const handleSelectAllVisible = () => {
+    const allVisibleIds = filteredAlumnos.map((a) => a.id);
+    const areAllSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selectedStudentIds.includes(id));
+    if (areAllSelected) {
+      setSelectedStudentIds((prev) => prev.filter((id) => !allVisibleIds.includes(id)));
+    } else {
+      const combined = Array.from(new Set([...selectedStudentIds, ...allVisibleIds]));
+      setSelectedStudentIds(combined);
+    }
+    playChime("tick");
+  };
+
+  // Bulk delete (eliminar varios estudiantes seleccionándolos)
+  const handleBulkDelete = async () => {
+    if (selectedStudentIds.length === 0) return;
+    const count = selectedStudentIds.length;
+    if (!window.confirm(`¿Estás seguro de eliminar ${count} estudiante(s) seleccionado(s) permanentemente?`)) {
+      return;
+    }
+    const idsToDelete = [...selectedStudentIds];
+    setAlumnos((prev) => prev.filter((a) => !idsToDelete.includes(a.id)));
+    setSelectedStudentIds([]);
+    playChime("tick");
+
+    idsToDelete.forEach(async (id) => {
+      try {
+        await deleteDoc(doc(db, "alumnos_pendientes", id));
+      } catch (err) {
+        console.warn("Error deleting alumno in Firestore", id, err);
+      }
+    });
+  };
+
+  // Bulk change generacion (elegir con botón multi opción qué generación es)
+  const handleBulkChangeGeneracion = async (newGen: string) => {
+    if (selectedStudentIds.length === 0 || !newGen) return;
+    const idsToUpdate = [...selectedStudentIds];
+    setAlumnos((prev) =>
+      prev.map((a) => (idsToUpdate.includes(a.id) ? { ...a, generacion: newGen, updatedAt: new Date().toISOString() } : a))
+    );
+    playChime("success");
+
+    idsToUpdate.forEach(async (id) => {
+      try {
+        await updateDoc(doc(db, "alumnos_pendientes", id), {
+          generacion: newGen,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn("Error updating generacion in Firestore", id, err);
+      }
+    });
+  };
+
+  // Guardar notas u observaciones de un estudiante
+  const handleSaveNote = async (id: string, noteText: string) => {
+    setAlumnos((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, notas: noteText, updatedAt: new Date().toISOString() } : a))
+    );
+    setEditingNoteId(null);
+    playChime("tick");
+
+    try {
+      await updateDoc(doc(db, "alumnos_pendientes", id), {
+        notas: noteText,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.warn("Error saving note to Firestore", err);
+    }
+  };
+
+  // Toggle grupo colapsable
+  const handleToggleGroup = (groupKey: string) => {
+    setCollapsedGroups((prev) =>
+      prev.includes(groupKey) ? prev.filter((g) => g !== groupKey) : [...prev, groupKey]
+    );
+    playChime("tick");
+  };
+
+  const handleExpandAllGroups = () => {
+    setCollapsedGroups([]);
+    playChime("tick");
+  };
+
+  const handleCollapseAllGroups = (groups: string[]) => {
+    setCollapsedGroups(groups);
     playChime("tick");
   };
 
@@ -506,6 +628,269 @@ export default function AlumnosPendientesSection({
     playChime("success");
   };
 
+  // Helper to render each student row with selection checkbox and inline notes
+  const renderAlumnoRow = (alumno: AlumnoPendiente) => {
+    const estatusCfg =
+      ESTATUS_OPTIONS.find((e) => e.label === alumno.estatus) || {
+        color: "bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200 border-stone-300",
+      };
+    const isSelected = selectedStudentIds.includes(alumno.id);
+    const isEditingNote = editingNoteId === alumno.id;
+
+    return (
+      <tr
+        key={alumno.id}
+        className={`hover:bg-amber-50/40 dark:hover:bg-amber-950/20 transition-colors group ${
+          isSelected ? "bg-amber-100/50 dark:bg-amber-950/40" : ""
+        }`}
+      >
+        {/* Checkbox de selección individual */}
+        <td className="py-4 px-4 text-center">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => handleToggleSelect(alumno.id)}
+            className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+          />
+        </td>
+
+        {/* Alumno y contacto */}
+        <td className="py-4 px-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-sm text-stone-900 dark:text-stone-100">
+                {alumno.nombre}
+              </span>
+              {alumno.id === "pend-edgar-batun-2026" && (
+                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                  Registro Solicitado
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-500 dark:text-stone-400">
+              {/* Email */}
+              <div className="flex items-center gap-1">
+                <Mail size={12} className="text-stone-400" />
+                <a
+                  href={`mailto:${alumno.email}`}
+                  className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline font-medium"
+                >
+                  {alumno.email}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(alumno.email, `email-${alumno.id}`)}
+                  className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded cursor-pointer"
+                  title="Copiar correo"
+                >
+                  {copiedField === `email-${alumno.id}` ? (
+                    <Check size={11} className="text-emerald-500" />
+                  ) : (
+                    <Copy size={11} />
+                  )}
+                </button>
+              </div>
+
+              {/* Teléfono */}
+              <div className="flex items-center gap-1 font-mono font-bold text-stone-700 dark:text-stone-300">
+                <Phone size={12} className="text-emerald-500" />
+                <span>{alumno.telefono}</span>
+                <button
+                  type="button"
+                  onClick={() => handleCopy(alumno.telefono, `tel-${alumno.id}`)}
+                  className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded cursor-pointer"
+                  title="Copiar teléfono"
+                >
+                  {copiedField === `tel-${alumno.id}` ? (
+                    <Check size={11} className="text-emerald-500" />
+                  ) : (
+                    <Copy size={11} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Notas u Observaciones (Poner / Editar notas) */}
+            {isEditingNote ? (
+              <div className="flex items-center gap-1.5 pt-1">
+                <input
+                  type="text"
+                  value={editingNoteText}
+                  onChange={(e) => setEditingNoteText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveNote(alumno.id, editingNoteText);
+                    if (e.key === "Escape") setEditingNoteId(null);
+                  }}
+                  placeholder="Escribe una nota u observación..."
+                  className="text-xs px-2.5 py-1 rounded-xl border border-amber-500 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100 w-full max-w-sm focus:outline-hidden"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => handleSaveNote(alumno.id, editingNoteText)}
+                  className="px-2 py-1 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 cursor-pointer"
+                  title="Guardar nota"
+                >
+                  <Check size={12} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingNoteId(null)}
+                  className="p-1 rounded-lg bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300 text-xs cursor-pointer"
+                  title="Cancelar"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 pt-0.5">
+                {alumno.notas ? (
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 italic max-w-md flex items-center gap-1 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-200/50 dark:border-amber-800/50">
+                    <StickyNote size={11} className="text-amber-600 shrink-0" />
+                    <span>"{alumno.notas}"</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingNoteId(alumno.id);
+                        setEditingNoteText(alumno.notas || "");
+                      }}
+                      className="p-0.5 text-stone-400 hover:text-amber-600 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                      title="Editar nota"
+                    >
+                      <Edit2 size={10} />
+                    </button>
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingNoteId(alumno.id);
+                      setEditingNoteText("");
+                    }}
+                    className="text-[10px] text-stone-400 hover:text-amber-600 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition cursor-pointer"
+                  >
+                    <Plus size={10} />
+                    <span>Poner nota</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </td>
+
+        {/* Casa */}
+        <td className="py-4 px-4">
+          <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
+            <Building2 size={14} className="text-amber-600 shrink-0" />
+            <span>{alumno.casa}</span>
+          </div>
+        </td>
+
+        {/* Generación y Rol */}
+        <td className="py-4 px-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
+              <Calendar size={13} className="text-stone-400 shrink-0" />
+              <span>{alumno.generacion}</span>
+            </div>
+            <div>
+              <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                {alumno.rol}
+              </span>
+            </div>
+          </div>
+        </td>
+
+        {/* Estatus con dropdown rápido */}
+        <td className="py-4 px-4">
+          <div className="relative inline-block">
+            <select
+              value={alumno.estatus}
+              onChange={(e) => handleChangeStatus(alumno.id, e.target.value)}
+              className={`px-2.5 py-1 rounded-xl text-xs font-black border transition cursor-pointer appearance-none pr-6 ${estatusCfg.color}`}
+            >
+              {ESTATUS_OPTIONS.map((opt) => (
+                <option key={opt.label} value={opt.label}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              size={12}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60"
+            />
+          </div>
+        </td>
+
+        {/* WhatsApp Personal */}
+        <td className="py-4 px-4 text-center">
+          <div className="flex flex-col items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => handleOpenWhatsAppModal(alumno)}
+              className="px-3.5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-md hover:shadow-emerald-600/20 flex items-center gap-2 active:scale-95 cursor-pointer"
+              title={`Mandar mensaje personal por WhatsApp a ${alumno.nombre}`}
+            >
+              <MessageCircle size={15} />
+              <span>Mandar WhatsApp</span>
+            </button>
+
+            {alumno.contactadoWhatsApp ? (
+              <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                <Check size={11} /> Contactado
+              </span>
+            ) : (
+              <span className="text-[10px] text-stone-400">
+                Pendiente de contacto
+              </span>
+            )}
+          </div>
+        </td>
+
+        {/* Acciones */}
+        <td className="py-4 px-4 text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            {/* Promover a Reconocimiento Oficial */}
+            {onPromoteToReconocimiento && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPromoteToReconocimiento(alumno);
+                  playChime("success");
+                }}
+                className="p-2 text-stone-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition cursor-pointer"
+                title="Promover a Reconocimiento Oficial en Seguimiento Operativo"
+              >
+                <Award size={15} />
+              </button>
+            )}
+
+            {/* Editar */}
+            <button
+              type="button"
+              onClick={() => handleOpenEditModal(alumno)}
+              className="p-2 text-stone-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition cursor-pointer"
+              title="Editar datos del alumno"
+            >
+              <Edit2 size={15} />
+            </button>
+
+            {/* Eliminar */}
+            <button
+              type="button"
+              onClick={() => handleDeleteAlumno(alumno.id, alumno.nombre)}
+              className="p-2 text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition cursor-pointer"
+              title="Eliminar de la lista de pendientes"
+            >
+              <Trash2 size={15} />
+            </button>
+          </div>
+        </td>
+      </tr>
+    );
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       {/* HEADER BANNER */}
@@ -544,6 +929,19 @@ export default function AlumnosPendientesSection({
                 <span>Subir BD de Drive</span>
               </button>
             )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowTemplatesModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 text-white font-black text-xs transition border border-white/30 flex items-center gap-2 active:scale-95 cursor-pointer backdrop-blur-sm shadow-xs"
+              title="Administrar, agregar, editar y eliminar plantillas rápidas de WhatsApp"
+            >
+              <MessageCircle size={15} />
+              <span>Plantillas WhatsApp</span>
+            </button>
 
             <button
               type="button"
@@ -689,7 +1087,160 @@ export default function AlumnosPendientesSection({
             )}
           </div>
         </div>
+
+        {/* SELECTOR MULTI-OPCIÓN DE GENERACIÓN (CHIPS RÁPIDOS) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-stone-200 dark:border-stone-800 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-bold text-stone-600 dark:text-stone-400 flex items-center gap-1.5">
+              <Calendar size={14} className="text-amber-600" />
+              <span>Generación:</span>
+            </span>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedGeneracion("todos");
+                  playChime("tick");
+                }}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+                  selectedGeneracion === "todos"
+                    ? "bg-amber-600 text-white shadow-xs"
+                    : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200"
+                }`}
+              >
+                Todas ({alumnos.length})
+              </button>
+              {GENERACIONES_SUGERIDAS.map((gen) => {
+                const count = alumnos.filter((a) => a.generacion === gen).length;
+                return (
+                  <button
+                    key={gen}
+                    type="button"
+                    onClick={() => {
+                      setSelectedGeneracion(gen);
+                      playChime("tick");
+                    }}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                      selectedGeneracion === gen
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200"
+                    }`}
+                  >
+                    <span>{gen.replace("Generación ", "Gen ")}</span>
+                    <span className="text-[10px] opacity-75">({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Selector de Agrupamiento Colapsable */}
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-stone-600 dark:text-stone-400 flex items-center gap-1">
+              <Layers size={14} className="text-indigo-600" />
+              <span>Agrupar por:</span>
+            </span>
+            <select
+              value={groupBy}
+              onChange={(e) => {
+                setGroupBy(e.target.value as any);
+                setCollapsedGroups([]);
+                playChime("tick");
+              }}
+              className="px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-800 dark:text-stone-200 cursor-pointer"
+            >
+              <option value="none">Sin agrupar</option>
+              <option value="generacion">Por Generación</option>
+              <option value="casa">Por Casa / Agrupación</option>
+              <option value="estatus">Por Estatus</option>
+            </select>
+
+            {groupBy !== "none" && (
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleExpandAllGroups}
+                  className="px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 text-[11px] font-bold cursor-pointer"
+                  title="Expandir todos los grupos"
+                >
+                  Expandir
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const keys = Array.from(new Set(filteredAlumnos.map((a) => {
+                      if (groupBy === "generacion") return a.generacion || "Sin Generación";
+                      if (groupBy === "casa") return a.casa || "Sin Casa";
+                      return a.estatus || "Sin Estatus";
+                    })));
+                    handleCollapseAllGroups(keys);
+                  }}
+                  className="px-2 py-1 rounded-lg bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200 text-[11px] font-bold cursor-pointer"
+                  title="Colapsar todos los grupos"
+                >
+                  Colapsar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
+
+      {/* BARRA DE ACCIONES MASIVAS (BULK SELECTION & DELETE) */}
+      {selectedStudentIds.length > 0 && (
+        <div className="sticky top-2 z-30 p-3 sm:p-4 rounded-2xl bg-amber-950 text-white shadow-xl flex flex-wrap items-center justify-between gap-3 border border-amber-600/70 animate-in slide-in-from-top-2 duration-200 backdrop-blur-md">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-300 flex items-center justify-center font-bold">
+              <CheckSquare size={17} />
+            </div>
+            <div>
+              <span className="font-black text-xs sm:text-sm">
+                {selectedStudentIds.length} estudiante(s) seleccionado(s)
+              </span>
+              <p className="text-[10px] text-amber-200/80">
+                Aplica eliminación masiva o asignación de generación en lote
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Multi opción para asignar generación */}
+            <div className="flex items-center gap-1 bg-amber-900/80 px-2 py-1 rounded-xl text-xs border border-amber-700/60">
+              <span className="text-[11px] text-amber-200 font-bold">Asignar Gen:</span>
+              {["2026", "2025", "2024", "2023"].map((yr) => (
+                <button
+                  key={yr}
+                  type="button"
+                  onClick={() => handleBulkChangeGeneracion(`Generación ${yr}`)}
+                  className="px-2 py-0.5 rounded-lg bg-white/10 hover:bg-white/25 text-white text-[11px] font-bold cursor-pointer transition active:scale-95"
+                >
+                  {yr}
+                </button>
+              ))}
+            </div>
+
+            {/* Eliminar varios estudiantes seleccionándolos */}
+            <button
+              type="button"
+              onClick={handleBulkDelete}
+              className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer shadow-md"
+              title="Eliminar estudiantes seleccionados permanentemente"
+            >
+              <Trash2 size={13} />
+              <span>Eliminar Seleccionados</span>
+            </button>
+
+            {/* Desmarcar todos */}
+            <button
+              type="button"
+              onClick={() => setSelectedStudentIds([])}
+              className="px-3 py-1.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs cursor-pointer transition"
+            >
+              Deseleccionar
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TABLA PRINCIPAL DE ALUMNOS PENDIENTES */}
       <div className="rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-md overflow-hidden">
@@ -710,7 +1261,7 @@ export default function AlumnosPendientesSection({
               <button
                 type="button"
                 onClick={handleOpenCreateModal}
-                className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition"
+                className="px-4 py-2 rounded-2xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs transition cursor-pointer"
               >
                 + Registrar Primer Alumno Pendiente
               </button>
@@ -718,7 +1269,7 @@ export default function AlumnosPendientesSection({
                 <button
                   type="button"
                   onClick={onOpenDriveImport}
-                  className="px-4 py-2 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs transition border border-stone-300 dark:border-stone-700 flex items-center gap-1.5"
+                  className="px-4 py-2 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-800 dark:text-stone-200 font-bold text-xs transition border border-stone-300 dark:border-stone-700 flex items-center gap-1.5 cursor-pointer"
                 >
                   <Database size={13} />
                   <span>Subir BD desde Drive</span>
@@ -731,6 +1282,18 @@ export default function AlumnosPendientesSection({
             <table className="w-full text-left border-collapse min-w-[850px]">
               <thead>
                 <tr className="border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-800/50 text-[11px] font-black uppercase tracking-wider text-stone-500 dark:text-stone-400">
+                  <th className="py-3.5 px-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={
+                        filteredAlumnos.length > 0 &&
+                        filteredAlumnos.every((a) => selectedStudentIds.includes(a.id))
+                      }
+                      onChange={handleSelectAllVisible}
+                      className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                      title="Seleccionar / deseleccionar todos los visibles"
+                    />
+                  </th>
                   <th className="py-3.5 px-4">Alumno y Datos de Contacto</th>
                   <th className="py-3.5 px-4">Casa / Agrupación</th>
                   <th className="py-3.5 px-4">Generación y Rol</th>
@@ -740,383 +1303,121 @@ export default function AlumnosPendientesSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 dark:divide-stone-800/60 text-xs">
-                {filteredAlumnos.map((alumno) => {
-                  const estatusCfg =
-                    ESTATUS_OPTIONS.find((e) => e.label === alumno.estatus) || {
-                      color: "bg-stone-100 text-stone-800 dark:bg-stone-800 dark:text-stone-200 border-stone-300",
-                    };
+                {(() => {
+                  if (groupBy === "none") {
+                    return filteredAlumnos.map((alumno) => renderAlumnoRow(alumno));
+                  }
 
-                  return (
-                    <tr
-                      key={alumno.id}
-                      className="hover:bg-amber-50/30 dark:hover:bg-amber-950/10 transition-colors group"
-                    >
-                      {/* Alumno y contacto */}
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-sm text-stone-900 dark:text-stone-100">
-                              {alumno.nombre}
-                            </span>
-                            {alumno.id === "pend-edgar-batun-2026" && (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                                Registro Solicitado
-                              </span>
-                            )}
-                          </div>
+                  // Render Grouped with Collapsible Headers
+                  const groupsMap: Record<string, AlumnoPendiente[]> = {};
+                  filteredAlumnos.forEach((a) => {
+                    let key = "Sin asignar";
+                    if (groupBy === "generacion") key = a.generacion || "Sin Generación";
+                    else if (groupBy === "casa") key = a.casa || "Sin Casa";
+                    else if (groupBy === "estatus") key = a.estatus || "Sin Estatus";
+                    if (!groupsMap[key]) groupsMap[key] = [];
+                    groupsMap[key].push(a);
+                  });
 
-                          <div className="flex flex-wrap items-center gap-3 text-[11px] text-stone-500 dark:text-stone-400">
-                            {/* Email */}
-                            <div className="flex items-center gap-1">
-                              <Mail size={12} className="text-stone-400" />
-                              <a
-                                href={`mailto:${alumno.email}`}
-                                className="hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline font-medium"
-                              >
-                                {alumno.email}
-                              </a>
+                  return Object.entries(groupsMap).map(([groupTitle, groupAlumnos]) => {
+                    const isCollapsed = collapsedGroups.includes(groupTitle);
+                    const allInGroupSelected = groupAlumnos.every((a) => selectedStudentIds.includes(a.id));
+
+                    return (
+                      <React.Fragment key={groupTitle}>
+                        {/* Fila Encabezado del Grupo Colapsable */}
+                        <tr className="bg-amber-500/10 dark:bg-amber-950/30 border-y border-amber-200/50 dark:border-amber-800/50">
+                          <td colSpan={7} className="py-2.5 px-4">
+                            <div className="flex items-center justify-between">
                               <button
                                 type="button"
-                                onClick={() => handleCopy(alumno.email, `email-${alumno.id}`)}
-                                className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded"
-                                title="Copiar correo"
+                                onClick={() => handleToggleGroup(groupTitle)}
+                                className="flex items-center gap-2 font-black text-xs text-amber-950 dark:text-amber-200 hover:text-amber-700 cursor-pointer"
                               >
-                                {copiedField === `email-${alumno.id}` ? (
-                                  <Check size={11} className="text-emerald-500" />
+                                {isCollapsed ? (
+                                  <ChevronRight size={16} className="text-amber-600 shrink-0" />
                                 ) : (
-                                  <Copy size={11} />
+                                  <ChevronDown size={16} className="text-amber-600 shrink-0" />
                                 )}
+                                <span>{groupTitle}</span>
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
+                                  {groupAlumnos.length} {groupAlumnos.length === 1 ? "alumno" : "alumnos"}
+                                </span>
                               </button>
-                            </div>
 
-                            {/* Teléfono */}
-                            <div className="flex items-center gap-1 font-mono font-bold text-stone-700 dark:text-stone-300">
-                              <Phone size={12} className="text-emerald-500" />
-                              <span>{alumno.telefono}</span>
                               <button
                                 type="button"
-                                onClick={() => handleCopy(alumno.telefono, `tel-${alumno.id}`)}
-                                className="p-0.5 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 rounded"
-                                title="Copiar teléfono"
+                                onClick={() => {
+                                  const groupIds = groupAlumnos.map((a) => a.id);
+                                  if (allInGroupSelected) {
+                                    setSelectedStudentIds((prev) => prev.filter((id) => !groupIds.includes(id)));
+                                  } else {
+                                    setSelectedStudentIds((prev) => Array.from(new Set([...prev, ...groupIds])));
+                                  }
+                                  playChime("tick");
+                                }}
+                                className="text-[11px] font-bold text-amber-800 dark:text-amber-300 hover:underline cursor-pointer"
                               >
-                                {copiedField === `tel-${alumno.id}` ? (
-                                  <Check size={11} className="text-emerald-500" />
-                                ) : (
-                                  <Copy size={11} />
-                                )}
+                                {allInGroupSelected ? "Deseleccionar grupo" : "Seleccionar todo el grupo"}
                               </button>
                             </div>
-                          </div>
+                          </td>
+                        </tr>
 
-                          {alumno.notas && (
-                            <p className="text-[11px] text-stone-500 italic max-w-sm">
-                              "{alumno.notas}"
-                            </p>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Casa */}
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
-                          <Building2 size={14} className="text-amber-600 shrink-0" />
-                          <span>{alumno.casa}</span>
-                        </div>
-                      </td>
-
-                      {/* Generación y Rol */}
-                      <td className="py-4 px-4">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-stone-200">
-                            <Calendar size={13} className="text-stone-400 shrink-0" />
-                            <span>{alumno.generacion}</span>
-                          </div>
-                          <div>
-                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                              {alumno.rol}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Estatus con dropdown rápido */}
-                      <td className="py-4 px-4">
-                        <div className="relative inline-block">
-                          <select
-                            value={alumno.estatus}
-                            onChange={(e) => handleChangeStatus(alumno.id, e.target.value)}
-                            className={`px-2.5 py-1 rounded-xl text-xs font-black border transition cursor-pointer appearance-none pr-6 ${estatusCfg.color}`}
-                          >
-                            {ESTATUS_OPTIONS.map((opt) => (
-                              <option key={opt.label} value={opt.label}>
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                          <ChevronDown
-                            size={12}
-                            className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60"
-                          />
-                        </div>
-                      </td>
-
-                      {/* WhatsApp Personal (Acción Principal del Requerimiento) */}
-                      <td className="py-4 px-4 text-center">
-                        <div className="flex flex-col items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenWhatsAppModal(alumno)}
-                            className="px-3.5 py-2 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-md hover:shadow-emerald-600/20 flex items-center gap-2 active:scale-95 cursor-pointer"
-                            title={`Mandar mensaje personal por WhatsApp a ${alumno.nombre}`}
-                          >
-                            <MessageCircle size={15} />
-                            <span>Mandar WhatsApp</span>
-                          </button>
-
-                          {alumno.contactadoWhatsApp ? (
-                            <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
-                              <Check size={11} /> Contactado
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-stone-400">
-                              Pendiente de contacto
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Acciones */}
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {/* Promover a Reconocimiento Oficial */}
-                          {onPromoteToReconocimiento && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                onPromoteToReconocimiento(alumno);
-                                playChime("success");
-                              }}
-                              className="p-2 text-stone-500 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 rounded-xl transition cursor-pointer"
-                              title="Promover a Reconocimiento Oficial en Seguimiento Operativo"
-                            >
-                              <Award size={15} />
-                            </button>
-                          )}
-
-                          {/* Editar */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEditModal(alumno)}
-                            className="p-2 text-stone-500 hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-950/50 rounded-xl transition cursor-pointer"
-                            title="Editar datos del alumno"
-                          >
-                            <Edit2 size={15} />
-                          </button>
-
-                          {/* Eliminar */}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteAlumno(alumno.id, alumno.nombre)}
-                            className="p-2 text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 rounded-xl transition cursor-pointer"
-                            title="Eliminar de la lista de pendientes"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        {/* Filas del Grupo (si no está colapsado) */}
+                        {!isCollapsed && groupAlumnos.map((alumno) => renderAlumnoRow(alumno))}
+                      </React.Fragment>
+                    );
+                  });
+                })()}
               </tbody>
             </table>
           </div>
         )}
       </div>
 
-      {/* MODAL: MANDAR MENSAJE PERSONAL POR WHATSAPP */}
-      {whatsappModalAlumno && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto">
-            {/* Modal Header */}
-            <div className="flex items-start justify-between gap-4 pb-3 border-b border-stone-100 dark:border-stone-800">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 text-emerald-600 flex items-center justify-center shrink-0">
-                  <MessageCircle size={26} />
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-stone-900 dark:text-stone-100">
-                    Enviar Mensaje Personal por WhatsApp
-                  </h3>
-                  <p className="text-xs text-stone-500">
-                    Para: <strong className="text-stone-800 dark:text-stone-200">{whatsappModalAlumno.nombre}</strong>
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWhatsappModalAlumno(null)}
-                className="p-2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 rounded-xl cursor-pointer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Recipient Details Pill */}
-            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-700 text-xs space-y-1.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="font-bold text-stone-700 dark:text-stone-300">
-                  {whatsappModalAlumno.casa} • {whatsappModalAlumno.generacion}
-                </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                  {whatsappModalAlumno.estatus} • {whatsappModalAlumno.rol}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-stone-500">
-                <span>📱 Teléfono: <strong className="font-mono text-stone-800 dark:text-stone-200">{whatsappModalAlumno.telefono}</strong></span>
-                <span>✉️ {whatsappModalAlumno.email}</span>
-              </div>
-            </div>
-
-            {/* Plantillas Rápidas */}
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-wider text-stone-500 dark:text-stone-400">
-                Selecciona una plantilla o escribe tu mensaje:
-              </label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleSelectTemplate("bienvenida")}
-                  className={`p-2.5 rounded-2xl border text-xs font-bold text-center transition cursor-pointer ${
-                    whatsappTemplate === "bienvenida"
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-emerald-500"
-                  }`}
-                >
-                  🎉 Bienvenida y Admisión
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectTemplate("pago")}
-                  className={`p-2.5 rounded-2xl border text-xs font-bold text-center transition cursor-pointer ${
-                    whatsappTemplate === "pago"
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-emerald-500"
-                  }`}
-                >
-                  💳 Datos de Pago (Laura)
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectTemplate("cuadernillos")}
-                  className={`p-2.5 rounded-2xl border text-xs font-bold text-center transition cursor-pointer ${
-                    whatsappTemplate === "cuadernillos"
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-emerald-500"
-                  }`}
-                >
-                  📚 Cuadernillos / Audio
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectTemplate("personalizado")}
-                  className={`p-2.5 rounded-2xl border text-xs font-bold text-center transition cursor-pointer ${
-                    whatsappTemplate === "personalizado"
-                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
-                      : "bg-stone-50 dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-emerald-500"
-                  }`}
-                >
-                  ✏️ Personalizado
-                </button>
-              </div>
-            </div>
-
-            {/* Formato de Teléfono / Lada */}
-            <div className="flex items-center justify-between text-xs p-2.5 rounded-xl bg-stone-50 dark:bg-stone-800/40 border border-stone-200 dark:border-stone-700">
-              <span className="text-stone-600 dark:text-stone-400 font-bold">Prefijo de País para WhatsApp:</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setPhonePrefix("52")}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition ${
-                    phonePrefix === "52"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
-                  }`}
-                >
-                  🇲🇽 México (+52)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPhonePrefix("none")}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition ${
-                    phonePrefix === "none"
-                      ? "bg-emerald-600 text-white"
-                      : "bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
-                  }`}
-                >
-                  Directo / Otro
-                </button>
-              </div>
-            </div>
-
-            {/* Editor de Mensaje */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-stone-700 dark:text-stone-300">
-                  Mensaje Personal a Enviar:
-                </label>
-                <span className="text-[10px] text-stone-400 font-medium">
-                  {customWhatsappMessage.length} caracteres
-                </span>
-              </div>
-              <textarea
-                rows={6}
-                value={customWhatsappMessage}
-                onChange={(e) => setCustomWhatsappMessage(e.target.value)}
-                placeholder="Escribe aquí el mensaje personal para el alumno..."
-                className="w-full p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs text-stone-900 dark:text-stone-100 font-medium leading-relaxed focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
-
-            {/* Preview del Enlace */}
-            <div className="p-2.5 rounded-xl bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 text-[11px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-2">
-              <span className="truncate">
-                Enlace wa.me: <strong>https://wa.me/{formatWhatsAppNumber(whatsappModalAlumno.telefono, phonePrefix)}</strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => handleCopy(customWhatsappMessage, "modal-msg-copy")}
-                className="shrink-0 px-2.5 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-900/60 font-bold text-xs hover:bg-emerald-200 transition"
-              >
-                {copiedField === "modal-msg-copy" ? "¡Copiado!" : "Copiar Texto"}
-              </button>
-            </div>
-
-            {/* Modal Actions */}
-            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-stone-100 dark:border-stone-800">
-              <button
-                type="button"
-                onClick={() => setWhatsappModalAlumno(null)}
-                className="px-4 py-2.5 rounded-2xl border border-stone-200 dark:border-stone-700 font-bold text-xs text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800 transition"
-              >
-                Cancelar
-              </button>
-
-              <button
-                type="button"
-                onClick={handleSendWhatsApp}
-                className="px-6 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-lg hover:shadow-emerald-600/25 flex items-center gap-2 active:scale-95 cursor-pointer"
-              >
-                <Send size={15} />
-                <span>Abrir WhatsApp y Enviar</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL REDACTOR DE WHATSAPP CON PLANTILLAS PERSONALIZADAS (PONER, QUITAR, EDITAR) */}
+      <WhatsAppComposerModal
+        isOpen={Boolean(whatsappModalAlumno)}
+        onClose={() => setWhatsappModalAlumno(null)}
+        recipient={
+          whatsappModalAlumno
+            ? {
+                nombre: whatsappModalAlumno.nombre,
+                telefono: whatsappModalAlumno.telefono,
+                diplomado: "Diplomado de Liderazgo",
+                year: whatsappModalAlumno.generacion?.replace(/[^0-9]/g, "") || "2026",
+                costo: 100,
+                tipo: "Primera Impresión",
+                casa: whatsappModalAlumno.casa,
+                rol: whatsappModalAlumno.rol,
+                generacion: whatsappModalAlumno.generacion,
+              }
+            : null
+        }
+        onSent={async (sentMessage) => {
+          if (!whatsappModalAlumno) return;
+          const updatedAlumno: AlumnoPendiente = {
+            ...whatsappModalAlumno,
+            contactadoWhatsApp: true,
+            ultimoContactoAt: new Date().toISOString(),
+            ultimoMensajeWhatsApp: sentMessage,
+          };
+          setAlumnos((prev) =>
+            prev.map((a) => (a.id === updatedAlumno.id ? updatedAlumno : a))
+          );
+          try {
+            await updateDoc(doc(db, "alumnos_pendientes", updatedAlumno.id), {
+              contactadoWhatsApp: true,
+              ultimoContactoAt: updatedAlumno.ultimoContactoAt,
+              ultimoMensajeWhatsApp: sentMessage,
+              updatedAt: new Date().toISOString(),
+            });
+          } catch (err) {
+            console.warn("Error updating alumno contactado:", err);
+          }
+        }}
+      />
 
       {/* MODAL: REGISTRAR / EDITAR ALUMNO PENDIENTE */}
       {showFormModal && (
@@ -1266,6 +1567,23 @@ export default function AlumnosPendientesSection({
                     onChange={(e) => setFormGeneracion(e.target.value)}
                     className="w-full px-3.5 py-2.5 rounded-2xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
                   />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] text-stone-400 font-bold">Selección rápida:</span>
+                    {GENERACIONES_SUGERIDAS.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setFormGeneracion(g)}
+                        className={`px-2 py-0.5 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                          formGeneracion === g
+                            ? "bg-amber-600 text-white border-amber-600 shadow-2xs"
+                            : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 border-stone-200 dark:border-stone-700 hover:bg-stone-200"
+                        }`}
+                      >
+                        {g.replace("Generación ", "Gen ")}
+                      </button>
+                    ))}
+                  </div>
                   <datalist id="generaciones-list">
                     {GENERACIONES_SUGERIDAS.map((g) => (
                       <option key={g} value={g} />
@@ -1310,6 +1628,13 @@ export default function AlumnosPendientesSection({
           </div>
         </div>
       )}
+
+      {/* MODAL GESTOR DE PLANTILLAS DE WHATSAPP (AGREGAR, EDITAR, ELIMINAR) */}
+      <WhatsAppComposerModal
+        isOpen={showTemplatesModal}
+        onClose={() => setShowTemplatesModal(false)}
+        initialManageMode={true}
+      />
     </div>
   );
 }

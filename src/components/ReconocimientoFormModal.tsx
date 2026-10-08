@@ -27,6 +27,7 @@ import {
   collection,
   addDoc,
   setDoc,
+  updateDoc,
   doc,
   onSnapshot,
   serverTimestamp,
@@ -39,6 +40,8 @@ interface ReconocimientoFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (folio: string) => void;
+  initialData?: any | null;
+  onUpdated?: (updated: any) => void;
 }
 
 export interface SolicitudReconocimientoRecord {
@@ -62,6 +65,8 @@ export default function ReconocimientoFormModal({
   isOpen,
   onClose,
   onSuccess,
+  initialData,
+  onUpdated,
 }: ReconocimientoFormModalProps) {
   // Form fields
   const [nombre, setNombre] = useState("");
@@ -91,6 +96,73 @@ export default function ReconocimientoFormModal({
       driveUrl: "",
     },
   ]);
+
+  // Sync initialData when provided (Edit Mode)
+  useEffect(() => {
+    if (initialData && isOpen) {
+      setNombre(initialData.nombre || "");
+      const stdRoles = ["Líder", "Guía", "Coordinador", "Alumno", "Facilitador", "Staff"];
+      if (stdRoles.includes(initialData.rol)) {
+        setRolOption(initialData.rol);
+        setOtroRol("");
+      } else if (initialData.rol) {
+        setRolOption("Otro");
+        setOtroRol(initialData.rol);
+      } else {
+        setRolOption("Líder");
+        setOtroRol("");
+      }
+
+      setGrupo(initialData.grupo || "");
+      const stdZonas = ["Jaguar", "Tiburón", "Delfín", "Colibrí", "Águila", "Teocalli"];
+      if (stdZonas.includes(initialData.zona)) {
+        setZonaOption(initialData.zona);
+        setOtraZona("");
+      } else if (initialData.zona) {
+        setZonaOption("Otro");
+        setOtraZona(initialData.zona);
+      } else {
+        setZonaOption("Jaguar");
+        setOtraZona("");
+      }
+
+      setEmail(initialData.email || "");
+      setTelefono(initialData.telefono || "");
+      setNotas(initialData.notas || "");
+
+      setDiplomas([
+        {
+          id: "diploma-edit-1",
+          diplomado: initialData.diplomado || "Liderazgo I",
+          year: String(initialData.year || "2026"),
+          tipoImpresion: (initialData.tipoImpresion as any) || "Primera Impresión",
+          driveUrl: initialData.driveUrl || "",
+        },
+      ]);
+    } else if (!initialData && isOpen) {
+      // New record mode
+      setNombre("");
+      setRolOption("Líder");
+      setOtroRol("");
+      setGrupo("");
+      setZonaOption("Jaguar");
+      setOtraZona("");
+      setEmail("");
+      setTelefono("");
+      setNotas("");
+      setDiplomas([
+        {
+          id: "diploma-1",
+          diplomado: "Liderazgo I",
+          year: "2026",
+          tipoImpresion: "Primera Impresión",
+          driveUrl: "",
+        },
+      ]);
+      setIsSuccess(false);
+      setSubmittedData(null);
+    }
+  }, [initialData, isOpen]);
 
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -251,6 +323,55 @@ export default function ReconocimientoFormModal({
     try {
       // 1. Iniciar sesión anónima antes de escribir
       await ensureAnonymousAuth();
+
+      // MODO EDICIÓN: Si estamos modificando un registro existente
+      if (initialData) {
+        const primaryDiploma = diplomas[0] || {
+          diplomado: "Liderazgo I",
+          year: "2026",
+          tipoImpresion: "Primera Impresión",
+          driveUrl: "",
+        };
+        const itemCosto = primaryDiploma.tipoImpresion === "Primera Impresión" ? 100 : 50;
+
+        const updatePayload: Record<string, any> = {
+          nombre: nombre.trim(),
+          rol: finalRol,
+          grupo: grupo.trim(),
+          zona: finalZona,
+          email: email.trim() || null,
+          telefono: telefono.trim() || null,
+          diplomado: primaryDiploma.diplomado || "Liderazgo I",
+          year: String(primaryDiploma.year || "2026"),
+          tipoImpresion: primaryDiploma.tipoImpresion,
+          costo: itemCosto,
+          driveUrl: primaryDiploma.driveUrl?.trim() || null,
+          notas: notas.trim() || null,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const targetId = initialData.id;
+        await Promise.allSettled([
+          updateDoc(doc(db, "reconocimientos", targetId), updatePayload),
+          updateDoc(doc(db, "solicitudes", targetId), updatePayload),
+          initialData.solicitudId
+            ? updateDoc(doc(db, "solicitudes", initialData.solicitudId), updatePayload)
+            : Promise.resolve(),
+          initialData.solicitudId
+            ? updateDoc(doc(db, "reconocimientos", initialData.solicitudId), updatePayload)
+            : Promise.resolve(),
+        ]);
+
+        playChime("success");
+        onUpdated?.({
+          ...initialData,
+          ...updatePayload,
+          id: targetId,
+        });
+        setIsSubmitting(false);
+        onClose();
+        return;
+      }
 
       let primaryId = "";
       const createdFolios: string[] = [];
@@ -498,13 +619,15 @@ export default function ReconocimientoFormModal({
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="inline-block px-3 py-0.5 rounded-full text-[10px] font-bold bg-white/20 text-white backdrop-blur-xs mb-1.5 uppercase tracking-wider">
-                        Expedición de Diplomas
+                        {initialData ? "Modo Edición Manual" : "Expedición de Diplomas"}
                       </span>
                       <h3 className="text-xl sm:text-2xl font-black tracking-tight">
-                        Solicitud de Reconocimiento
+                        {initialData ? "Modificar Datos del Solicitante" : "Solicitud de Reconocimiento"}
                       </h3>
                       <p className="text-indigo-100 text-xs mt-0.5">
-                        Completa tus datos para solicitar la impresión oficial de tu diploma.
+                        {initialData
+                          ? "Actualiza manualmente los datos de este participante o graduado."
+                          : "Completa tus datos para solicitar la impresión oficial de tu diploma."}
                       </p>
                     </div>
                     <div className="hidden sm:flex w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-xs items-center justify-center text-2xl text-indigo-100">
@@ -1245,11 +1368,11 @@ export default function ReconocimientoFormModal({
                         {isSubmitting ? (
                           <>
                             <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                            <span>Registrando Solicitud...</span>
+                            <span>{initialData ? "Guardando Cambios..." : "Registrando Solicitud..."}</span>
                           </>
                         ) : (
                           <>
-                            <span>Registrar Solicitud ({diplomas.length})</span>
+                            <span>{initialData ? "Guardar Cambios del Solicitante" : `Registrar Solicitud (${diplomas.length})`}</span>
                             <ArrowRight size={15} />
                           </>
                         )}

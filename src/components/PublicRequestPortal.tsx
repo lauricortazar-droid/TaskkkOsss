@@ -37,6 +37,7 @@ import { playChime } from "../utils/audio";
 import { googleSignIn, loginWithEmail } from "../lib/firebase";
 import { savePublicSolicitudToFirestore } from "../lib/firestoreService";
 import ReconocimientoFormModal from "./ReconocimientoFormModal";
+import PublicReconocimientosImpresosModal from "./PublicReconocimientosImpresosModal";
 
 interface PublicRequestPortalProps {
   onAdminLoginClick: (adminEmail?: string) => void;
@@ -179,6 +180,7 @@ export default function PublicRequestPortal({
 
   // Reconocimiento Modal state (Solicitud de Reconocimientos Mini Web App)
   const [showReconocimientoModal, setShowReconocimientoModal] = useState(false);
+  const [showReconocimientosImpresosModal, setShowReconocimientosImpresosModal] = useState(false);
 
   // Notification state
   const [hasNotifPermission, setHasNotifPermission] = useState<boolean>(() => {
@@ -608,27 +610,28 @@ export default function PublicRequestPortal({
           </div>
         </div>
 
-        {/* BOTÓN GRANDE DESTACADO: QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO */}
-        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white shadow-xl border border-indigo-400/40 relative overflow-hidden transition-all hover:shadow-indigo-500/20">
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 w-full md:w-auto">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-3xl shrink-0 shadow-md">
+        {/* SECCIÓN DESTACADA: TRÁMITES DE RECONOCIMIENTOS Y CONSULTA DIGITAL DRIVE */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Tarjeta 1: Solicitar Impresión */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-blue-700 via-indigo-700 to-indigo-900 text-white shadow-xl border border-indigo-400/40 relative overflow-hidden flex flex-col justify-between space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 shadow-md">
                 🎓
               </div>
               <div className="space-y-0.5">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider">
-                    Diplomado Liderazgo I
+                  <span className="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-black uppercase tracking-wider">
+                    Diplomado Liderazgo
                   </span>
                   <span className="px-2 py-0.5 rounded-full bg-amber-400/20 text-amber-300 text-[10px] font-bold">
                     Trámite Oficial
                   </span>
                 </div>
-                <h3 className="text-base sm:text-lg font-black text-white tracking-tight">
-                  ¿Eres graduado o necesitas reposición de tu diploma?
+                <h3 className="text-base font-black text-white tracking-tight">
+                  ¿Necesitas tu Reconocimiento?
                 </h3>
-                <p className="text-xs text-indigo-100 max-w-xl">
-                  Registra tu solicitud en segundos. Laura Cortazar recibirá la notificación en tiempo real en su panel y correo electrónico (laurcortazar@gmail.com).
+                <p className="text-xs text-indigo-100 leading-relaxed">
+                  Solicita tu primera impresión ($100) o re-impresión ($50) en segundos.
                 </p>
               </div>
             </div>
@@ -640,10 +643,48 @@ export default function PublicRequestPortal({
                 setShowReconocimientoModal(true);
                 playChime("tick");
               }}
-              className="w-full md:w-auto px-6 py-3.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-amber-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+              className="w-full px-5 py-3 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-amber-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>📜 QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO</span>
+              <span>📜 SOLICITAR IMPRESIÓN</span>
               <ArrowRight size={16} />
+            </button>
+          </div>
+
+          {/* Tarjeta 2: Consultar Reconocimientos Impresos y Ver Digital en Drive */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-emerald-800 via-teal-850 to-stone-900 text-white shadow-xl border border-emerald-400/40 relative overflow-hidden flex flex-col justify-between space-y-4">
+            <div className="flex items-start gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-500/30 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 shadow-md border border-emerald-300/30">
+                📂
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 text-[10px] font-black uppercase tracking-wider">
+                    Google Drive Público
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase">
+                    ¡Listos!
+                  </span>
+                </div>
+                <h3 className="text-base font-black text-white tracking-tight">
+                  Reconocimientos Ya Impresos
+                </h3>
+                <p className="text-xs text-emerald-100 leading-relaxed">
+                  Consulta la lista oficial en vivo y abre el archivo digital en Drive de tu reconocimiento.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              id="btn-ver-reconocimientos-impresos"
+              onClick={() => {
+                setShowReconocimientosImpresosModal(true);
+                playChime("tick");
+              }}
+              className="w-full px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-emerald-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <span>🌐 VER RECONOCIMIENTOS IMPRESOS (DRIVE)</span>
+              <ExternalLink size={16} />
             </button>
           </div>
         </div>
@@ -1472,6 +1513,13 @@ export default function PublicRequestPortal({
         onSuccess={(folio) => {
           saveFolioLocal(folio);
         }}
+      />
+
+      {/* Modal de Consulta Pública de Reconocimientos Impresos y Enlace Drive */}
+      <PublicReconocimientosImpresosModal
+        isOpen={showReconocimientosImpresosModal}
+        onClose={() => setShowReconocimientosImpresosModal(false)}
+        onRequestNewClick={() => setShowReconocimientoModal(true)}
       />
 
       {/* Footer */}

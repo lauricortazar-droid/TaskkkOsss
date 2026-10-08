@@ -157,6 +157,16 @@ service cloud.firestore {
       allow create, read, update, delete: if true;
     }
 
+    // Plantillas personalizadas de WhatsApp (Poner, Quitar, Editar)
+    match /whatsapp_templates/{id} {
+      allow create, read, update, delete: if true;
+    }
+
+    // Mini Bloc Google Tasks (Notas rápidas flotantes y sincronizadas)
+    match /mini_tasks/{id} {
+      allow create, read, update, delete: if true;
+    }
+
     // Device pairing pin codes
     match /pair_codes/{codeId} {
       allow create, update, read, delete: if isValidId(codeId);
