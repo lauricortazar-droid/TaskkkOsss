@@ -3464,35 +3464,54 @@ export default function ReconocimientosOS({
                   key={g.key + "-" + idx}
                   className="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs hover:shadow-md transition-all space-y-4"
                 >
-                  {/* Encabezado Principal que se ve como botón según el requerimiento del usuario:
-                      GRADUADOS
-                      - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
-                  */}
+                  {/* Encabezado Principal estilizado: Nombre y Primer Apellido */}
                   <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-stone-850 dark:via-stone-800 dark:to-stone-850 border border-indigo-100 dark:border-stone-700 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider font-mono shadow-2xs">
-                          GRADUADOS
-                        </span>
-                        <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400">
-                          {g.rol} • Zona {g.zona}
-                        </span>
-                        {g.hasAnyDrive && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] flex items-center gap-1">
-                            <CheckCircle2 size={11} />
-                            <span>Drive Listo</span>
-                          </span>
-                        )}
+                    <div className="flex items-start gap-3">
+                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider">
+                        {(g.nombreFormateado || "E")
+                          .split(" ")
+                          .filter(Boolean)
+                          .map((w: string) => w[0])
+                          .slice(0, 2)
+                          .join("")
+                          .toUpperCase()}
                       </div>
-
-                      {/* TEXTO EXACTO DE UNA LÍNEA FORMATEADO */}
-                      <p className="text-sm sm:text-base font-black font-mono text-stone-900 dark:text-stone-100 select-all leading-snug">
-                        {g.singleLineDisplay}
-                      </p>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 leading-tight tracking-tight">
+                            {g.nombreFormateado}
+                          </h4>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            {g.rol || "Líder"}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            Grupo {g.grupo}
+                          </span>
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                            Zona {g.zona}
+                          </span>
+                          {g.hasAnyDrive && (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                              <CheckCircle2 size={11} />
+                              <span>Drive Listo</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Acciones de copia rápida para el formato */}
-                    <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
+                    <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+                      <div className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-800 border border-indigo-100 dark:border-stone-700 text-indigo-950 dark:text-indigo-200 text-xs font-black">
+                        <span className="text-[9px] uppercase text-indigo-600 dark:text-indigo-400 font-bold block leading-none mb-0.5">
+                          Diplomas
+                        </span>
+                        <span>{g.yearsSummary}</span>
+                      </div>
+
                       <button
                         type="button"
                         onClick={() => {
@@ -3500,7 +3519,7 @@ export default function ReconocimientosOS({
                           playChime("tick");
                         }}
                         className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold border border-stone-200 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-650 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
-                        title="Copiar línea formateada para circular o reporte"
+                        title={`Copiar línea oficial: ${g.singleLineDisplay}`}
                       >
                         <Copy size={12} />
                         <span>Copiar Línea</span>
@@ -3550,12 +3569,12 @@ export default function ReconocimientosOS({
                           >
                             <div className="flex items-start justify-between gap-2">
                               <div>
-                                <div className="flex items-center gap-1.5 mb-0.5">
+                                <div className="flex items-center gap-1.5 mb-1">
                                   <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-black ${yearBadgeColor}`}>
                                     {d.year}
                                   </span>
-                                  <span className="text-[11px] font-bold text-stone-500">
-                                    {d.tipoImpresion} (${d.costo})
+                                  <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 shadow-2xs">
+                                    {d.tipoImpresion}
                                   </span>
                                 </div>
                                 <h5 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">

@@ -59,17 +59,17 @@ export interface GraduadoItem {
 }
 
 /**
- * Formatea el nombre de un participante para resaltar su primer apellido entre paréntesis.
- * Ejemplo:
- * - "Laura Cortazar" -> "Laura (Cortazar)"
- * - "Edgar Iván Batún López" -> "Edgar Iván (Batún) López"
- * - "Juan Carlos Pérez Gómez" -> "Juan Carlos (Pérez) Gómez"
+ * Formatea el nombre mostrando exclusivamente su nombre y primer apellido,
+ * tal como solicitó el usuario (sin segundo apellido, sin paréntesis y sin nombres intermedios innecesarios):
+ * - "Edgar Iván Batún López" -> "Edgar Batún"
+ * - "Juan Carlos Pérez Gómez" -> "Juan Pérez"
+ * - "Laura Cortazar" -> "Laura Cortazar"
  */
 export function formatNombrePrimerApellido(nombre: string): {
   formattedName: string;
   primerApellido: string;
 } {
-  const clean = nombre.trim();
+  const clean = (nombre || "").replace(/[()]/g, "").trim();
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length === 0) {
     return { formattedName: "Estudiante", primerApellido: "" };
@@ -78,22 +78,29 @@ export function formatNombrePrimerApellido(nombre: string): {
     return { formattedName: parts[0], primerApellido: parts[0] };
   }
   if (parts.length === 2) {
-    return { formattedName: `${parts[0]} (${parts[1]})`, primerApellido: parts[1] };
+    return { formattedName: `${parts[0]} ${parts[1]}`, primerApellido: parts[1] };
   }
   if (parts.length === 3) {
-    // Si la primera palabra es un nombre compuesto habitual
-    const compound = ["juan", "jose", "josé", "maria", "maría", "ana", "luis", "carlos", "edgar", "jorge", "pedro", "miguel"];
-    if (compound.includes(parts[0].toLowerCase())) {
-      return { formattedName: `${parts[0]} ${parts[1]} (${parts[2]})`, primerApellido: parts[2] };
+    // Casos de 3 palabras en español:
+    // Caso A: [Nombre] [Segundo Nombre] [Primer Apellido] -> ej: "Edgar Iván Batún", "Juan Carlos Pérez"
+    // Caso B: [Nombre] [Primer Apellido] [Segundo Apellido] -> ej: "Edgar Batún López", "Laura Cortazar Ruiz"
+    const commonSecondNames = [
+      "carlos", "luis", "alberto", "antonio", "manuel", "fernando", "javier",
+      "enrique", "guadalupe", "iván", "ivan", "david", "eduardo", "alejandro",
+      "miguel", "ángel", "angel", "josé", "jose", "maría", "maria", "jesus", "jesús"
+    ];
+    if (commonSecondNames.includes(parts[1].toLowerCase())) {
+      return { formattedName: `${parts[0]} ${parts[2]}`, primerApellido: parts[2] };
     }
-    return { formattedName: `${parts[0]} (${parts[1]}) ${parts[2]}`, primerApellido: parts[1] };
+    return { formattedName: `${parts[0]} ${parts[1]}`, primerApellido: parts[1] };
   }
-  // 4 o más palabras (ej: Nombre1 Nombre2 ApellidoPaterno ApellidoMaterno)
+  // 4 o más palabras (ej: "Edgar Iván Batún López", "Juan Carlos Pérez Gómez")
+  // Nombre: parts[0] ("Edgar")
+  // Primer apellido: parts[parts.length - 2] ("Batún")
+  const primerNombre = parts[0];
   const primerApellido = parts[parts.length - 2];
-  const nombres = parts.slice(0, parts.length - 2).join(" ");
-  const segundoApellido = parts[parts.length - 1];
   return {
-    formattedName: `${nombres} (${primerApellido}) ${segundoApellido}`,
+    formattedName: `${primerNombre} ${primerApellido}`,
     primerApellido,
   };
 }
@@ -484,59 +491,77 @@ export default function PublicReconocimientosImpresosModal({
               </div>
 
               {/* Tarjetas de Graduados con el formato exacto requerido */}
-              {filteredGraduados.map((item) => (
-                <div
-                  key={item.key}
-                  className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs hover:border-indigo-400 dark:hover:border-indigo-600 transition flex flex-col justify-between space-y-3 group"
-                >
-                  {/* Formato solicitado por el usuario */}
-                  <div className="space-y-2">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      {/* Texto representativo del graduado */}
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-                            GRADUADO
-                          </span>
-                          <span className="text-xs font-mono font-bold text-stone-400">
-                            {item.grupo} • {item.zona}
-                          </span>
+              {filteredGraduados.map((item) => {
+                const initials = (item.nombreFormateado || "E")
+                  .split(" ")
+                  .filter(Boolean)
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase() || "🎓";
+
+                return (
+                  <div
+                    key={item.key}
+                    className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs hover:border-indigo-400 dark:hover:border-indigo-600 transition flex flex-col justify-between space-y-3.5 group"
+                  >
+                    {/* Encabezado Principal del Graduado */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100 dark:border-stone-800">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider">
+                          {initials}
                         </div>
-                        {/* Línea principal: - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026 */}
-                        <h4 className="text-sm sm:text-base font-black text-stone-900 dark:text-stone-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex flex-wrap items-baseline gap-1.5">
-                          <span className="text-indigo-600 dark:text-indigo-400 font-black">•</span>
-                          <span>{item.nombreFormateado}</span>
-                          <span className="text-xs font-bold text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-lg">
-                            {item.grupo}
-                          </span>
-                          <span className="text-xs font-bold text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-lg">
-                            Zona {item.zona}
-                          </span>
-                        </h4>
+                        <div>
+                          <h4 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 leading-tight tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            {item.nombreFormateado}
+                          </h4>
+                          <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                              {item.rol || "Líder"}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                              Grupo {item.grupo}
+                            </span>
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                              Zona {item.zona}
+                            </span>
+                          </div>
+                        </div>
                       </div>
 
-                      {/* Resumen de diplomas */}
-                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                      {/* Resumen de diplomas y botón de copiado */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto shrink-0">
                         <div className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-purple-900 dark:text-purple-200 text-xs font-black">
-                          <span className="text-[10px] uppercase text-purple-600 dark:text-purple-400 block font-bold leading-none mb-0.5">
+                          <span className="text-[9px] uppercase text-purple-600 dark:text-purple-400 block font-bold leading-none mb-0.5">
                             Diplomas
                           </span>
                           <span>{item.yearsSummary}</span>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(item.singleLineDisplay);
+                            setCopiedId(item.key);
+                            setTimeout(() => setCopiedId((curr) => curr === item.key ? null : curr), 2000);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl text-stone-600 dark:text-stone-300 hover:text-indigo-600 bg-stone-50 dark:bg-stone-800 hover:bg-indigo-50 border border-stone-200 dark:border-stone-700 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                          title="Copiar registro de graduado"
+                        >
+                          {copiedId === item.key ? (
+                            <>
+                              <Check size={13} className="text-emerald-600" />
+                              <span className="text-[11px] text-emerald-600 font-bold">Copiado</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={13} />
+                              <span className="text-[11px] hidden sm:inline">Copiar</span>
+                            </>
+                          )}
+                        </button>
                       </div>
                     </div>
-
-                    {/* Resumen en una línea tal como lo visualizó el usuario */}
-                    <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 text-xs font-mono text-stone-700 dark:text-stone-300 flex items-center justify-between gap-2 overflow-x-auto">
-                      <div className="truncate">
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400">GRADUADOS: </span>
-                        <span>{item.singleLineDisplay}</span>
-                      </div>
-                      <span className="text-[10px] text-stone-400 font-sans shrink-0">
-                        {item.diplomas.length} diploma(s)
-                      </span>
-                    </div>
-                  </div>
 
                   {/* Botones de acción directos a Google Drive para cada diploma */}
                   <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-2">
@@ -562,7 +587,7 @@ export default function PublicReconocimientosImpresosModal({
                               </span>
                               <span className="truncate">{dip.diplomado}</span>
                             </div>
-                            <span className="text-[10px] text-stone-400 font-mono block">
+                            <span className="inline-block mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 border border-stone-200 dark:border-stone-700 shadow-2xs">
                               {dip.tipoImpresion}
                             </span>
                           </div>
@@ -573,10 +598,10 @@ export default function PublicReconocimientosImpresosModal({
                                 href={dip.driveUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
                                 title="Abrir reconocimiento en Google Drive"
                               >
-                                <span>Ver Drive</span>
+                                <span>Ver Reconocimiento Digital</span>
                                 <ExternalLink size={12} />
                               </a>
                               <button
@@ -619,7 +644,8 @@ export default function PublicReconocimientosImpresosModal({
                     )}
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           )}
         </div>

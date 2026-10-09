@@ -1296,25 +1296,31 @@
     let currentGradSearch = "";
     let currentOnlyDrive = false;
 
-    // Formatear nombre resaltando primer apellido entre paréntesis
+    // Formatear nombre: sólo nombre y primer apellido (sin segundo apellido, sin nombres intermedios innecesarios, sin paréntesis)
     function formatNombrePrimerApellido(nombre) {
-      const clean = (nombre || "").trim();
+      const clean = (nombre || "").replace(/[()]/g, "").trim();
       const parts = clean.split(/\s+/).filter(Boolean);
       if (parts.length === 0) return { formattedName: "Estudiante", primerApellido: "" };
       if (parts.length === 1) return { formattedName: parts[0], primerApellido: parts[0] };
-      if (parts.length === 2) return { formattedName: `${parts[0]} (${parts[1]})`, primerApellido: parts[1] };
-      if (parts.length === 3) {
-        const compound = ["juan", "jose", "josé", "maria", "maría", "ana", "luis", "carlos", "edgar", "jorge", "pedro", "miguel"];
-        if (compound.includes(parts[0].toLowerCase())) {
-          return { formattedName: `${parts[0]} ${parts[1]} (${parts[2]})`, primerApellido: parts[2] };
-        }
-        return { formattedName: `${parts[0]} (${parts[1]}) ${parts[2]}`, primerApellido: parts[1] };
+      if (parts.length === 2) {
+        return { formattedName: `${parts[0]} ${parts[1]}`, primerApellido: parts[1] };
       }
+      if (parts.length === 3) {
+        const commonSecondNames = [
+          "carlos", "luis", "alberto", "antonio", "manuel", "fernando", "javier",
+          "enrique", "guadalupe", "iván", "ivan", "david", "eduardo", "alejandro",
+          "miguel", "ángel", "angel", "josé", "jose", "maría", "maria", "jesus", "jesús"
+        ];
+        if (commonSecondNames.includes(parts[1].toLowerCase())) {
+          return { formattedName: `${parts[0]} ${parts[2]}`, primerApellido: parts[2] };
+        }
+        return { formattedName: `${parts[0]} ${parts[1]}`, primerApellido: parts[1] };
+      }
+      // 4 o más palabras (ej: "Edgar Iván Batún López") -> "Edgar Batún"
+      const primerNombre = parts[0];
       const primerApellido = parts[parts.length - 2];
-      const nombres = parts.slice(0, parts.length - 2).join(" ");
-      const segundoApellido = parts[parts.length - 1];
       return {
-        formattedName: `${nombres} (${primerApellido}) ${segundoApellido}`,
+        formattedName: `${primerNombre} ${primerApellido}`,
         primerApellido
       };
     }
@@ -1459,42 +1465,52 @@
       }
 
       const html = filtered.map((item) => {
+        // Iniciales para avatar profesional
+        const initials = (item.formattedName || "E")
+          .split(" ")
+          .filter(Boolean)
+          .map((w) => w[0])
+          .slice(0, 2)
+          .join("")
+          .toUpperCase() || "🎓";
+
         // Badges de diplomas con enlaces si existen
         const diplomasHtml = item.diplomas.map((dip) => {
-          const yearColor = dip.year === "2026"
-            ? "bg-purple-100 text-purple-900 border-purple-200"
+          const yearBadgeStyle = dip.year === "2026"
+            ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white"
             : dip.year === "2025"
-            ? "bg-blue-100 text-blue-900 border-blue-200"
-            : "bg-emerald-100 text-emerald-900 border-emerald-200";
+            ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white"
+            : "bg-gradient-to-r from-amber-500 to-orange-500 text-white";
 
           const driveBtn = dip.driveUrl ? `
             <a
               href="${escapeHtml(dip.driveUrl)}"
               target="_blank"
               rel="noopener noreferrer"
-              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-[11px] shadow-xs transition transform active:scale-95 cursor-pointer"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs shadow-xs transition transform active:scale-95 cursor-pointer"
               title="Abrir reconocimiento oficial en Google Drive"
             >
-              <i class="fa-solid fa-arrow-up-right-from-square"></i>
-              <span>Ver Reconocimiento Digital (${escapeHtml(dip.year)})</span>
+              <span>Ver Reconocimiento Digital</span>
+              <i class="fa-solid fa-arrow-up-right-from-square text-[10px]"></i>
             </a>
           ` : `
-            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 text-[10px] font-medium">
-              <i class="fa-regular fa-clock"></i> Enlace Drive en preparación
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-gray-50 border border-gray-200 text-gray-400 text-[11px] font-medium">
+              <i class="fa-regular fa-clock text-[10px]"></i>
+              <span>Enlace en preparación</span>
             </span>
           `;
 
           return `
-            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-gray-200">
-              <div class="flex items-center gap-2">
-                <span class="px-2 py-0.5 rounded-md text-[11px] font-black border ${yearColor}">
+            <div class="flex flex-wrap items-center justify-between gap-2.5 p-3 rounded-xl bg-gray-50/80 hover:bg-gray-50 border border-gray-200/80 transition">
+              <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-0.5 rounded-lg text-xs font-black shadow-2xs ${yearBadgeStyle}">
                   ${escapeHtml(dip.year)}
                 </span>
-                <span class="text-xs font-semibold text-gray-800">
+                <span class="text-xs sm:text-sm font-bold text-gray-900">
                   ${escapeHtml(dip.diplomado || "Diplomado Oficial")}
                 </span>
-                <span class="text-[10px] text-gray-400">
-                  (${escapeHtml(dip.tipoImpresion || "Impreso")})
+                <span class="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white text-gray-600 border border-gray-200 shadow-2xs">
+                  ${escapeHtml(dip.tipoImpresion || "Primera Impresión")}
                 </span>
               </div>
               <div class="flex items-center gap-2">
@@ -1505,51 +1521,58 @@
         }).join("");
 
         return `
-          <div class="p-4 sm:p-5 rounded-2xl border border-gray-200 bg-white hover:border-indigo-400 transition-all shadow-2xs space-y-3">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-gray-100">
+          <div class="p-4 sm:p-5 rounded-2xl border border-gray-200 bg-white hover:border-indigo-400 hover:shadow-md transition-all shadow-2xs space-y-3.5">
+            <!-- Encabezado con Nombre y Primer Apellido -->
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
               <div class="flex items-start gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-lg font-black shadow-xs shrink-0">
-                  🎓
+                <div class="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-sm font-black shadow-xs shrink-0 tracking-wider">
+                  ${initials}
                 </div>
                 <div>
-                  <h3 class="font-black text-gray-950 text-sm sm:text-base leading-snug">
+                  <h3 class="font-extrabold text-gray-950 text-base sm:text-lg leading-tight tracking-tight">
                     ${escapeHtml(item.formattedName)}
                   </h3>
-                  <div class="flex flex-wrap items-center gap-1.5 mt-1">
-                    <span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 text-[10px] font-extrabold border border-indigo-200">
+                  <div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      ${escapeHtml(item.rol || "Líder")}
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
                       Grupo ${escapeHtml(item.grupo)}
                     </span>
-                    <span class="px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 text-[10px] font-extrabold border border-stone-200">
+                    <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-50 text-sky-800 border border-sky-200">
                       Zona ${escapeHtml(item.zona)}
-                    </span>
-                    <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[10px] font-bold">
-                      ${escapeHtml(item.rol || "Líder")}
                     </span>
                   </div>
                 </div>
               </div>
               
-              <div class="flex items-center gap-2 self-end sm:self-auto">
+              <div class="flex items-center gap-2 self-start sm:self-auto shrink-0">
+                <div class="px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200 text-purple-900 text-xs font-black">
+                  <span class="text-[9px] uppercase text-purple-600 font-bold block leading-none mb-0.5">Diplomas</span>
+                  <span>${escapeHtml(item.yearsSummary)}</span>
+                </div>
                 <button
                   type="button"
-                  onclick="navigator.clipboard.writeText('${escapeHtml(item.singleLineDisplay)}').then(() => { alert('¡Línea copiada: ${escapeHtml(item.singleLineDisplay)}!'); })"
-                  class="p-2 rounded-xl text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 text-xs transition cursor-pointer"
-                  title="Copiar línea de este graduado"
+                  onclick="const btn = this; if (navigator.clipboard) { navigator.clipboard.writeText('${escapeHtml(item.singleLineDisplay)}').then(() => { const oldHtml = btn.innerHTML; btn.innerHTML = '<i class=\\'fa-solid fa-check text-emerald-600\\'></i><span class=\\'text-[11px] text-emerald-600 font-bold\\'>Copiado</span>'; setTimeout(() => { btn.innerHTML = oldHtml; }, 2000); }); }"
+                  class="px-2.5 py-1.5 rounded-xl text-gray-600 hover:text-indigo-600 bg-gray-50 hover:bg-indigo-50 border border-gray-200 text-xs font-bold transition cursor-pointer flex items-center gap-1.5 shadow-2xs"
+                  title="Copiar registro de graduado"
                 >
-                  <i class="fa-regular fa-copy"></i>
+                  <i class="fa-regular fa-copy text-xs"></i>
+                  <span class="text-[11px] hidden sm:inline">Copiar</span>
                 </button>
               </div>
             </div>
 
-            <!-- Formato Oficial Solicitado en Texto -->
-            <div class="p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700 flex items-center justify-between">
-              <span class="truncate font-semibold">${escapeHtml(item.singleLineDisplay)}</span>
-              <span class="text-[10px] text-gray-400 font-sans uppercase shrink-0 ml-2">Oficial</span>
-            </div>
-
-            <!-- Lista de Diplomas y Enlaces Drive -->
-            <div class="space-y-1.5 pt-1">
-              ${diplomasHtml}
+            <!-- Lista de Reconocimientos y Enlaces Drive -->
+            <div class="space-y-2">
+              <div class="text-[10px] font-extrabold uppercase tracking-wider text-gray-400 flex items-center justify-between">
+                <span>Reconocimientos Oficiales</span>
+                <span class="text-indigo-600 font-bold">${item.diplomas.length} diploma${item.diplomas.length === 1 ? "" : "s"}</span>
+              </div>
+              <div class="space-y-2">
+                ${diplomasHtml}
+              </div>
             </div>
           </div>
         `;

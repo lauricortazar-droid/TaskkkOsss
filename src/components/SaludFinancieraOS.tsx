@@ -436,15 +436,19 @@ export default function SaludFinancieraOS({
   const [pagoDeudaRegistrarGasto, setPagoDeudaRegistrarGasto] = useState(true);
   const [pagoDeudaMandarPrint, setPagoDeudaMandarPrint] = useState(false);
 
-  // Formulario de Nueva Deuda
+  // Formulario de Nueva / Edición Deuda
+  const [editingDebt, setEditingDebt] = useState<FinancialDebt | null>(null);
+  const [debtToDelete, setDebtToDelete] = useState<FinancialDebt | null>(null);
   const [formDeudaAcreedor, setFormDeudaAcreedor] = useState("");
   const [formDeudaConcepto, setFormDeudaConcepto] = useState("");
   const [formDeudaMontoOriginal, setFormDeudaMontoOriginal] = useState<number>(5000);
+  const [formDeudaSaldoActual, setFormDeudaSaldoActual] = useState<number>(5000);
   const [formDeudaVencimiento, setFormDeudaVencimiento] = useState(
     new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10)
   );
   const [formDeudaPagoMinimo, setFormDeudaPagoMinimo] = useState<number>(1000);
   const [formDeudaPrioridad, setFormDeudaPrioridad] = useState<"Alta" | "Media" | "Baja">("Alta");
+  const [formDeudaEstado, setFormDeudaEstado] = useState<"Activa" | "Liquidada">("Activa");
   const [formDeudaNotas, setFormDeudaNotas] = useState("");
 
   // Formulario de Gasto Fijo Recurrente
@@ -954,10 +958,92 @@ export default function SaludFinancieraOS({
     setTimeout(() => setActionFeedback(null), 3000);
   };
 
-  // HANDLER: REGISTRAR NUEVA DEUDA
+  // HANDLERS: DEUDAS (CREAR, EDITAR, ELIMINAR)
+  const handleOpenCreateDeuda = () => {
+    setEditingDebt(null);
+    setFormDeudaAcreedor("");
+    setFormDeudaConcepto("");
+    setFormDeudaMontoOriginal(5000);
+    setFormDeudaSaldoActual(5000);
+    setFormDeudaVencimiento(new Date(Date.now() + 15 * 86400000).toISOString().slice(0, 10));
+    setFormDeudaPagoMinimo(1000);
+    setFormDeudaPrioridad("Alta");
+    setFormDeudaEstado("Activa");
+    setFormDeudaNotas("");
+    setIsDeudaModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleOpenEditDeuda = (d: FinancialDebt) => {
+    setEditingDebt(d);
+    setFormDeudaAcreedor(d.acreedor);
+    setFormDeudaConcepto(d.concepto);
+    setFormDeudaMontoOriginal(d.montoOriginal);
+    setFormDeudaSaldoActual(d.saldoActual);
+    setFormDeudaVencimiento(d.vencimiento);
+    setFormDeudaPagoMinimo(d.pagoMinimo);
+    setFormDeudaPrioridad(d.prioridad);
+    setFormDeudaEstado(d.estado);
+    setFormDeudaNotas(d.notas || "");
+    setIsDeudaModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleDeleteDeuda = async (debt: FinancialDebt) => {
+    setDebts((prev) => prev.filter((d) => d.id !== debt.id));
+
+    try {
+      await deleteDoc(doc(db, "finanzas_deudas", debt.id));
+    } catch (err) {
+      console.error("Error al eliminar deuda en Firestore", err);
+    }
+
+    setDebtToDelete(null);
+    playChime("tick");
+    setActionFeedback(`Deuda con ${debt.acreedor} eliminada.`);
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
   const handleSaveDeuda = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formDeudaAcreedor.trim() || formDeudaMontoOriginal <= 0) return;
+
+    if (editingDebt) {
+      const nuevoSaldo = Math.max(0, Number(formDeudaSaldoActual));
+      const estadoFinal: "Activa" | "Liquidada" = nuevoSaldo === 0 ? "Liquidada" : formDeudaEstado;
+
+      const updatedDebt: FinancialDebt = {
+        ...editingDebt,
+        acreedor: formDeudaAcreedor.trim(),
+        concepto: formDeudaConcepto.trim() || "Deuda registrada",
+        montoOriginal: Number(formDeudaMontoOriginal),
+        saldoActual: nuevoSaldo,
+        vencimiento: formDeudaVencimiento,
+        pagoMinimo: Number(formDeudaPagoMinimo) || Math.round(Number(formDeudaMontoOriginal) * 0.2),
+        prioridad: formDeudaPrioridad,
+        estado: estadoFinal,
+        notas: formDeudaNotas.trim() || undefined,
+      };
+
+      setDebts((prev) => prev.map((d) => (d.id === editingDebt.id ? updatedDebt : d)));
+
+      try {
+        await setDoc(doc(db, "finanzas_deudas", updatedDebt.id), updatedDebt);
+      } catch (err) {
+        console.error("Error al actualizar deuda en Firestore", err);
+      }
+
+      setIsDeudaModalOpen(false);
+      setEditingDebt(null);
+      playChime("tick");
+      setActionFeedback(`Deuda con ${updatedDebt.acreedor} actualizada exitosamente.`);
+      setTimeout(() => setActionFeedback(null), 3000);
+
+      setFormDeudaAcreedor("");
+      setFormDeudaConcepto("");
+      setFormDeudaNotas("");
+      return;
+    }
 
     const newDebt: FinancialDebt = {
       id: `deb-${Date.now()}`,
@@ -2042,11 +2128,8 @@ export default function SaludFinancieraOS({
               <button
                 type="button"
                 id="btn-nueva-deuda-modal"
-                onClick={() => {
-                  setIsDeudaModalOpen(true);
-                  playChime("tick");
-                }}
-                className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 font-bold text-xs transition"
+                onClick={handleOpenCreateDeuda}
+                className="px-3.5 py-2 rounded-2xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-800 dark:text-stone-200 font-bold text-xs transition cursor-pointer"
               >
                 + Nueva Deuda
               </button>
@@ -2062,7 +2145,7 @@ export default function SaludFinancieraOS({
                   setIsPagarDeudaModalOpen(true);
                   playChime("tick");
                 }}
-                className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition flex items-center gap-1.5 shadow-md"
+                className="px-4 py-2 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs transition flex items-center gap-1.5 shadow-md cursor-pointer"
               >
                 <CreditCard size={15} />
                 <span>Registrar Pago / Abono</span>
@@ -2107,13 +2190,36 @@ export default function SaludFinancieraOS({
                       <p className="text-xs text-stone-500 dark:text-stone-400">{d.concepto}</p>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-[10px] font-bold text-stone-400 block uppercase">
-                        Saldo Actual
-                      </span>
-                      <span className="font-mono font-black text-lg text-stone-900 dark:text-stone-100">
-                        ${d.saldoActual.toLocaleString("es-MX")}
-                      </span>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditDeuda(d)}
+                          className="p-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:border-blue-400 dark:hover:border-blue-500 text-stone-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                          title="Editar información de esta deuda"
+                          aria-label={`Editar deuda con ${d.acreedor}`}
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDebtToDelete(d)}
+                          className="p-1.5 rounded-xl border border-stone-200 dark:border-stone-700 hover:border-rose-400 dark:hover:border-rose-500 text-stone-500 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                          title="Eliminar esta deuda"
+                          aria-label={`Eliminar deuda con ${d.acreedor}`}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-stone-400 block uppercase">
+                          Saldo Actual
+                        </span>
+                        <span className="font-mono font-black text-lg text-stone-900 dark:text-stone-100">
+                          ${d.saldoActual.toLocaleString("es-MX")}
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -2148,7 +2254,7 @@ export default function SaludFinancieraOS({
                   </div>
 
                   {/* Botones de Acción */}
-                  <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-stone-800">
+                  <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
                     {!isLiquidada ? (
                       <button
                         type="button"
@@ -2157,17 +2263,37 @@ export default function SaludFinancieraOS({
                           setPagoDeudaMonto(d.pagoMinimo || d.saldoActual);
                           setIsPagarDeudaModalOpen(true);
                         }}
-                        className="w-full py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition flex items-center justify-center gap-1.5 shadow-xs"
+                        className="flex-1 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-xs transition flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                       >
                         <CreditCard size={13} />
-                        <span>Abonar a esta Deuda</span>
+                        <span>Abonar</span>
                       </button>
                     ) : (
-                      <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                      <span className="flex-1 text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 size={14} />
                         <span>Completamente saldada</span>
                       </span>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditDeuda(d)}
+                      className="px-3 py-2 rounded-xl border border-stone-200 dark:border-stone-700 hover:bg-stone-100 dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                      title="Editar parámetros de la deuda"
+                    >
+                      <Edit2 size={12} />
+                      <span>Editar</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setDebtToDelete(d)}
+                      className="p-2 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition flex items-center justify-center cursor-pointer"
+                      title="Eliminar esta deuda"
+                      aria-label="Eliminar deuda"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </div>
 
                   {/* Historial de Pagos de la Deuda */}
@@ -3115,15 +3241,34 @@ export default function SaludFinancieraOS({
         </div>
       )}
 
-      {/* MODAL 4: NUEVA DEUDA */}
+      {/* MODAL 4: NUEVA / EDITAR DEUDA */}
       {isDeudaModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3 border-stone-100 dark:border-stone-800">
-              <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
-                Registrar Nueva Deuda o Crédito
-              </h4>
-              <button onClick={() => setIsDeudaModalOpen(false)} className="text-stone-400">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-xl bg-blue-100 dark:bg-blue-950 text-blue-600 text-sm">
+                  💳
+                </span>
+                <div>
+                  <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                    {editingDebt ? "Editar Deuda o Crédito" : "Registrar Nueva Deuda o Crédito"}
+                  </h4>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    {editingDebt
+                      ? `Modifica los términos, saldo o vencimiento de la deuda con ${editingDebt.acreedor}`
+                      : "Planifica la amortización de pasivos y créditos comerciales o personales"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsDeudaModalOpen(false);
+                  setEditingDebt(null);
+                }}
+                className="text-stone-400 hover:text-stone-600 p-1 cursor-pointer"
+              >
                 ✕
               </button>
             </div>
@@ -3169,7 +3314,10 @@ export default function SaludFinancieraOS({
                     onChange={(e) => {
                       const val = Number(e.target.value) || 0;
                       setFormDeudaMontoOriginal(val);
-                      if (formDeudaPagoMinimo === 0) setFormDeudaPagoMinimo(Math.round(val * 0.2));
+                      if (!editingDebt) {
+                        setFormDeudaSaldoActual(val);
+                        if (formDeudaPagoMinimo === 0) setFormDeudaPagoMinimo(Math.round(val * 0.2));
+                      }
                     }}
                     className="w-full px-3.5 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 border-none font-mono font-black text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-blue-500"
                   />
@@ -3188,6 +3336,38 @@ export default function SaludFinancieraOS({
                   />
                 </div>
               </div>
+
+              {/* Campos especiales en edición: ajuste manual de saldo y estado */}
+              {editingDebt && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-2xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40">
+                  <div>
+                    <label className="font-bold text-amber-900 dark:text-amber-200 block mb-1">
+                      Saldo Actual Pendiente ($): *
+                    </label>
+                    <input
+                      type="number"
+                      required
+                      min={0}
+                      value={formDeudaSaldoActual}
+                      onChange={(e) => setFormDeudaSaldoActual(Number(e.target.value) || 0)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-stone-800 border border-amber-300 dark:border-amber-700 font-mono font-black text-amber-700 dark:text-amber-300 outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="font-bold text-amber-900 dark:text-amber-200 block mb-1">
+                      Estado de la Deuda:
+                    </label>
+                    <select
+                      value={formDeudaEstado}
+                      onChange={(e) => setFormDeudaEstado(e.target.value as any)}
+                      className="w-full px-3.5 py-2 rounded-xl bg-white dark:bg-stone-800 border border-amber-300 dark:border-amber-700 font-bold text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="Activa">⏳ Activa (Pendiente de pago)</option>
+                      <option value="Liquidada">🏆 Liquidada (Completamente pagada)</option>
+                    </select>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -3232,22 +3412,111 @@ export default function SaludFinancieraOS({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsDeudaModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-black shadow-md cursor-pointer"
-                >
-                  Guardar Deuda
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                {editingDebt ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const d = editingDebt;
+                      setIsDeudaModalOpen(false);
+                      setEditingDebt(null);
+                      setDebtToDelete(d);
+                    }}
+                    className="px-3 py-2 rounded-xl text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/50 font-bold text-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="Eliminar esta deuda"
+                  >
+                    <Trash2 size={13} />
+                    <span>Eliminar Deuda</span>
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDeudaModalOpen(false);
+                      setEditingDebt(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black shadow-md cursor-pointer transition flex items-center gap-1.5"
+                  >
+                    {editingDebt ? <Edit2 size={13} /> : <Plus size={13} />}
+                    <span>{editingDebt ? "Guardar Cambios" : "Guardar Deuda"}</span>
+                  </button>
+                </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4.5: CONFIRMAR ELIMINAR DEUDA */}
+      {debtToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-rose-200 dark:border-rose-900/50 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                  ¿Eliminar esta deuda?
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  {debtToDelete.acreedor} • {debtToDelete.concepto}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-stone-400">Saldo pendiente:</span>
+                <span className="font-bold text-stone-800 dark:text-stone-200">
+                  ${debtToDelete.saldoActual.toLocaleString("es-MX")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-400">Monto original:</span>
+                <span className="text-stone-600 dark:text-stone-400">
+                  ${debtToDelete.montoOriginal.toLocaleString("es-MX")}
+                </span>
+              </div>
+              {debtToDelete.historialPagos && debtToDelete.historialPagos.length > 0 && (
+                <div className="flex justify-between text-emerald-600 font-bold">
+                  <span>Abonos registrados:</span>
+                  <span>{debtToDelete.historialPagos.length} pago(s)</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              Esta acción quitará la deuda de tu tablero financiero y recalculará automáticamente tus métricas de endeudamiento.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setDebtToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteDeuda(debtToDelete)}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Sí, Eliminar Deuda</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
