@@ -31,6 +31,7 @@ export interface FieldMapping {
   grupo?: string;
   zona?: string;
   driveUrl?: string;
+  elaboradoDigital?: string;
   pagado?: string;
   cuadernillos?: string;
   audio?: string;
@@ -70,6 +71,7 @@ export interface SolicitudImportItem {
   email?: string;
   driveUrl?: string;
   notas?: string;
+  elaboradoDigital: boolean;
   pagado: boolean;
   cuadernillos: boolean;
   audio: boolean;
@@ -278,6 +280,14 @@ export function autoDetectFieldMapping(
       "enlace",
       "archivo drive",
     ]);
+    mapping.elaboradoDigital = findBest([
+      "elaborado",
+      "hecho",
+      "diseno",
+      "diseño",
+      "digital hecho",
+      "elaborado digital",
+    ]);
     mapping.pagado = findBest([
       "pagado",
       "pago",
@@ -451,6 +461,7 @@ export function buildSolicitudesFromRows(
     const driveUrl = rawDrive.trim() || undefined;
     const notas = rawNotas.trim() || undefined;
 
+    const elaboradoDigital = mapping.elaboradoDigital ? parseBooleanValue(row[mapping.elaboradoDigital]) : false;
     const pagado = mapping.pagado ? parseBooleanValue(row[mapping.pagado]) : false;
     const cuadernillos = mapping.cuadernillos ? parseBooleanValue(row[mapping.cuadernillos]) : false;
     const audio = mapping.audio ? parseBooleanValue(row[mapping.audio]) : false;
@@ -485,6 +496,7 @@ export function buildSolicitudesFromRows(
       email,
       driveUrl,
       notas,
+      elaboradoDigital,
       pagado,
       cuadernillos,
       audio,

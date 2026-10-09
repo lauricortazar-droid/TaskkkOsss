@@ -395,7 +395,8 @@ export default function ReconocimientoFormModal({
           driveUrl: d.driveUrl?.trim() || null,
           notas: notas.trim() || null,
           timestamp: serverTimestamp(),
-          // 6 flags de control para Laura:
+          // Flags de control operativo para Laura:
+          elaboradoDigital: false,
           pagado: false,
           cuadernillos: false,
           audio: false,

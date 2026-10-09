@@ -343,6 +343,7 @@ export default function DriveDatabaseImportModal({
               email: item.email || null,
               driveUrl: item.driveUrl || null,
               notas: item.notas ? `[Importado de Drive] ${item.notas}` : "[Importado de Drive]",
+              elaboradoDigital: isHistorial ? true : Boolean(item.elaboradoDigital),
               pagado: isHistorial ? true : item.pagado,
               cuadernillos: isHistorial ? true : item.cuadernillos,
               audio: isHistorial ? true : item.audio,
