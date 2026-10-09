@@ -51,6 +51,8 @@ import {
   ChevronRight,
   ChevronDown,
   X,
+  FileBadge,
+  Award,
 } from "lucide-react";
 import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
 import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
@@ -95,7 +97,8 @@ export interface ReconocimientoRecord {
   updatedAt?: string;
   entregadoAt?: string;
 
-  // The 6 key tracking checkmarks for Laura:
+  // Seguimiento operativo para Laura:
+  elaboradoDigital: boolean;
   pagado: boolean;
   cuadernillos: boolean;
   audio: boolean;
@@ -245,6 +248,9 @@ export default function ReconocimientosOS({
   const [historyMonth, setHistoryMonth] = useState<string>("todos");
   const [historySearch, setHistorySearch] = useState<string>("");
 
+  // Retroalimentación visual inmediata con animación CSS al hacer clic en botones de estatus
+  const [animatingBtnKey, setAnimatingBtnKey] = useState<string | null>(null);
+
   // Modal para ver / editar enlace a Google Drive
   const [driveModalRecord, setDriveModalRecord] = useState<ReconocimientoRecord | null>(null);
   const [editDriveUrl, setEditDriveUrl] = useState("");
@@ -328,6 +334,7 @@ export default function ReconocimientosOS({
             ...val,
             id: matchedKey,
             solicitudId: val.solicitudId || matchedKey,
+            elaboradoDigital: base.elaboradoDigital || val.elaboradoDigital,
             pagado: base.pagado || val.pagado,
             cuadernillos: base.cuadernillos || val.cuadernillos,
             audio: base.audio || val.audio,
@@ -372,6 +379,7 @@ export default function ReconocimientosOS({
           uniqueList.push({ ...item });
         } else {
           const existing = uniqueList[existingIdx];
+          existing.elaboradoDigital = existing.elaboradoDigital || item.elaboradoDigital;
           existing.pagado = existing.pagado || item.pagado;
           existing.cuadernillos = existing.cuadernillos || item.cuadernillos;
           existing.audio = existing.audio || item.audio;
@@ -414,6 +422,7 @@ export default function ReconocimientosOS({
             createdAt: d.createdAt || new Date().toISOString(),
             updatedAt: d.updatedAt || undefined,
             entregadoAt: d.entregadoAt || undefined,
+            elaboradoDigital: Boolean(d.elaboradoDigital),
             pagado: Boolean(d.pagado),
             cuadernillos: Boolean(d.cuadernillos),
             audio: Boolean(d.audio),
@@ -455,6 +464,7 @@ export default function ReconocimientosOS({
               createdAt: d.createdAt || new Date().toISOString(),
               updatedAt: d.updatedAt || undefined,
               entregadoAt: d.entregadoAt || undefined,
+              elaboradoDigital: Boolean(d.elaboradoDigital),
               pagado: Boolean(d.pagado),
               cuadernillos: Boolean(d.cuadernillos),
               audio: Boolean(d.audio),
@@ -488,12 +498,17 @@ export default function ReconocimientosOS({
     };
   }, []);
 
-  // 2. Toggle one of the 6 tracking fields with instant Firestore sync in both collections
+  // 2. Toggle tracking fields with instant Firestore sync in both collections
   const handleToggleStatus = async (
     record: ReconocimientoRecord,
-    field: "pagado" | "cuadernillos" | "audio" | "digital" | "impreso" | "entregado"
+    field: "elaboradoDigital" | "pagado" | "cuadernillos" | "audio" | "digital" | "impreso" | "entregado"
   ) => {
     const nextVal = !record[field];
+    const clickKey = `${record.id}-${field}`;
+    setAnimatingBtnKey(clickKey);
+    setTimeout(() => {
+      setAnimatingBtnKey((curr) => (curr === clickKey ? null : curr));
+    }, 450);
     playChime("tick");
 
     // Optimistic UI update
@@ -892,6 +907,8 @@ export default function ReconocimientosOS({
       if (filterPago === "pendientes" && r.pagado) return false;
 
       // Special status filter
+      if (filterStatus === "pend_elaborado" && r.elaboradoDigital) return false;
+      if (filterStatus === "hecho_digital" && !r.elaboradoDigital) return false;
       if (filterStatus === "pend_cuadernillos" && r.cuadernillos) return false;
       if (filterStatus === "pend_audio" && r.audio) return false;
       if (filterStatus === "pend_digital" && r.digital) return false;
@@ -996,6 +1013,7 @@ export default function ReconocimientosOS({
           email: a.email,
           notas: a.notas,
           createdAt: a.createdAt || (a.fechaRegistro ? new Date(a.fechaRegistro).toISOString() : new Date().toISOString()),
+          elaboradoDigital: false,
           pagado: Boolean(a.contactadoWhatsApp),
           cuadernillos: false,
           audio: false,
@@ -1044,6 +1062,7 @@ export default function ReconocimientosOS({
   // 7. Computed Stats
   const stats = useMemo(() => {
     const total = records.length;
+    const elaboradoDigitalCount = records.filter((r) => r.elaboradoDigital).length;
     const pagadosCount = records.filter((r) => r.pagado).length;
     const totalRecaudado = records.filter((r) => r.pagado).reduce((acc, r) => acc + (r.costo || 0), 0);
     const totalPorCobrar = records.filter((r) => !r.pagado).reduce((acc, r) => acc + (r.costo || 0), 0);
@@ -1055,6 +1074,7 @@ export default function ReconocimientosOS({
 
     return {
       total,
+      elaboradoDigitalCount,
       pagadosCount,
       totalRecaudado,
       totalPorCobrar,
@@ -1137,6 +1157,14 @@ export default function ReconocimientosOS({
   const chartDataStages = useMemo(() => {
     const total = records.length;
     return [
+      {
+        estado: "Elaborado Digital",
+        label: "Rec. Digital Hecho",
+        completadas: stats.elaboradoDigitalCount,
+        pendientes: Math.max(0, total - stats.elaboradoDigitalCount),
+        porcentaje: total > 0 ? Math.round((stats.elaboradoDigitalCount / total) * 100) : 0,
+        color: "#0891b2",
+      },
       {
         estado: "Pagado",
         label: "Pagado",
@@ -1379,6 +1407,7 @@ export default function ReconocimientosOS({
       "Rol",
       "Grupo",
       "Zona",
+      "RecDigitalElaborado",
       "Estado Pago",
       "Pagado",
       "Cuadernillos",
@@ -1408,6 +1437,7 @@ export default function ReconocimientosOS({
       escapeCSV(r.rol),
       escapeCSV(r.grupo),
       escapeCSV(r.zona),
+      escapeCSV(r.elaboradoDigital ? "SI" : "NO"),
       escapeCSV(r.pagado ? "PAGADO" : "PENDIENTE"),
       escapeCSV(r.pagado ? "SI" : "NO"),
       escapeCSV(r.cuadernillos ? "SI" : "NO"),
@@ -2077,11 +2107,12 @@ export default function ReconocimientosOS({
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white/70 dark:bg-stone-900/70 rounded-xl">
           <button
             type="button"
+            id="tab-btn-seguimiento-operativo"
             onClick={() => {
               setActiveView("dashboard");
               playChime("tick");
             }}
-            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+            className={`px-4 py-2 rounded-xl text-xs font-black transition-transform duration-150 transform flex items-center gap-2 cursor-pointer btn-seguimiento-operativo-scale active:scale-95 hover:scale-[1.03] ${
               activeView === "dashboard"
                 ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/20"
                 : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
@@ -2459,8 +2490,8 @@ export default function ReconocimientosOS({
         </div>
       </div>
 
-      {/* 6 Key Tracking Metric KPI Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      {/* 7 Key Tracking Metric KPI Cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
         
         {/* KPI 1: Total Alumnos */}
         <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
@@ -2472,6 +2503,20 @@ export default function ReconocimientosOS({
             {stats.total}
           </div>
           <span className="text-[10px] text-stone-400 font-medium">Registros en Firestore</span>
+        </div>
+
+        {/* KPI: Rec. Digital Elaborado */}
+        <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
+          <div className="flex items-center justify-between text-stone-500 text-xs">
+            <span>Rec. Digital</span>
+            <FileBadge size={14} className="text-cyan-600 dark:text-cyan-400" />
+          </div>
+          <div className="text-2xl font-black text-cyan-600 dark:text-cyan-400">
+            {stats.elaboradoDigitalCount} <span className="text-xs text-stone-400 font-bold">/ {stats.total}</span>
+          </div>
+          <span className="text-[10px] text-stone-400 font-medium">
+            {stats.total - stats.elaboradoDigitalCount} pendientes de hacer
+          </span>
         </div>
 
         {/* KPI 2: Pagados */}
@@ -2780,9 +2825,11 @@ export default function ReconocimientosOS({
               className="px-3 py-1.5 rounded-2xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs font-bold text-stone-700 dark:text-stone-200 focus:outline-hidden"
             >
               <option value="todos">Todos los Estados</option>
+              <option value="pend_elaborado">Pendiente de Elaborar Digital</option>
+              <option value="hecho_digital">Reconocimiento Digital Elaborado</option>
               <option value="pend_cuadernillos">Pendiente de Cuadernillos</option>
               <option value="pend_audio">Pendiente de Audio</option>
-              <option value="pend_digital">Pendiente de Digital</option>
+              <option value="pend_digital">Pendiente de Enviar Digital</option>
               <option value="pend_impresion">Pendiente de Impresión</option>
               <option value="listos_entrega">Listos para Entrega</option>
               <option value="entregados">Completados / Entregados</option>
@@ -2858,12 +2905,13 @@ export default function ReconocimientosOS({
                   <th className="py-3 px-4">Alumno / Rol</th>
                   <th className="py-3 px-3">Grupo & Zona</th>
                   <th className="py-3 px-3">Año & Tipo</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya pagó el alumno?">1. Pagado</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya mandó los cuadernillos?">2. Cuadernillos</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya mandó el audio?">3. Audio</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya se le mandó el reconocimiento digital?">4. Digital</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya se imprimió físicamente?">5. Impreso</th>
-                  <th className="py-3 px-2 text-center" title="¿Ya se le entregó?">6. Entregado</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya se elaboró el reconocimiento de manera digital (aunque no se haya enviado)?">1. Rec. Hecho</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya pagó el alumno?">2. Pagado</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya mandó los cuadernillos?">3. Cuadernillos</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya mandó el audio?">4. Audio</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya se le mandó el reconocimiento digital?">5. Digital</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya se imprimió físicamente?">6. Impreso</th>
+                  <th className="py-3 px-2 text-center" title="¿Ya se le entregó?">7. Entregado</th>
                   <th className="py-3 px-4 text-right">Acciones</th>
                 </tr>
               </thead>
@@ -2919,12 +2967,42 @@ export default function ReconocimientosOS({
                         </div>
                       </td>
 
+                      {/* CHECK OPERATIVO: RECONOCIMIENTO DIGITAL ELABORADO (ANTES DE PAGO) */}
+                      <td className="py-3.5 px-2 text-center">
+                        <button
+                          type="button"
+                          aria-label="Seguimiento Operativo: Reconocimiento digital"
+                          onClick={() => handleToggleStatus(r, "elaboradoDigital")}
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-elaboradoDigital`
+                              ? "animate-scale-feedback ring-2 ring-cyan-400 shadow-md"
+                              : ""
+                          } ${
+                            r.elaboradoDigital
+                              ? "bg-cyan-600 border-cyan-700 text-white shadow-cyan-500/20"
+                              : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-cyan-400"
+                          }`}
+                          title={
+                            r.elaboradoDigital
+                              ? "Seguimiento Operativo: Reconocimiento digital elaborado / listo (Clic para desmarcar)"
+                              : "Seguimiento Operativo: Pendiente de elaborar reconocimiento digital (Clic para marcar como hecho)"
+                          }
+                        >
+                          <FileBadge size={15} />
+                        </button>
+                      </td>
+
                       {/* CHECK 1: PAGADO */}
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Pago"
                           onClick={() => handleToggleStatus(r, "pagado")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-pagado`
+                              ? "animate-scale-feedback ring-2 ring-emerald-400 shadow-md"
+                              : ""
+                          } ${
                             r.pagado
                               ? "bg-emerald-500 border-emerald-600 text-white shadow-emerald-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-emerald-400"
@@ -2939,8 +3017,13 @@ export default function ReconocimientosOS({
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Cuadernillos"
                           onClick={() => handleToggleStatus(r, "cuadernillos")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-cuadernillos`
+                              ? "animate-scale-feedback ring-2 ring-blue-400 shadow-md"
+                              : ""
+                          } ${
                             r.cuadernillos
                               ? "bg-blue-600 border-blue-700 text-white shadow-blue-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-blue-400"
@@ -2955,8 +3038,13 @@ export default function ReconocimientosOS({
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Audio"
                           onClick={() => handleToggleStatus(r, "audio")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-audio`
+                              ? "animate-scale-feedback ring-2 ring-amber-400 shadow-md"
+                              : ""
+                          } ${
                             r.audio
                               ? "bg-amber-500 border-amber-600 text-stone-950 font-black shadow-amber-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-amber-400"
@@ -2971,8 +3059,13 @@ export default function ReconocimientosOS({
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Digital"
                           onClick={() => handleToggleStatus(r, "digital")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-digital`
+                              ? "animate-scale-feedback ring-2 ring-indigo-400 shadow-md"
+                              : ""
+                          } ${
                             r.digital
                               ? "bg-indigo-600 border-indigo-700 text-white shadow-indigo-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-indigo-400"
@@ -2987,8 +3080,13 @@ export default function ReconocimientosOS({
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Impreso"
                           onClick={() => handleToggleStatus(r, "impreso")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-impreso`
+                              ? "animate-scale-feedback ring-2 ring-purple-400 shadow-md"
+                              : ""
+                          } ${
                             r.impreso
                               ? "bg-purple-600 border-purple-700 text-white shadow-purple-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-purple-400"
@@ -3003,8 +3101,13 @@ export default function ReconocimientosOS({
                       <td className="py-3.5 px-2 text-center">
                         <button
                           type="button"
+                          aria-label="Seguimiento Operativo: Entregado"
                           onClick={() => handleToggleStatus(r, "entregado")}
-                          className={`p-2 rounded-xl border text-xs font-bold transition-all shadow-2xs active:scale-90 ${
+                          className={`p-2 rounded-xl border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                            animatingBtnKey === `${r.id}-entregado`
+                              ? "animate-scale-feedback ring-2 ring-teal-400 shadow-md"
+                              : ""
+                          } ${
                             r.entregado
                               ? "bg-teal-600 border-teal-700 text-white shadow-teal-500/20"
                               : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-teal-400"
@@ -3724,6 +3827,7 @@ export default function ReconocimientosOS({
                       <th className="py-3 px-4">Hora & Medio de Registro</th>
                       <th className="py-3 px-4">Solicitante / Participante</th>
                       <th className="py-3 px-4">Diplomado & Gen</th>
+                      <th className="py-3 px-2 text-center" title="¿Ya se elaboró el reconocimiento digital (aunque no se haya enviado)?">Rec. Dig.</th>
                       <th className="py-3 px-2 text-center" title="Pago Confirmado">Pago</th>
                       <th className="py-3 px-2 text-center" title="Cuadernillos">Cuad.</th>
                       <th className="py-3 px-2 text-center" title="Audio">Audio</th>
@@ -3791,12 +3895,42 @@ export default function ReconocimientosOS({
                           </div>
                         </td>
 
-                        {/* 6 Checks */}
+                        {/* Check Operativo: Reconocimiento Digital Elaborado (Antes de Pago) */}
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Reconocimiento digital"
+                            onClick={() => handleToggleStatus(r, "elaboradoDigital")}
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-elaboradoDigital`
+                                ? "animate-scale-feedback ring-2 ring-cyan-400 shadow-md"
+                                : ""
+                            } ${
+                              r.elaboradoDigital
+                                ? "bg-cyan-600 border-cyan-700 text-white shadow-cyan-500/20"
+                                : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400 hover:border-cyan-400"
+                            }`}
+                            title={
+                              r.elaboradoDigital
+                                ? "Seguimiento Operativo: Reconocimiento digital elaborado / listo (Clic para desmarcar)"
+                                : "Seguimiento Operativo: Pendiente de elaborar reconocimiento digital (Clic para marcar como hecho)"
+                            }
+                          >
+                            <FileBadge size={13} />
+                          </button>
+                        </td>
+
+                        {/* Checks Operativos */}
+                        <td className="py-3 px-2 text-center">
+                          <button
+                            type="button"
+                            aria-label="Seguimiento Operativo: Pago"
                             onClick={() => handleToggleStatus(r, "pagado")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-pagado`
+                                ? "animate-scale-feedback ring-2 ring-emerald-400 shadow-md"
+                                : ""
+                            } ${
                               r.pagado
                                 ? "bg-emerald-500 border-emerald-600 text-white"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
@@ -3810,8 +3944,13 @@ export default function ReconocimientosOS({
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Cuadernillos"
                             onClick={() => handleToggleStatus(r, "cuadernillos")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-cuadernillos`
+                                ? "animate-scale-feedback ring-2 ring-blue-400 shadow-md"
+                                : ""
+                            } ${
                               r.cuadernillos
                                 ? "bg-blue-600 border-blue-700 text-white"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
@@ -3825,8 +3964,13 @@ export default function ReconocimientosOS({
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Audio"
                             onClick={() => handleToggleStatus(r, "audio")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-audio`
+                                ? "animate-scale-feedback ring-2 ring-amber-400 shadow-md"
+                                : ""
+                            } ${
                               r.audio
                                 ? "bg-amber-500 border-amber-600 text-stone-950 font-black"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
@@ -3840,8 +3984,13 @@ export default function ReconocimientosOS({
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Digital"
                             onClick={() => handleToggleStatus(r, "digital")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-digital`
+                                ? "animate-scale-feedback ring-2 ring-indigo-400 shadow-md"
+                                : ""
+                            } ${
                               r.digital
                                 ? "bg-indigo-600 border-indigo-700 text-white"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
@@ -3855,8 +4004,13 @@ export default function ReconocimientosOS({
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Impreso"
                             onClick={() => handleToggleStatus(r, "impreso")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-impreso`
+                                ? "animate-scale-feedback ring-2 ring-emerald-400 shadow-md"
+                                : ""
+                            } ${
                               r.impreso
                                 ? "bg-emerald-600 border-emerald-700 text-white"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
@@ -3870,8 +4024,13 @@ export default function ReconocimientosOS({
                         <td className="py-3 px-2 text-center">
                           <button
                             type="button"
+                            aria-label="Seguimiento Operativo: Entregado"
                             onClick={() => handleToggleStatus(r, "entregado")}
-                            className={`p-1.5 rounded-lg border text-xs font-bold transition shadow-2xs active:scale-90 ${
+                            className={`p-1.5 rounded-lg border text-xs font-bold shadow-2xs btn-seguimiento-operativo-scale cursor-pointer ${
+                              animatingBtnKey === `${r.id}-entregado`
+                                ? "animate-scale-feedback ring-2 ring-purple-400 shadow-md"
+                                : ""
+                            } ${
                               r.entregado
                                 ? "bg-purple-600 border-purple-700 text-white"
                                 : "bg-stone-100 dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-400"
