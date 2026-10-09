@@ -56,7 +56,7 @@ import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSe
 import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
 import WhatsAppComposerModal from "./WhatsAppComposerModal";
 import ReconocimientoFormModal from "./ReconocimientoFormModal";
-import PublicReconocimientosImpresosModal from "./PublicReconocimientosImpresosModal";
+import PublicReconocimientosImpresosModal, { formatNombrePrimerApellido } from "./PublicReconocimientosImpresosModal";
 import { ImportTarget } from "../utils/driveImportParser";
 import {
   ResponsiveContainer,
@@ -180,8 +180,17 @@ export default function ReconocimientosOS({
   const [filterPago, setFilterPago] = useState<"todos" | "pagados" | "pendientes">("todos");
   const [filterStatus, setFilterStatus] = useState<string>("todos");
 
-  // View Mode: Dashboard | En Vivo | Tablero Impresos & Drive | Pendientes | Historial
-  const [activeView, setActiveView] = useState<"dashboard" | "pendientes" | "historial" | "en_vivo" | "impresos">("dashboard");
+  // View Mode: Dashboard | Graduados | En Vivo | Tablero Impresos & Drive | Pendientes | Historial
+  const [activeView, setActiveView] = useState<"dashboard" | "graduados" | "pendientes" | "historial" | "en_vivo" | "impresos">("dashboard");
+
+  // Estados específicos para el Tablero Visual de GRADUADOS
+  const [graduadosYearFilter, setGraduadosYearFilter] = useState<string>("todos");
+  const [graduadosSearchQuery, setGraduadosSearchQuery] = useState("");
+  const [graduadosDriveFilter, setGraduadosDriveFilter] = useState<"todos" | "con_drive" | "sin_drive">("todos");
+  const [copiedGraduadosNotice, setCopiedGraduadosNotice] = useState(false);
+  const [editingGraduadoDriveRecordId, setEditingGraduadoDriveRecordId] = useState<string | null>(null);
+  const [editingGraduadoDriveUrl, setEditingGraduadoDriveUrl] = useState("");
+  const [isSavingGraduadoDrive, setIsSavingGraduadoDrive] = useState(false);
 
   // Selección múltiple para eliminar varios registros o aplicar cambios en lote
   const [selectedRecordIds, setSelectedRecordIds] = useState<string[]>([]);
@@ -1505,6 +1514,198 @@ export default function ReconocimientosOS({
     playChime("tick");
   };
 
+  // =========================================================
+  // TABLERO VISUAL DE GRADUADOS (2022 - 2025 - 2026)
+  // Agrupado por Alumno: Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
+  // =========================================================
+  const graduadosBoardList = useMemo(() => {
+    const map = new Map<string, {
+      key: string;
+      nombreOriginal: string;
+      nombreFormateado: string;
+      primerApellido: string;
+      grupo: string;
+      zona: string;
+      rol: string;
+      telefono?: string;
+      email?: string;
+      diplomas: Array<{
+        id: string;
+        diplomado: string;
+        year: string;
+        tipoImpresion: string;
+        costo: number;
+        impreso: boolean;
+        digital: boolean;
+        entregado: boolean;
+        pagado: boolean;
+        driveUrl?: string;
+        folio?: string;
+      }>;
+      yearsList: string[];
+      yearsSummary: string;
+      singleLineDisplay: string;
+      hasAnyDrive: boolean;
+      driveCount: number;
+    }>();
+
+    records.forEach((r) => {
+      const rawName = (r.nombre || "").trim();
+      if (!rawName) return;
+      const normKey = rawName
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, "");
+
+      const { formattedName, primerApellido } = formatNombrePrimerApellido(rawName);
+
+      if (!map.has(normKey)) {
+        map.set(normKey, {
+          key: normKey,
+          nombreOriginal: rawName,
+          nombreFormateado: formattedName,
+          primerApellido,
+          grupo: r.grupo || "G-1",
+          zona: r.zona || "General",
+          rol: r.rol || "Alumno",
+          telefono: r.telefono,
+          email: r.email,
+          diplomas: [],
+          yearsList: [],
+          yearsSummary: "",
+          singleLineDisplay: "",
+          hasAnyDrive: false,
+          driveCount: 0,
+        });
+      }
+
+      const item = map.get(normKey)!;
+      if (!item.telefono && r.telefono) item.telefono = r.telefono;
+      if (!item.email && r.email) item.email = r.email;
+      if (r.grupo && (item.grupo === "G-1" || !item.grupo)) item.grupo = r.grupo;
+      if (r.zona && (item.zona === "General" || !item.zona)) item.zona = r.zona;
+
+      item.diplomas.push({
+        id: r.id,
+        diplomado: r.diplomado || "Diplomado de Liderazgo",
+        year: r.year || "2026",
+        tipoImpresion: r.tipoImpresion || "Primera Impresión",
+        costo: r.costo || 50,
+        impreso: Boolean(r.impreso),
+        digital: Boolean(r.digital),
+        entregado: Boolean(r.entregado),
+        pagado: Boolean(r.pagado),
+        driveUrl: r.driveUrl,
+        folio: r.folio,
+      });
+    });
+
+    const list: any[] = [];
+    map.forEach((item) => {
+      item.diplomas.sort((a, b) => a.year.localeCompare(b.year));
+      const years = Array.from(new Set(item.diplomas.map((d: any) => d.year))).sort((a: any, b: any) => a.localeCompare(b));
+      item.yearsList = years;
+      item.yearsSummary = years.join(" - ") || "2026";
+      item.singleLineDisplay = `- ${item.nombreFormateado} ${item.grupo} ${item.zona} Diplomas: ${item.yearsSummary}`;
+      item.driveCount = item.diplomas.filter((d: any) => Boolean(d.driveUrl && d.driveUrl.trim())).length;
+      item.hasAnyDrive = item.driveCount > 0;
+      list.push(item);
+    });
+
+    return list.sort((a, b) => a.nombreOriginal.localeCompare(b.nombreOriginal));
+  }, [records]);
+
+  // Lista de años disponibles asegurando 2022, 2025 y 2026
+  const graduadosAvailableYears = useMemo(() => {
+    const yearsSet = new Set<string>(["2022", "2025", "2026"]);
+    graduadosBoardList.forEach((g) => {
+      g.yearsList.forEach((y: string) => yearsSet.add(y));
+    });
+    return Array.from(yearsSet).sort((a, b) => b.localeCompare(a));
+  }, [graduadosBoardList]);
+
+  // Filtrado de graduados para el Tablero Visual
+  const filteredGraduadosList = useMemo(() => {
+    return graduadosBoardList.filter((g) => {
+      // Filtro por año
+      if (graduadosYearFilter !== "todos") {
+        if (!g.yearsList.includes(graduadosYearFilter)) {
+          return false;
+        }
+      }
+
+      // Filtro por Drive
+      if (graduadosDriveFilter === "con_drive" && !g.hasAnyDrive) return false;
+      if (graduadosDriveFilter === "sin_drive" && g.hasAnyDrive) return false;
+
+      // Buscador por nombre o apellidos
+      if (graduadosSearchQuery.trim()) {
+        const q = graduadosSearchQuery.toLowerCase().trim();
+        const matchOriginal = g.nombreOriginal.toLowerCase().includes(q);
+        const matchFormat = g.nombreFormateado.toLowerCase().includes(q);
+        const matchApellido = g.primerApellido.toLowerCase().includes(q);
+        const matchGrupo = g.grupo.toLowerCase().includes(q);
+        const matchZona = g.zona.toLowerCase().includes(q);
+        const matchSingle = g.singleLineDisplay.toLowerCase().includes(q);
+        const matchDiplomas = g.diplomas.some(
+          (d: any) => d.diplomado.toLowerCase().includes(q) || d.year.includes(q)
+        );
+        if (!matchOriginal && !matchFormat && !matchApellido && !matchGrupo && !matchZona && !matchSingle && !matchDiplomas) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [graduadosBoardList, graduadosYearFilter, graduadosDriveFilter, graduadosSearchQuery]);
+
+  // Guardar link de Google Drive (Laura lo agrega o modifica directamente)
+  const handleSaveGraduadoDriveUrl = async (recordId: string, url: string) => {
+    const cleanUrl = url.trim();
+    setIsSavingGraduadoDrive(true);
+    try {
+      await Promise.allSettled([
+        updateDoc(doc(db, "reconocimientos", recordId), {
+          driveUrl: cleanUrl,
+          updatedAt: new Date().toISOString(),
+        }),
+        updateDoc(doc(db, "solicitudes", recordId), {
+          driveUrl: cleanUrl,
+          updatedAt: new Date().toISOString(),
+        }),
+      ]);
+
+      setRecords((prev) =>
+        prev.map((r) => (r.id === recordId ? { ...r, driveUrl: cleanUrl } : r))
+      );
+      setEditingGraduadoDriveRecordId(null);
+      setEditingGraduadoDriveUrl("");
+      playChime("success");
+    } catch (err) {
+      console.error("Error saving Drive link:", err);
+      alert("No se pudo guardar el enlace de Drive en Firestore.");
+    } finally {
+      setIsSavingGraduadoDrive(false);
+    }
+  };
+
+  // Copiar lista de GRADUADOS formateada:
+  // GRADUADOS
+  // - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
+  const handleCopyGraduadosFormattedList = () => {
+    if (filteredGraduadosList.length === 0) return;
+    const lines = [
+      "GRADUADOS",
+      ...filteredGraduadosList.map((g) => g.singleLineDisplay),
+    ].join("\n");
+
+    navigator.clipboard.writeText(lines);
+    setCopiedGraduadosNotice(true);
+    playChime("tick");
+    setTimeout(() => setCopiedGraduadosNotice(false), 3000);
+  };
+
   // Renderizar fila en el Tablero de Impresos con campo editable de Google Drive
   const renderImpresoRow = (r: ReconocimientoRecord) => {
     const isSelected = selectedRecordIds.includes(r.id);
@@ -1871,7 +2072,7 @@ export default function ReconocimientosOS({
         </div>
       </div>
 
-      {/* SELECTOR DE VISTAS: SEGUIMIENTO OPERATIVO VS HISTORIAL DE ENTREGADOS (SOLO INTERNO) */}
+      {/* SELECTOR DE VISTAS: SEGUIMIENTO OPERATIVO VS GRADUADOS VS HISTORIAL */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-2 bg-stone-100 dark:bg-stone-800/90 rounded-2xl border border-stone-200 dark:border-stone-700 shadow-xs">
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-white/70 dark:bg-stone-900/70 rounded-xl">
           <button
@@ -1894,6 +2095,31 @@ export default function ReconocimientosOS({
                 : "bg-stone-200 dark:bg-stone-700 text-stone-700 dark:text-stone-300"
             }`}>
               {records.length}
+            </span>
+          </button>
+
+          {/* TABLERO VISUAL DE GRADUADOS */}
+          <button
+            type="button"
+            id="tab-btn-graduados"
+            onClick={() => {
+              setActiveView("graduados");
+              playChime("tick");
+            }}
+            className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
+              activeView === "graduados"
+                ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm ring-2 ring-indigo-500/20"
+                : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
+            }`}
+          >
+            <GraduationCap size={15} />
+            <span>Tablero Graduados</span>
+            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+              activeView === "graduados"
+                ? "bg-white/20 text-white"
+                : "bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300"
+            }`}>
+              {graduadosBoardList.length}
             </span>
           </button>
 
@@ -1996,6 +2222,11 @@ export default function ReconocimientosOS({
         <div className="flex items-center gap-2 px-3 text-xs text-stone-500 dark:text-stone-400 font-medium">
           {activeView === "dashboard" ? (
             <span>Modo operativo con control de pagos, audios, cuadernillos y entrega en vivo.</span>
+          ) : activeView === "graduados" ? (
+            <span className="flex items-center gap-1.5 text-indigo-700 dark:text-indigo-300 font-bold">
+              <GraduationCap size={14} />
+              <span>Tablero de GRADUADOS con filtro por año (2022, 2025, 2026), buscador y enlaces a Google Drive</span>
+            </span>
           ) : activeView === "en_vivo" ? (
             <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-bold">
               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
@@ -2865,6 +3096,479 @@ export default function ReconocimientosOS({
 
       </div>
       </>
+      )}
+
+      {/* VISTA: TABLERO VISUAL DE GRADUADOS (2022, 2025, 2026) */}
+      {activeView === "graduados" && (
+        <div id="tablero-graduados-view" className="space-y-6 animate-in fade-in duration-200">
+          
+          {/* Header Banner de Graduados */}
+          <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950 text-white shadow-xl relative overflow-hidden border border-indigo-500/40">
+            <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="p-2 rounded-2xl bg-white/10 backdrop-blur-md text-white text-xl flex items-center justify-center">
+                    🎓
+                  </span>
+                  <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-amber-400 text-stone-950 font-mono shadow-xs">
+                    OFICIAL • GRADUADOS
+                  </span>
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/10 text-indigo-200 border border-white/20">
+                    Diplomas: 2022 - 2025 - 2026
+                  </span>
+                </div>
+                <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
+                  Tablero Visual de Graduados
+                </h3>
+                <p className="text-xs sm:text-sm text-indigo-100 max-w-2xl leading-relaxed">
+                  Directorio de graduados con reconocimientos impresos vinculados a Google Drive.
+                  Laura agrega o actualiza el enlace público de Drive en cualquier momento sin que el alumno deba configurar nada.
+                </p>
+              </div>
+
+              {/* Botones de acción rápida en cabecera */}
+              <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+                <button
+                  type="button"
+                  id="btn-copiar-lista-graduados"
+                  onClick={handleCopyGraduadosFormattedList}
+                  className="px-4 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 backdrop-blur-md border border-white/30 text-white font-bold text-xs transition flex items-center gap-2 shadow-xs active:scale-95 cursor-pointer"
+                  title="Copiar lista de graduados formateada (- Nombre (primer apellido)...)"
+                >
+                  {copiedGraduadosNotice ? (
+                    <>
+                      <Check size={14} className="text-emerald-400" />
+                      <span className="text-emerald-300 font-black">¡Lista Copiada!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} />
+                      <span>Copiar Formato Oficial</span>
+                    </>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowPublicDrivePreviewModal(true)}
+                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-stone-950 font-black text-xs transition flex items-center gap-2 shadow-md active:scale-95 cursor-pointer"
+                  title="Ver modal público de graduados"
+                >
+                  <Eye size={14} />
+                  <span>Ver Portal Público</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer border border-white/20"
+                  title="Registrar nuevo alumno o diploma"
+                >
+                  <Plus size={14} />
+                  <span>Nuevo</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Barra de Filtros: Buscador por Nombre, Botones por Año (2022, 2025, 2026), y Filtro Drive */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm space-y-4">
+            
+            <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              {/* Buscador por Nombre */}
+              <div className="relative flex-1">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input
+                  type="text"
+                  id="search-graduados-input"
+                  value={graduadosSearchQuery}
+                  onChange={(e) => setGraduadosSearchQuery(e.target.value)}
+                  placeholder="Buscar graduado por nombre, primer apellido, grupo, zona o diplomado..."
+                  className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 border-none text-xs sm:text-sm font-medium text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-stone-400"
+                />
+                {graduadosSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setGraduadosSearchQuery("")}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 dark:hover:text-stone-200"
+                  >
+                    <X size={15} />
+                  </button>
+                )}
+              </div>
+
+              {/* Filtro de Drive */}
+              <div className="flex items-center gap-1.5 p-1 bg-stone-100 dark:bg-stone-800 rounded-2xl shrink-0">
+                <span className="text-[11px] font-bold text-stone-400 px-2 uppercase tracking-wider">
+                  Drive:
+                </span>
+                {[
+                  { key: "todos", label: "Todos" },
+                  { key: "con_drive", label: "Con Link 📁" },
+                  { key: "sin_drive", label: "Sin Link ⏳" },
+                ].map((f) => (
+                  <button
+                    key={f.key}
+                    type="button"
+                    onClick={() => {
+                      setGraduadosDriveFilter(f.key as any);
+                      playChime("tick");
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                      graduadosDriveFilter === f.key
+                        ? "bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs"
+                        : "text-stone-500 hover:text-stone-900 dark:hover:text-stone-200"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* BOTONES DE FILTRO POR AÑO: 2022, 2025, 2026 */}
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <span className="text-xs font-extrabold uppercase tracking-wider text-stone-400 mr-1 flex items-center gap-1.5">
+                <Calendar size={13} />
+                <span>Filtrar por Año:</span>
+              </span>
+
+              {/* Botón Todos */}
+              <button
+                type="button"
+                onClick={() => {
+                  setGraduadosYearFilter("todos");
+                  playChime("tick");
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                  graduadosYearFilter === "todos"
+                    ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-950 shadow-xs"
+                    : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200"
+                }`}
+              >
+                <span>Todos los Años</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  graduadosYearFilter === "todos"
+                    ? "bg-white/20 text-white dark:bg-stone-900/20 dark:text-stone-900"
+                    : "bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300"
+                }`}>
+                  {graduadosBoardList.length}
+                </span>
+              </button>
+
+              {/* Botones para años 2022, 2025, 2026 y otros */}
+              {graduadosAvailableYears.map((year) => {
+                const countForYear = graduadosBoardList.filter((g) => g.yearsList.includes(year)).length;
+                const isSelected = graduadosYearFilter === year;
+
+                // Color personalizado por año
+                let colorClass = "bg-indigo-600 text-white";
+                let badgeSelectedClass = "bg-white/20 text-white";
+                if (year === "2022") {
+                  colorClass = "bg-amber-600 text-white shadow-amber-500/20";
+                } else if (year === "2025") {
+                  colorClass = "bg-blue-600 text-white shadow-blue-500/20";
+                } else if (year === "2026") {
+                  colorClass = "bg-purple-600 text-white shadow-purple-500/20";
+                }
+
+                return (
+                  <button
+                    key={year}
+                    type="button"
+                    onClick={() => {
+                      setGraduadosYearFilter(year);
+                      playChime("tick");
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition flex items-center gap-1.5 cursor-pointer ${
+                      isSelected
+                        ? `${colorClass} shadow-xs ring-2 ring-indigo-500/20`
+                        : "bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-750"
+                    }`}
+                  >
+                    <span>Generación {year}</span>
+                    <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      isSelected
+                        ? badgeSelectedClass
+                        : "bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-300"
+                    }`}>
+                      {countForYear}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Fila de Estadísticas Rápidas */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2 border-t border-stone-100 dark:border-stone-800 text-xs">
+              <div className="p-2.5 rounded-2xl bg-stone-50 dark:bg-stone-800/50">
+                <span className="text-[10px] font-bold text-stone-400 block uppercase">Graduados Mostrados</span>
+                <span className="font-mono font-black text-sm text-stone-900 dark:text-stone-100">
+                  {filteredGraduadosList.length}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30">
+                <span className="text-[10px] font-bold text-indigo-500 block uppercase">Con Enlace Drive</span>
+                <span className="font-mono font-black text-sm text-indigo-700 dark:text-indigo-300">
+                  {filteredGraduadosList.filter((g) => g.hasAnyDrive).length}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-amber-50/60 dark:bg-amber-950/30">
+                <span className="text-[10px] font-bold text-amber-600 block uppercase">Diplomas 2022</span>
+                <span className="font-mono font-black text-sm text-amber-700 dark:text-amber-300">
+                  {filteredGraduadosList.flatMap((g) => g.diplomas).filter((d: any) => d.year === "2022").length}
+                </span>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-purple-50/60 dark:bg-purple-950/30">
+                <span className="text-[10px] font-bold text-purple-600 block uppercase">Diplomas 2025 - 2026</span>
+                <span className="font-mono font-black text-sm text-purple-700 dark:text-purple-300">
+                  {filteredGraduadosList.flatMap((g) => g.diplomas).filter((d: any) => d.year === "2025" || d.year === "2026").length}
+                </span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* TABLERO VISUAL: LISTA DE GRADUADOS */}
+          {filteredGraduadosList.length === 0 ? (
+            <div className="p-12 text-center bg-white dark:bg-stone-900 rounded-3xl border border-stone-200 dark:border-stone-800 space-y-3">
+              <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                🎓
+              </div>
+              <h4 className="text-base font-black text-stone-900 dark:text-stone-100">
+                No se encontraron graduados con los filtros seleccionados
+              </h4>
+              <p className="text-xs text-stone-500 dark:text-stone-400 max-w-md mx-auto">
+                Prueba cambiando el año de filtro ({graduadosYearFilter}) o borrando la búsqueda "{graduadosSearchQuery}".
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setGraduadosYearFilter("todos");
+                  setGraduadosSearchQuery("");
+                  setGraduadosDriveFilter("todos");
+                }}
+                className="px-4 py-2 rounded-xl bg-indigo-600 text-white font-bold text-xs hover:bg-indigo-700 transition"
+              >
+                Restablecer todos los filtros
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4">
+              {filteredGraduadosList.map((g, idx) => (
+                <div
+                  key={g.key + "-" + idx}
+                  className="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs hover:shadow-md transition-all space-y-4"
+                >
+                  {/* Encabezado Principal que se ve como botón según el requerimiento del usuario:
+                      GRADUADOS
+                      - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
+                  */}
+                  <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-stone-850 dark:via-stone-800 dark:to-stone-850 border border-indigo-100 dark:border-stone-700 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-md bg-indigo-600 text-white font-black text-[10px] uppercase tracking-wider font-mono shadow-2xs">
+                          GRADUADOS
+                        </span>
+                        <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400">
+                          {g.rol} • Zona {g.zona}
+                        </span>
+                        {g.hasAnyDrive && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 font-bold text-[10px] flex items-center gap-1">
+                            <CheckCircle2 size={11} />
+                            <span>Drive Listo</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {/* TEXTO EXACTO DE UNA LÍNEA FORMATEADO */}
+                      <p className="text-sm sm:text-base font-black font-mono text-stone-900 dark:text-stone-100 select-all leading-snug">
+                        {g.singleLineDisplay}
+                      </p>
+                    </div>
+
+                    {/* Acciones de copia rápida para el formato */}
+                    <div className="flex items-center gap-1.5 self-start sm:self-center shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(g.singleLineDisplay);
+                          playChime("tick");
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold border border-stone-200 dark:border-stone-600 hover:bg-stone-50 dark:hover:bg-stone-650 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                        title="Copiar línea formateada para circular o reporte"
+                      >
+                        <Copy size={12} />
+                        <span>Copiar Línea</span>
+                      </button>
+
+                      {g.telefono && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const driveLink = g.diplomas.find((d: any) => d.driveUrl)?.driveUrl;
+                            const msg = driveLink
+                              ? `Hola ${g.nombreOriginal}, aquí tienes el enlace oficial a Google Drive de tu reconocimiento: ${driveLink}`
+                              : `Hola ${g.nombreOriginal}, te confirmamos tu participación en el diplomado (${g.yearsSummary}). Tu reconocimiento ya está en proceso de impresión.`;
+                            const url = buildWhatsAppUrl(g.telefono!, msg);
+                            window.open(url, "_blank");
+                          }}
+                          className="p-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 hover:bg-emerald-100 transition border border-emerald-200/60"
+                          title="Enviar WhatsApp al graduado"
+                        >
+                          <MessageCircle size={14} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Detalle de Diplomas y Enlaces a Google Drive de este Graduado */}
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-black uppercase tracking-wider text-stone-400 block">
+                      Reconocimientos y Enlaces a Google Drive:
+                    </span>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {g.diplomas.map((d: any, dIdx: number) => {
+                        const isEditingDrive = editingGraduadoDriveRecordId === d.id;
+                        const hasDrive = Boolean(d.driveUrl && d.driveUrl.trim());
+
+                        // Year badge colors
+                        let yearBadgeColor = "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300";
+                        if (d.year === "2022") yearBadgeColor = "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
+                        if (d.year === "2025") yearBadgeColor = "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
+                        if (d.year === "2026") yearBadgeColor = "bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300";
+
+                        return (
+                          <div
+                            key={d.id + "-" + dIdx}
+                            className="p-3.5 rounded-2xl border border-stone-200 dark:border-stone-800 bg-stone-50/70 dark:bg-stone-850 space-y-2.5 transition"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-black ${yearBadgeColor}`}>
+                                    {d.year}
+                                  </span>
+                                  <span className="text-[11px] font-bold text-stone-500">
+                                    {d.tipoImpresion} (${d.costo})
+                                  </span>
+                                </div>
+                                <h5 className="font-bold text-xs sm:text-sm text-stone-900 dark:text-stone-100">
+                                  {d.diplomado}
+                                </h5>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0">
+                                {d.impreso ? (
+                                  <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px] font-bold" title="Reconocimiento físico impreso">
+                                    🖨️ Impreso
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-md bg-stone-200 dark:bg-stone-700 text-stone-600 dark:text-stone-400 text-[10px]">
+                                    Por imprimir
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Sección Enlace Google Drive (El graduado lo mira; Laura lo agrega/edita) */}
+                            {isEditingDrive ? (
+                              <div className="p-2.5 rounded-xl bg-white dark:bg-stone-900 border border-indigo-200 dark:border-indigo-800 space-y-2">
+                                <label className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400 block">
+                                  Agregar / Modificar enlace público de Google Drive:
+                                </label>
+                                <input
+                                  type="url"
+                                  value={editingGraduadoDriveUrl}
+                                  onChange={(e) => setEditingGraduadoDriveUrl(e.target.value)}
+                                  placeholder="https://drive.google.com/file/d/..."
+                                  className="w-full px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-xs font-mono text-stone-900 dark:text-stone-100 outline-none focus:ring-2 focus:ring-indigo-500"
+                                />
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingGraduadoDriveRecordId(null);
+                                      setEditingGraduadoDriveUrl("");
+                                    }}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-bold text-stone-500 hover:bg-stone-100 dark:hover:bg-stone-800"
+                                  >
+                                    Cancelar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={isSavingGraduadoDrive}
+                                    onClick={() => handleSaveGraduadoDriveUrl(d.id, editingGraduadoDriveUrl)}
+                                    className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                                  >
+                                    {isSavingGraduadoDrive ? "Guardando..." : "Guardar en Drive"}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-stone-200/60 dark:border-stone-800">
+                                {hasDrive ? (
+                                  <div className="flex items-center gap-2">
+                                    <a
+                                      href={d.driveUrl}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs shadow-xs transition transform active:scale-95 cursor-pointer"
+                                      title="Abrir reconocimiento digital en Google Drive"
+                                    >
+                                      <ExternalLink size={13} />
+                                      <span>Ver Reconocimiento Digital (Drive)</span>
+                                    </a>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        navigator.clipboard.writeText(d.driveUrl!);
+                                        playChime("tick");
+                                      }}
+                                      className="p-1.5 rounded-lg bg-stone-200 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-300 transition text-xs cursor-pointer"
+                                      title="Copiar enlace de Drive"
+                                    >
+                                      <Copy size={13} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1">
+                                    <Clock size={12} />
+                                    <span>Sin enlace Drive asignado aún</span>
+                                  </span>
+                                )}
+
+                                {/* Botón para que Laura agregue o modifique el enlace del Drive */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingGraduadoDriveRecordId(d.id);
+                                    setEditingGraduadoDriveUrl(d.driveUrl || "");
+                                  }}
+                                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                  title="Laura agregará o modificará el link de Drive"
+                                >
+                                  <Edit2 size={11} />
+                                  <span>{hasDrive ? "Editar Link" : "+ Agregar Link Drive"}</span>
+                                </button>
+                              </div>
+                            )}
+
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          )}
+
+        </div>
       )}
 
       {/* VISTA: REGISTRO EN VIVO (TODOS LOS MEDIOS - DEL MÁS NUEVO AL MÁS VIEJO) */}

@@ -167,6 +167,23 @@ service cloud.firestore {
       allow create, read, update, delete: if true;
     }
 
+    // Salud Financiera (Gastos, Ingresos, Deudas y Gastos Fijos)
+    match /finanzas_gastos/{id} {
+      allow create, read, update, delete: if true;
+    }
+
+    match /finanzas_ingresos/{id} {
+      allow create, read, update, delete: if true;
+    }
+
+    match /finanzas_deudas/{id} {
+      allow create, read, update, delete: if true;
+    }
+
+    match /finanzas_fijos/{id} {
+      allow create, read, update, delete: if true;
+    }
+
     // Device pairing pin codes
     match /pair_codes/{codeId} {
       allow create, update, read, delete: if isValidId(codeId);

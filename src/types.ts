@@ -435,6 +435,50 @@ export interface LonasOrder {
    MI SALUD FINANCIERA TYPES (Flujo de Efectivo, Disponible Real, Deudas)
 ========================================================= */
 export type AccountType = "Efectivo" | "Cuenta Bancaria" | "Tarjeta Débito" | "Billetera Digital" | "Ahorro";
+export type ExpenseType = "Fijo" | "Variable";
+export type PaymentMethodType = "Efectivo" | "Tarjeta" | "Transferencia";
+
+export interface FinancialExpense {
+  id: string;
+  fecha: string; // YYYY-MM-DD
+  articulo: string; // Artículo / concepto del gasto
+  tipo: ExpenseType; // Fijo o Variable
+  referencia: string; // Factura, ticket, folio, referencia bancaria
+  metodo: PaymentMethodType; // Efectivo / Tarjeta / Transferencia
+  monto: number;
+  categoria: string; // Renta, Servicios, Comida, Insumos, etc.
+  notas?: string;
+  cuentaId?: string;
+  deudaId?: string;
+  createdAt?: string;
+}
+
+export interface FinancialIncomeItem {
+  id: string;
+  fecha: string; // YYYY-MM-DD
+  articulo: string; // Concepto o artículo del ingreso
+  monto: number;
+  tipo?: string; // Venta, Anticipo, Salario, etc.
+  categoria: string;
+  metodo: PaymentMethodType; // Efectivo / Tarjeta / Transferencia
+  referencia: string;
+  notas?: string;
+  estado: "Recibido" | "Esperado";
+  cuentaId?: string;
+  createdAt?: string;
+}
+
+export interface FinancialFixedExpenseConfig {
+  id: string;
+  concepto: string;
+  monto: number;
+  diaVencimiento: number; // Día del mes (1 al 31)
+  categoria: string;
+  metodo: PaymentMethodType;
+  referencia?: string;
+  activo: boolean;
+  notas?: string;
+}
 
 export interface FinancialAccount {
   id: string;
@@ -460,7 +504,9 @@ export interface FinancialDebtPayment {
   id: string;
   fecha: string;
   monto: number;
-  cuentaOrigenId: string;
+  cuentaOrigenId?: string;
+  metodo?: PaymentMethodType;
+  referencia?: string;
   nota?: string;
 }
 
