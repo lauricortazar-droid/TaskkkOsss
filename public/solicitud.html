@@ -69,15 +69,53 @@
           <p class="text-xs sm:text-sm text-gray-500">Módulo oficial de registro y expedición de diplomas • Universidad FGDLL</p>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex flex-wrap items-center gap-2 justify-center sm:justify-end">
         <span id="authStatusBadge" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
           <i class="fa-solid fa-circle-notch fa-spin text-[10px]"></i> Conectando...
         </span>
+
+        <!-- Botón Oficial GRADUADOS Solicitado en la parte superior -->
+        <button
+          type="button"
+          id="btnOpenGraduadosModal"
+          class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white text-xs sm:text-sm font-black shadow-md shadow-indigo-500/25 transition-all transform active:scale-95 cursor-pointer ring-2 ring-indigo-400/40"
+          title="Ver lista de GRADUADOS con reconocimientos impresos y enlaces de Google Drive"
+        >
+          <i class="fa-solid fa-graduation-cap text-amber-300"></i>
+          <span>GRADUADOS</span>
+          <span id="graduadosCountBadge" class="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-white/20 text-white">...</span>
+        </button>
+
         <a href="/" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold transition shadow-sm">
           <i class="fa-solid fa-arrow-left"></i> Volver a Task-OS
         </a>
       </div>
     </header>
+
+    <!-- Banner Destacado: GRADUADOS (2022 • 2025 • 2026) -->
+    <div class="mb-6 p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950 text-white shadow-lg border border-indigo-500/40 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5 text-center sm:text-left">
+        <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-xs flex items-center justify-center text-2xl text-amber-300 shrink-0 border border-white/20 shadow-inner">
+          <i class="fa-solid fa-graduation-cap"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2 justify-center sm:justify-start">
+            <span class="text-[11px] font-black uppercase tracking-wider text-amber-300">Lista Oficial de Reconocimientos Impresos</span>
+            <span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/20 text-white">2022 • 2025 • 2026</span>
+          </div>
+          <h2 class="text-base sm:text-lg font-black text-white">Tablero de GRADUADOS con Enlace a Google Drive</h2>
+          <p class="text-xs text-indigo-200 mt-0.5">Consulta si tu diploma ya fue impreso y accede directamente a tu reconocimiento digital público.</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        id="btnBannerGraduados"
+        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-gray-950 font-black text-xs sm:text-sm shadow-md transition-all transform active:scale-95 flex items-center justify-center gap-2 shrink-0 cursor-pointer uppercase tracking-wider"
+      >
+        <i class="fa-solid fa-graduation-cap"></i>
+        <span>Ver Lista de GRADUADOS</span>
+      </button>
+    </div>
 
     <!-- Main 3-Column Grid (2 cols for form, 1 col for recent list) -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
@@ -537,6 +575,170 @@
 
     </div>
 
+  </div>
+
+  <!-- MODAL OFICIAL: TABLERO VISUAL DE GRADUADOS (2022 • 2025 • 2026) -->
+  <div id="graduadosModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5" role="dialog" aria-modal="true" aria-labelledby="graduadosModalTitle">
+    <div class="relative bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-gray-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
+      
+      <!-- Header del Modal -->
+      <div class="bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950 p-5 sm:p-6 text-white relative flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3.5">
+          <div class="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-2xl text-amber-300 border border-white/20 shadow-md shrink-0">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="px-2.5 py-0.5 rounded-full bg-amber-400/30 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                Lista Oficial
+              </span>
+              <span id="graduadosModalCountPill" class="px-2 py-0.5 rounded-full bg-white/20 text-white text-[10px] font-bold">
+                Cargando...
+              </span>
+            </div>
+            <h2 id="graduadosModalTitle" class="text-xl sm:text-2xl font-black text-white tracking-tight mt-0.5">
+              GRADUADOS
+            </h2>
+            <p class="text-xs text-indigo-200 leading-relaxed mt-0.5">
+              Lista de reconocimientos que ya imprimí ligados al link de Drive donde pueden mirar su reconocimiento digital en modo público.
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          id="btnCloseGraduadosModal"
+          class="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition cursor-pointer shrink-0"
+          title="Cerrar ventana"
+        >
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Barra de Filtros, Búsqueda y Acciones -->
+      <div class="p-4 sm:p-5 bg-gray-50 border-b border-gray-200 space-y-3">
+        
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <!-- Filtro por Años (2022, 2025, 2026, Todos) -->
+          <div class="flex flex-wrap items-center gap-1.5" id="graduadosYearFilterContainer">
+            <span class="text-xs font-bold text-gray-500 mr-1 flex items-center gap-1">
+              <i class="fa-solid fa-filter text-[10px]"></i> Año:
+            </span>
+            <button
+              type="button"
+              data-year="todos"
+              class="grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-xs cursor-pointer transition"
+            >
+              Todos
+            </button>
+            <button
+              type="button"
+              data-year="2026"
+              class="grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 cursor-pointer transition"
+            >
+              2026
+            </button>
+            <button
+              type="button"
+              data-year="2025"
+              class="grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 cursor-pointer transition"
+            >
+              2025
+            </button>
+            <button
+              type="button"
+              data-year="2022"
+              class="grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 cursor-pointer transition"
+            >
+              2022
+            </button>
+          </div>
+
+          <!-- Botón de Copiar Lista Oficial y Filtro Drive -->
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              id="btnFilterOnlyDrive"
+              class="px-2.5 py-1.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Filtrar por reconocimientos con Google Drive disponible"
+            >
+              <i class="fa-solid fa-cloud text-indigo-600"></i>
+              <span id="btnFilterOnlyDriveText">Con Drive</span>
+            </button>
+
+            <button
+              type="button"
+              id="btnCopyGraduadosList"
+              class="px-3.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200 text-xs font-black shadow-2xs transition flex items-center gap-1.5 cursor-pointer"
+              title="Copiar lista en formato: - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026"
+            >
+              <i class="fa-regular fa-copy text-indigo-600"></i>
+              <span id="btnCopyGraduadosText">Copiar Formato</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Buscador por Nombre y Primer Apellido -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+          <input
+            type="text"
+            id="graduadosSearchInput"
+            placeholder="Buscar por nombre, primer apellido, grupo o zona..."
+            class="w-full pl-9 pr-9 py-2.5 rounded-xl border border-gray-300 bg-white text-xs font-semibold text-gray-900 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition shadow-2xs"
+          />
+          <button
+            type="button"
+            id="btnClearGraduadosSearch"
+            class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs cursor-pointer p-1"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Notificación de lista copiada -->
+        <div id="graduadosCopyAlert" class="hidden p-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+          <i class="fa-solid fa-circle-check text-emerald-600"></i>
+          <span>¡Lista copiada al portapapeles con formato oficial: - Nombre (primer apellido) Grupo Zona Diplomas: ...!</span>
+        </div>
+
+      </div>
+
+      <!-- Lista Scrollable de Graduados -->
+      <div id="graduadosListContainer" class="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3 divide-y divide-gray-100">
+        <!-- Estado inicial de carga -->
+        <div id="graduadosLoadingState" class="py-12 text-center text-gray-500 space-y-3">
+          <i class="fa-solid fa-circle-notch fa-spin text-2xl text-indigo-600"></i>
+          <p class="text-xs font-semibold">Cargando lista de graduados y enlaces a Google Drive...</p>
+        </div>
+
+        <!-- Estado vacío -->
+        <div id="graduadosEmptyState" class="hidden py-12 text-center text-gray-400 space-y-3">
+          <div class="w-12 h-12 rounded-2xl bg-gray-100 flex items-center justify-center text-xl text-gray-400 mx-auto">
+            <i class="fa-solid fa-graduation-cap"></i>
+          </div>
+          <p class="text-xs font-semibold">No se encontraron graduados con los filtros seleccionados.</p>
+        </div>
+
+        <!-- Contenedor dinámico de tarjetas -->
+        <div id="graduadosCardsGrid" class="space-y-3"></div>
+      </div>
+
+      <!-- Footer del Modal -->
+      <div class="p-4 bg-gray-50 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-500">
+        <div class="flex items-center gap-2">
+          <i class="fa-solid fa-circle-info text-indigo-600"></i>
+          <span>Formato: <strong>- Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026</strong></span>
+        </div>
+        <button
+          type="button"
+          id="btnBottomCloseGraduadosModal"
+          class="w-full sm:w-auto px-5 py-2 rounded-xl bg-gray-900 hover:bg-black text-white font-bold transition cursor-pointer"
+        >
+          Cerrar
+        </button>
+      </div>
+
+    </div>
   </div>
 
   <!-- FIREBASE SDK V11 (Módulos vía CDN) & APLICACIÓN JS -->
@@ -1064,6 +1266,429 @@
       } catch (err) {
         console.warn("Failed to attach snapshot listener:", err);
       }
+    }
+
+    // =========================================================
+    // MÓDULO OFICIAL: TABLERO VISUAL DE GRADUADOS (2022 • 2025 • 2026)
+    // Agrupado por alumno:
+    // - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
+    // =========================================================
+
+    const graduadosModal = document.getElementById("graduadosModal");
+    const btnOpenGraduadosModal = document.getElementById("btnOpenGraduadosModal");
+    const btnBannerGraduados = document.getElementById("btnBannerGraduados");
+    const btnCloseGraduadosModal = document.getElementById("btnCloseGraduadosModal");
+    const btnBottomCloseGraduadosModal = document.getElementById("btnBottomCloseGraduadosModal");
+    const graduadosCountBadge = document.getElementById("graduadosCountBadge");
+    const graduadosModalCountPill = document.getElementById("graduadosModalCountPill");
+    const graduadosSearchInput = document.getElementById("graduadosSearchInput");
+    const btnClearGraduadosSearch = document.getElementById("btnClearGraduadosSearch");
+    const btnFilterOnlyDrive = document.getElementById("btnFilterOnlyDrive");
+    const btnFilterOnlyDriveText = document.getElementById("btnFilterOnlyDriveText");
+    const btnCopyGraduadosList = document.getElementById("btnCopyGraduadosList");
+    const graduadosCopyAlert = document.getElementById("graduadosCopyAlert");
+    const graduadosCardsGrid = document.getElementById("graduadosCardsGrid");
+    const graduadosLoadingState = document.getElementById("graduadosLoadingState");
+    const graduadosEmptyState = document.getElementById("graduadosEmptyState");
+
+    let graduadosList = [];
+    let currentGradYearFilter = "todos";
+    let currentGradSearch = "";
+    let currentOnlyDrive = false;
+
+    // Formatear nombre resaltando primer apellido entre paréntesis
+    function formatNombrePrimerApellido(nombre) {
+      const clean = (nombre || "").trim();
+      const parts = clean.split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return { formattedName: "Estudiante", primerApellido: "" };
+      if (parts.length === 1) return { formattedName: parts[0], primerApellido: parts[0] };
+      if (parts.length === 2) return { formattedName: `${parts[0]} (${parts[1]})`, primerApellido: parts[1] };
+      if (parts.length === 3) {
+        const compound = ["juan", "jose", "josé", "maria", "maría", "ana", "luis", "carlos", "edgar", "jorge", "pedro", "miguel"];
+        if (compound.includes(parts[0].toLowerCase())) {
+          return { formattedName: `${parts[0]} ${parts[1]} (${parts[2]})`, primerApellido: parts[2] };
+        }
+        return { formattedName: `${parts[0]} (${parts[1]}) ${parts[2]}`, primerApellido: parts[1] };
+      }
+      const primerApellido = parts[parts.length - 2];
+      const nombres = parts.slice(0, parts.length - 2).join(" ");
+      const segundoApellido = parts[parts.length - 1];
+      return {
+        formattedName: `${nombres} (${primerApellido}) ${segundoApellido}`,
+        primerApellido
+      };
+    }
+
+    function openGraduadosModal() {
+      if (!graduadosModal) return;
+      graduadosModal.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+      if (graduadosSearchInput) graduadosSearchInput.focus();
+    }
+
+    function closeGraduadosModal() {
+      if (!graduadosModal) return;
+      graduadosModal.classList.add("hidden");
+      document.body.style.overflow = "";
+    }
+
+    window.openGraduadosModal = openGraduadosModal;
+    window.closeGraduadosModal = closeGraduadosModal;
+
+    if (btnOpenGraduadosModal) btnOpenGraduadosModal.addEventListener("click", openGraduadosModal);
+    if (btnBannerGraduados) btnBannerGraduados.addEventListener("click", openGraduadosModal);
+    if (btnCloseGraduadosModal) btnCloseGraduadosModal.addEventListener("click", closeGraduadosModal);
+    if (btnBottomCloseGraduadosModal) btnBottomCloseGraduadosModal.addEventListener("click", closeGraduadosModal);
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && graduadosModal && !graduadosModal.classList.contains("hidden")) {
+        closeGraduadosModal();
+      }
+    });
+
+    if (graduadosModal) {
+      graduadosModal.addEventListener("click", (e) => {
+        if (e.target === graduadosModal) closeGraduadosModal();
+      });
+    }
+
+    // Filtros por Año
+    document.querySelectorAll(".grad-year-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".grad-year-btn").forEach((b) => {
+          b.className = "grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 cursor-pointer transition";
+        });
+        btn.className = "grad-year-btn px-3 py-1.5 rounded-xl text-xs font-extrabold bg-indigo-600 text-white shadow-xs cursor-pointer transition";
+        currentGradYearFilter = btn.dataset.year || "todos";
+        renderGraduados();
+      });
+    });
+
+    // Filtro Sólo con Drive
+    if (btnFilterOnlyDrive) {
+      btnFilterOnlyDrive.addEventListener("click", () => {
+        currentOnlyDrive = !currentOnlyDrive;
+        if (currentOnlyDrive) {
+          btnFilterOnlyDrive.className = "px-2.5 py-1.5 rounded-xl border border-indigo-500 bg-indigo-50 text-indigo-900 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs";
+          btnFilterOnlyDriveText.textContent = "Con Drive ✓";
+        } else {
+          btnFilterOnlyDrive.className = "px-2.5 py-1.5 rounded-xl border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs";
+          btnFilterOnlyDriveText.textContent = "Con Drive";
+        }
+        renderGraduados();
+      });
+    }
+
+    // Buscador en Vivo
+    if (graduadosSearchInput) {
+      graduadosSearchInput.addEventListener("input", (e) => {
+        currentGradSearch = e.target.value.toLowerCase().trim();
+        if (btnClearGraduadosSearch) {
+          if (currentGradSearch) btnClearGraduadosSearch.classList.remove("hidden");
+          else btnClearGraduadosSearch.classList.add("hidden");
+        }
+        renderGraduados();
+      });
+    }
+
+    if (btnClearGraduadosSearch) {
+      btnClearGraduadosSearch.addEventListener("click", () => {
+        graduadosSearchInput.value = "";
+        currentGradSearch = "";
+        btnClearGraduadosSearch.classList.add("hidden");
+        renderGraduados();
+        graduadosSearchInput.focus();
+      });
+    }
+
+    // Copiar Lista Oficial Completa en el formato solicitado
+    if (btnCopyGraduadosList) {
+      btnCopyGraduadosList.addEventListener("click", () => {
+        const filtered = getFilteredGraduados();
+        if (filtered.length === 0) return;
+        const textToCopy = filtered.map((g) => g.singleLineDisplay).join("\n");
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(textToCopy).then(() => {
+            if (graduadosCopyAlert) {
+              graduadosCopyAlert.classList.remove("hidden");
+              setTimeout(() => graduadosCopyAlert.classList.add("hidden"), 3500);
+            }
+          });
+        }
+      });
+    }
+
+    function getFilteredGraduados() {
+      return graduadosList.filter((item) => {
+        // Filtro por año
+        if (currentGradYearFilter !== "todos") {
+          if (!item.yearsList.includes(currentGradYearFilter)) return false;
+        }
+        // Filtro por Drive
+        if (currentOnlyDrive && !item.hasAnyDrive) {
+          return false;
+        }
+        // Filtro por búsqueda
+        if (currentGradSearch) {
+          const matchName = item.nombreOriginal.toLowerCase().includes(currentGradSearch);
+          const matchApellido = item.primerApellido.toLowerCase().includes(currentGradSearch);
+          const matchGrupo = item.grupo.toLowerCase().includes(currentGradSearch);
+          const matchZona = item.zona.toLowerCase().includes(currentGradSearch);
+          if (!matchName && !matchApellido && !matchGrupo && !matchZona) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderGraduados() {
+      if (!graduadosCardsGrid) return;
+      const filtered = getFilteredGraduados();
+
+      if (graduadosLoadingState) graduadosLoadingState.classList.add("hidden");
+      
+      if (filtered.length === 0) {
+        graduadosCardsGrid.innerHTML = "";
+        if (graduadosEmptyState) graduadosEmptyState.classList.remove("hidden");
+        if (graduadosModalCountPill) graduadosModalCountPill.textContent = "0 Graduados";
+        return;
+      }
+
+      if (graduadosEmptyState) graduadosEmptyState.classList.add("hidden");
+      if (graduadosModalCountPill) {
+        graduadosModalCountPill.textContent = `${filtered.length} Graduado${filtered.length === 1 ? "" : "s"}`;
+      }
+
+      const html = filtered.map((item) => {
+        // Badges de diplomas con enlaces si existen
+        const diplomasHtml = item.diplomas.map((dip) => {
+          const yearColor = dip.year === "2026"
+            ? "bg-purple-100 text-purple-900 border-purple-200"
+            : dip.year === "2025"
+            ? "bg-blue-100 text-blue-900 border-blue-200"
+            : "bg-emerald-100 text-emerald-900 border-emerald-200";
+
+          const driveBtn = dip.driveUrl ? `
+            <a
+              href="${escapeHtml(dip.driveUrl)}"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-[11px] shadow-xs transition transform active:scale-95 cursor-pointer"
+              title="Abrir reconocimiento oficial en Google Drive"
+            >
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span>Ver Reconocimiento Digital (${escapeHtml(dip.year)})</span>
+            </a>
+          ` : `
+            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-gray-100 text-gray-400 text-[10px] font-medium">
+              <i class="fa-regular fa-clock"></i> Enlace Drive en preparación
+            </span>
+          `;
+
+          return `
+            <div class="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-gray-200">
+              <div class="flex items-center gap-2">
+                <span class="px-2 py-0.5 rounded-md text-[11px] font-black border ${yearColor}">
+                  ${escapeHtml(dip.year)}
+                </span>
+                <span class="text-xs font-semibold text-gray-800">
+                  ${escapeHtml(dip.diplomado || "Diplomado Oficial")}
+                </span>
+                <span class="text-[10px] text-gray-400">
+                  (${escapeHtml(dip.tipoImpresion || "Impreso")})
+                </span>
+              </div>
+              <div class="flex items-center gap-2">
+                ${driveBtn}
+              </div>
+            </div>
+          `;
+        }).join("");
+
+        return `
+          <div class="p-4 sm:p-5 rounded-2xl border border-gray-200 bg-white hover:border-indigo-400 transition-all shadow-2xs space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-gray-100">
+              <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center text-lg font-black shadow-xs shrink-0">
+                  🎓
+                </div>
+                <div>
+                  <h3 class="font-black text-gray-950 text-sm sm:text-base leading-snug">
+                    ${escapeHtml(item.formattedName)}
+                  </h3>
+                  <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                    <span class="px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-900 text-[10px] font-extrabold border border-indigo-200">
+                      Grupo ${escapeHtml(item.grupo)}
+                    </span>
+                    <span class="px-2 py-0.5 rounded-md bg-stone-100 text-stone-800 text-[10px] font-extrabold border border-stone-200">
+                      Zona ${escapeHtml(item.zona)}
+                    </span>
+                    <span class="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-800 text-[10px] font-bold">
+                      ${escapeHtml(item.rol || "Líder")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onclick="navigator.clipboard.writeText('${escapeHtml(item.singleLineDisplay)}').then(() => { alert('¡Línea copiada: ${escapeHtml(item.singleLineDisplay)}!'); })"
+                  class="p-2 rounded-xl text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 text-xs transition cursor-pointer"
+                  title="Copiar línea de este graduado"
+                >
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Formato Oficial Solicitado en Texto -->
+            <div class="p-2.5 rounded-xl bg-gray-50 border border-gray-200 text-xs font-mono text-gray-700 flex items-center justify-between">
+              <span class="truncate font-semibold">${escapeHtml(item.singleLineDisplay)}</span>
+              <span class="text-[10px] text-gray-400 font-sans uppercase shrink-0 ml-2">Oficial</span>
+            </div>
+
+            <!-- Lista de Diplomas y Enlaces Drive -->
+            <div class="space-y-1.5 pt-1">
+              ${diplomasHtml}
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      graduadosCardsGrid.innerHTML = html;
+    }
+
+    // Escuchar reconocimientos e integrar lista de Graduados
+    function listenToGraduados() {
+      // Semillas iniciales oficiales aseguradas
+      const initialSeedMap = new Map([
+        ["laura cortazar", {
+          nombreOriginal: "Laura Cortazar",
+          grupo: "G-1",
+          zona: "Tiburón",
+          rol: "Líder",
+          diplomas: [
+            { id: "g-seed-1", diplomado: "Diplomado de Liderazgo Transformacional", year: "2022", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1laura_2022" },
+            { id: "g-seed-2", diplomado: "Liderazgo de Alto Rendimiento", year: "2025", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1laura_2025" },
+            { id: "g-seed-3", diplomado: "Dirección y Liderazgo Máster", year: "2026", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1laura_2026" }
+          ]
+        }],
+        ["edgar ivan batun lopez", {
+          nombreOriginal: "Edgar Iván Batún López",
+          grupo: "G-3",
+          zona: "Tiburón",
+          rol: "Líder",
+          diplomas: [
+            { id: "g-seed-4", diplomado: "Liderazgo I", year: "2025", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1edgar_2025" },
+            { id: "g-seed-5", diplomado: "Liderazgo II Avanzado", year: "2026", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1edgar_2026" }
+          ]
+        }],
+        ["juan carlos perez gomez", {
+          nombreOriginal: "Juan Carlos Pérez Gómez",
+          grupo: "G-2",
+          zona: "Águilas",
+          rol: "Sublíder",
+          diplomas: [
+            { id: "g-seed-6", diplomado: "Formación de Mentores", year: "2022", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1juan_2022" },
+            { id: "g-seed-7", diplomado: "Liderazgo I", year: "2026", tipoImpresion: "Primera Impresión", driveUrl: "https://drive.google.com/drive/folders/1juan_2026" }
+          ]
+        }]
+      ]);
+
+      const updateListFromMap = (studentMap) => {
+        const list = [];
+        studentMap.forEach((data) => {
+          const { formattedName, primerApellido } = formatNombrePrimerApellido(data.nombreOriginal);
+          const sortedDiplomas = [...data.diplomas].sort((a, b) => a.year.localeCompare(b.year));
+          const uniqueYears = Array.from(new Set(sortedDiplomas.map((d) => d.year))).sort();
+          const yearsSummary = uniqueYears.length > 0 ? uniqueYears.join(" - ") : "2026";
+          const singleLineDisplay = `- ${formattedName} ${data.grupo} ${data.zona} Diplomas: ${yearsSummary}`;
+          const hasAnyDrive = sortedDiplomas.some((d) => Boolean(d.driveUrl && d.driveUrl.trim()));
+
+          list.push({
+            nombreOriginal: data.nombreOriginal,
+            formattedName,
+            primerApellido,
+            grupo: data.grupo || "G-1",
+            zona: data.zona || "General",
+            rol: data.rol || "Líder",
+            diplomas: sortedDiplomas,
+            yearsList: uniqueYears,
+            yearsSummary,
+            singleLineDisplay,
+            hasAnyDrive
+          });
+        });
+
+        graduadosList = list.sort((a, b) => a.nombreOriginal.localeCompare(b.nombreOriginal));
+        if (graduadosCountBadge) {
+          graduadosCountBadge.textContent = graduadosList.length;
+        }
+        renderGraduados();
+      };
+
+      // Inicial con semillas
+      updateListFromMap(initialSeedMap);
+
+      // Escuchar Firestore reconocimientos
+      try {
+        onSnapshot(collection(db, RECONOCIMIENTOS_COLLECTION), (snapshot) => {
+          const map = new Map(initialSeedMap);
+          snapshot.forEach((snapDoc) => {
+            const d = snapDoc.data();
+            const isImpreso = Boolean(d.impreso || d.estado === "Impreso" || d.fechaImpresion || (d.driveUrl && d.driveUrl.trim()));
+            if (!isImpreso) return;
+
+            const rawName = (d.nombre || "Estudiante").trim();
+            const normKey = rawName.toLowerCase();
+            const dipObj = {
+              id: snapDoc.id,
+              diplomado: d.diplomado || "Diplomado Oficial",
+              year: String(d.year || "2026").trim(),
+              tipoImpresion: d.tipoImpresion || "Impresión",
+              driveUrl: d.driveUrl ? String(d.driveUrl).trim() : undefined
+            };
+
+            if (!map.has(normKey)) {
+              map.set(normKey, {
+                nombreOriginal: rawName,
+                grupo: d.grupo || "G-1",
+                zona: d.zona || "General",
+                rol: d.rol || "Líder",
+                diplomas: [dipObj]
+              });
+            } else {
+              const existing = map.get(normKey);
+              if (d.grupo && (!existing.grupo || existing.grupo === "G-1")) existing.grupo = d.grupo;
+              if (d.zona && (!existing.zona || existing.zona === "General")) existing.zona = d.zona;
+              const dupIndex = existing.diplomas.findIndex((dip) => dip.id === dipObj.id || dip.year === dipObj.year);
+              if (dupIndex >= 0) {
+                if (dipObj.driveUrl && !existing.diplomas[dupIndex].driveUrl) {
+                  existing.diplomas[dupIndex] = dipObj;
+                }
+              } else {
+                existing.diplomas.push(dipObj);
+              }
+            }
+          });
+
+          updateListFromMap(map);
+        }, (err) => {
+          console.warn("Notice in graduados listener:", err);
+        });
+      } catch (e) {
+        console.warn("Could not listen to reconocimientos for graduados:", e);
+      }
+    }
+
+    // Inicializar listener de Graduados
+    listenToGraduados();
+
+    // Auto-apertura si la URL tiene parámetro o hash #graduados
+    if (window.location.hash === "#graduados" || window.location.search.includes("graduados") || window.location.search.includes("view=graduados")) {
+      setTimeout(() => {
+        openGraduadosModal();
+      }, 300);
     }
 
     function escapeHtml(text) {
