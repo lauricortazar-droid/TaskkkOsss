@@ -409,6 +409,9 @@ export default function SaludFinancieraOS({
   const [ingresoSearchQuery, setIngresoSearchQuery] = useState("");
 
   // Formulario de Gasto
+  const [editingExpense, setEditingExpense] = useState<FinancialExpense | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<FinancialExpense | null>(null);
+  const [deleteExpenseRefundBalance, setDeleteExpenseRefundBalance] = useState(true);
   const [formGastoFecha, setFormGastoFecha] = useState(new Date().toISOString().slice(0, 10));
   const [formGastoArticulo, setFormGastoArticulo] = useState("");
   const [formGastoTipo, setFormGastoTipo] = useState<ExpenseType>("Variable");
@@ -419,6 +422,9 @@ export default function SaludFinancieraOS({
   const [formGastoNotas, setFormGastoNotas] = useState("");
 
   // Formulario de Ingreso
+  const [editingIncome, setEditingIncome] = useState<FinancialIncomeItem | null>(null);
+  const [incomeToDelete, setIncomeToDelete] = useState<FinancialIncomeItem | null>(null);
+  const [deleteIncomeDeductBalance, setDeleteIncomeDeductBalance] = useState(true);
   const [formIngresoFecha, setFormIngresoFecha] = useState(new Date().toISOString().slice(0, 10));
   const [formIngresoArticulo, setFormIngresoArticulo] = useState("");
   const [formIngresoMonto, setFormIngresoMonto] = useState<number>(1000);
@@ -452,6 +458,8 @@ export default function SaludFinancieraOS({
   const [formDeudaNotas, setFormDeudaNotas] = useState("");
 
   // Formulario de Gasto Fijo Recurrente
+  const [editingFixedConfig, setEditingFixedConfig] = useState<FinancialFixedExpenseConfig | null>(null);
+  const [fixedConfigToDelete, setFixedConfigToDelete] = useState<FinancialFixedExpenseConfig | null>(null);
   const [formFixedConcepto, setFormFixedConcepto] = useState("");
   const [formFixedMonto, setFormFixedMonto] = useState<number>(1000);
   const [formFixedDia, setFormFixedDia] = useState<number>(15);
@@ -831,10 +839,128 @@ export default function SaludFinancieraOS({
     playChime("success");
   };
 
-  // HANDLER: AGREGAR GASTO
+  // HANDLERS: GASTOS (CREAR, EDITAR, ELIMINAR)
+  const handleOpenCreateGasto = () => {
+    setEditingExpense(null);
+    setFormGastoFecha(new Date().toISOString().slice(0, 10));
+    setFormGastoArticulo("");
+    setFormGastoTipo("Variable");
+    setFormGastoReferencia("");
+    setFormGastoMetodo("Efectivo");
+    setFormGastoMonto(150);
+    setFormGastoCategoria("Materiales Lonas");
+    setFormGastoNotas("");
+    setIsGastoModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleOpenEditGasto = (exp: FinancialExpense) => {
+    setEditingExpense(exp);
+    setFormGastoFecha(exp.fecha || new Date().toISOString().slice(0, 10));
+    setFormGastoArticulo(exp.articulo);
+    setFormGastoTipo(exp.tipo || "Variable");
+    setFormGastoReferencia(exp.referencia || "");
+    setFormGastoMetodo(exp.metodo || "Efectivo");
+    setFormGastoMonto(Number(exp.monto) || 0);
+    setFormGastoCategoria(exp.categoria || "Materiales Lonas");
+    setFormGastoNotas(exp.notas || "");
+    setIsGastoModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleDeleteGasto = async (exp: FinancialExpense, refundBalance: boolean = true) => {
+    setExpenses((prev) => prev.filter((p) => p.id !== exp.id));
+
+    // Si se activó reintegrar al saldo disponible de cuentas
+    if (refundBalance) {
+      setAccounts((prev) =>
+        prev.map((acc) => {
+          if (exp.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+            return { ...acc, saldoActual: acc.saldoActual + exp.monto };
+          }
+          if (exp.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+            return { ...acc, saldoActual: acc.saldoActual + exp.monto };
+          }
+          return acc;
+        })
+      );
+    }
+
+    try {
+      await deleteDoc(doc(db, "finanzas_gastos", exp.id));
+    } catch (err) {
+      console.error("Error al eliminar gasto en Firestore:", err);
+    }
+
+    setExpenseToDelete(null);
+    playChime("tick");
+    setActionFeedback(`Gasto "${exp.articulo}" ($${exp.monto.toLocaleString("es-MX")}) eliminado correctamente.`);
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
   const handleSaveGasto = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formGastoArticulo.trim() || formGastoMonto <= 0) return;
+
+    if (editingExpense) {
+      const updatedExpense: FinancialExpense = {
+        ...editingExpense,
+        fecha: formGastoFecha,
+        articulo: formGastoArticulo.trim(),
+        tipo: formGastoTipo,
+        referencia: formGastoReferencia.trim() || "S/Ref",
+        metodo: formGastoMetodo,
+        monto: Number(formGastoMonto),
+        categoria: formGastoCategoria,
+        notas: formGastoNotas.trim() || undefined,
+      };
+
+      const diffMonto = updatedExpense.monto - editingExpense.monto;
+      const metodoCambio = editingExpense.metodo !== updatedExpense.metodo;
+
+      setAccounts((prev) =>
+        prev.map((acc) => {
+          let saldo = acc.saldoActual;
+          if (metodoCambio) {
+            // Revertir efecto del método anterior
+            if (editingExpense.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+              saldo += editingExpense.monto;
+            } else if (editingExpense.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+              saldo += editingExpense.monto;
+            }
+            // Aplicar nuevo método
+            if (updatedExpense.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+              saldo -= updatedExpense.monto;
+            } else if (updatedExpense.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+              saldo -= updatedExpense.monto;
+            }
+          } else {
+            // Mismo método: ajustar la diferencia
+            if (updatedExpense.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+              saldo -= diffMonto;
+            } else if (updatedExpense.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+              saldo -= diffMonto;
+            }
+          }
+          return { ...acc, saldoActual: saldo };
+        })
+      );
+
+      setExpenses((prev) => prev.map((exp) => (exp.id === editingExpense.id ? updatedExpense : exp)));
+
+      try {
+        await setDoc(doc(db, "finanzas_gastos", updatedExpense.id), updatedExpense);
+      } catch (err) {
+        console.error("Error al actualizar gasto en Firestore:", err);
+      }
+
+      setIsGastoModalOpen(false);
+      setEditingExpense(null);
+      playChime("tick");
+      setActionFeedback(`Gasto "${updatedExpense.articulo}" actualizado exitosamente.`);
+      setTimeout(() => setActionFeedback(null), 3000);
+      return;
+    }
 
     const newExpense: FinancialExpense = {
       id: `exp-${Date.now()}`,
@@ -881,10 +1007,121 @@ export default function SaludFinancieraOS({
     setFormGastoNotas("");
   };
 
-  // HANDLER: AGREGAR INGRESO
+  // HANDLERS: INGRESOS (CREAR, EDITAR, ELIMINAR)
+  const handleOpenCreateIngreso = () => {
+    setEditingIncome(null);
+    setFormIngresoFecha(new Date().toISOString().slice(0, 10));
+    setFormIngresoArticulo("");
+    setFormIngresoMonto(1000);
+    setFormIngresoCategoria("Clientes Lonas");
+    setFormIngresoMetodo("Efectivo");
+    setFormIngresoReferencia("");
+    setFormIngresoNotas("");
+    setFormIngresoEstado("Recibido");
+    setIsIngresoModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleOpenEditIngreso = (inc: FinancialIncomeItem) => {
+    setEditingIncome(inc);
+    setFormIngresoFecha(inc.fecha || new Date().toISOString().slice(0, 10));
+    setFormIngresoArticulo(inc.articulo);
+    setFormIngresoMonto(Number(inc.monto) || 0);
+    setFormIngresoCategoria(inc.categoria || "Clientes Lonas");
+    setFormIngresoMetodo(inc.metodo || "Efectivo");
+    setFormIngresoReferencia(inc.referencia || "");
+    setFormIngresoNotas(inc.notas || "");
+    setFormIngresoEstado(inc.estado || "Recibido");
+    setIsIngresoModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleDeleteIngreso = async (inc: FinancialIncomeItem, deductBalance: boolean = true) => {
+    setIncomes((prev) => prev.filter((p) => p.id !== inc.id));
+
+    // Si ya estaba recibido y se desea descontar de saldo
+    if (deductBalance && inc.estado === "Recibido") {
+      setAccounts((prev) =>
+        prev.map((acc) => {
+          if (inc.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+            return { ...acc, saldoActual: acc.saldoActual - inc.monto };
+          }
+          if (inc.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+            return { ...acc, saldoActual: acc.saldoActual - inc.monto };
+          }
+          return acc;
+        })
+      );
+    }
+
+    try {
+      await deleteDoc(doc(db, "finanzas_ingresos", inc.id));
+    } catch (err) {
+      console.error("Error al eliminar ingreso en Firestore:", err);
+    }
+
+    setIncomeToDelete(null);
+    playChime("tick");
+    setActionFeedback(`Ingreso "${inc.articulo}" ($${inc.monto.toLocaleString("es-MX")}) eliminado correctamente.`);
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
   const handleSaveIngreso = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formIngresoArticulo.trim() || formIngresoMonto <= 0) return;
+
+    if (editingIncome) {
+      const updatedIncome: FinancialIncomeItem = {
+        ...editingIncome,
+        fecha: formIngresoFecha,
+        articulo: formIngresoArticulo.trim(),
+        monto: Number(formIngresoMonto),
+        categoria: formIngresoCategoria,
+        metodo: formIngresoMetodo,
+        referencia: formIngresoReferencia.trim() || "S/Ref",
+        notas: formIngresoNotas.trim() || undefined,
+        estado: formIngresoEstado,
+      };
+
+      // Ajuste de saldos si el estado o monto cambiaron
+      setAccounts((prev) =>
+        prev.map((acc) => {
+          let saldo = acc.saldoActual;
+          // Revertir efecto previo si estaba recibido
+          if (editingIncome.estado === "Recibido") {
+            if (editingIncome.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+              saldo -= editingIncome.monto;
+            } else if (editingIncome.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+              saldo -= editingIncome.monto;
+            }
+          }
+          // Aplicar nuevo efecto si ahora está recibido
+          if (updatedIncome.estado === "Recibido") {
+            if (updatedIncome.metodo === "Efectivo" && acc.tipo === "Efectivo") {
+              saldo += updatedIncome.monto;
+            } else if (updatedIncome.metodo !== "Efectivo" && acc.tipo !== "Efectivo") {
+              saldo += updatedIncome.monto;
+            }
+          }
+          return { ...acc, saldoActual: saldo };
+        })
+      );
+
+      setIncomes((prev) => prev.map((inc) => (inc.id === editingIncome.id ? updatedIncome : inc)));
+
+      try {
+        await setDoc(doc(db, "finanzas_ingresos", updatedIncome.id), updatedIncome);
+      } catch (err) {
+        console.error("Error al actualizar ingreso en Firestore:", err);
+      }
+
+      setIsIngresoModalOpen(false);
+      setEditingIncome(null);
+      playChime("success");
+      setActionFeedback(`Ingreso "${updatedIncome.articulo}" actualizado exitosamente.`);
+      setTimeout(() => setActionFeedback(null), 3000);
+      return;
+    }
 
     const newIncome: FinancialIncomeItem = {
       id: `inc-${Date.now()}`,
@@ -1183,10 +1420,103 @@ export default function SaludFinancieraOS({
     setTimeout(() => setActionFeedback(null), 4000);
   };
 
-  // HANDLER: AGREGAR GASTO FIJO RECURRENTE
+  // HANDLER: ELIMINAR ABONO DE UNA DEUDA Y REVERTIR SALDO
+  const handleDeleteAbonoDeuda = async (debtId: string, pagoId: string, pagoMonto: number) => {
+    const targetDebt = debts.find((d) => d.id === debtId);
+    if (!targetDebt) return;
+
+    const nuevoSaldo = targetDebt.saldoActual + pagoMonto;
+    const updatedPagos = (targetDebt.historialPagos || []).filter((p) => p.id !== pagoId);
+    const updatedDebt: FinancialDebt = {
+      ...targetDebt,
+      saldoActual: nuevoSaldo,
+      estado: nuevoSaldo > 0 ? "Activa" : targetDebt.estado,
+      historialPagos: updatedPagos,
+    };
+
+    setDebts((prev) => prev.map((d) => (d.id === debtId ? updatedDebt : d)));
+
+    try {
+      await setDoc(doc(db, "finanzas_deudas", updatedDebt.id), updatedDebt);
+    } catch (err) {
+      console.error("Error al eliminar abono de deuda:", err);
+    }
+
+    playChime("tick");
+    setActionFeedback(`Abono de $${pagoMonto.toLocaleString("es-MX")} revertido. Saldo actual: $${nuevoSaldo.toLocaleString("es-MX")}.`);
+    setTimeout(() => setActionFeedback(null), 3500);
+  };
+
+  // HANDLERS: GASTOS FIJOS (CREAR, EDITAR, ELIMINAR)
+  const handleOpenCreateFixedConfig = () => {
+    setEditingFixedConfig(null);
+    setFormFixedConcepto("");
+    setFormFixedMonto(1000);
+    setFormFixedDia(15);
+    setFormFixedCategoria("Servicios");
+    setFormFixedMetodo("Tarjeta");
+    setFormFixedReferencia("");
+    setIsFixedConfigModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleOpenEditFixedConfig = (f: FinancialFixedExpenseConfig) => {
+    setEditingFixedConfig(f);
+    setFormFixedConcepto(f.concepto);
+    setFormFixedMonto(f.monto);
+    setFormFixedDia(f.diaVencimiento);
+    setFormFixedCategoria(f.categoria);
+    setFormFixedMetodo(f.metodo);
+    setFormFixedReferencia(f.referencia || "");
+    setIsFixedConfigModalOpen(true);
+    playChime("tick");
+  };
+
+  const handleDeleteFixedConfig = async (f: FinancialFixedExpenseConfig) => {
+    setFixedConfigs((prev) => prev.filter((item) => item.id !== f.id));
+
+    try {
+      await deleteDoc(doc(db, "finanzas_fijos", f.id));
+    } catch (err) {
+      console.error("Error al eliminar gasto fijo en Firestore:", err);
+    }
+
+    setFixedConfigToDelete(null);
+    playChime("tick");
+    setActionFeedback(`Plantilla fija "${f.concepto}" eliminada.`);
+    setTimeout(() => setActionFeedback(null), 3000);
+  };
+
   const handleSaveFixedConfig = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formFixedConcepto.trim() || formFixedMonto <= 0) return;
+
+    if (editingFixedConfig) {
+      const updatedFixed: FinancialFixedExpenseConfig = {
+        ...editingFixedConfig,
+        concepto: formFixedConcepto.trim(),
+        monto: Number(formFixedMonto),
+        diaVencimiento: Math.min(31, Math.max(1, formFixedDia)),
+        categoria: formFixedCategoria,
+        metodo: formFixedMetodo,
+        referencia: formFixedReferencia.trim() || "Gasto fijo mensual",
+      };
+
+      setFixedConfigs((prev) => prev.map((f) => (f.id === editingFixedConfig.id ? updatedFixed : f)));
+
+      try {
+        await setDoc(doc(db, "finanzas_fijos", updatedFixed.id), updatedFixed);
+      } catch (err) {
+        console.error("Error actualizando plantilla fija:", err);
+      }
+
+      setIsFixedConfigModalOpen(false);
+      setEditingFixedConfig(null);
+      playChime("tick");
+      setActionFeedback(`Plantilla fija "${updatedFixed.concepto}" actualizada.`);
+      setTimeout(() => setActionFeedback(null), 3000);
+      return;
+    }
 
     const newFixed: FinancialFixedExpenseConfig = {
       id: `fix-${Date.now()}`,
@@ -1712,10 +2042,7 @@ export default function SaludFinancieraOS({
             <button
               type="button"
               id="btn-agregar-gasto-modal"
-              onClick={() => {
-                setIsGastoModalOpen(true);
-                playChime("tick");
-              }}
+              onClick={handleOpenCreateGasto}
               className="px-4 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-black text-xs transition flex items-center gap-2 shadow-md self-start sm:self-auto cursor-pointer"
             >
               <Plus size={15} />
@@ -1881,22 +2208,26 @@ export default function SaludFinancieraOS({
                           -${exp.monto.toLocaleString("es-MX")}
                         </td>
                         <td className="py-3 px-3 text-center whitespace-nowrap">
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              if (confirm(`¿Eliminar gasto de ${exp.articulo}?`)) {
-                                setExpenses((prev) => prev.filter((p) => p.id !== exp.id));
-                                try {
-                                  await deleteDoc(doc(db, "finanzas_gastos", exp.id));
-                                } catch (_) {}
-                                playChime("tick");
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
-                            title="Eliminar gasto"
-                          >
-                            <Trash2 size={13} />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEditGasto(exp)}
+                              className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                              title="Editar gasto"
+                              aria-label={`Editar gasto ${exp.articulo}`}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setExpenseToDelete(exp)}
+                              className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                              title="Eliminar gasto"
+                              aria-label={`Eliminar gasto ${exp.articulo}`}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1928,10 +2259,7 @@ export default function SaludFinancieraOS({
             <button
               type="button"
               id="btn-agregar-ingreso-modal"
-              onClick={() => {
-                setIsIngresoModalOpen(true);
-                playChime("tick");
-              }}
+              onClick={handleOpenCreateIngreso}
               className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs transition flex items-center gap-2 shadow-md self-start sm:self-auto cursor-pointer"
             >
               <Plus size={15} />
@@ -2082,17 +2410,20 @@ export default function SaludFinancieraOS({
 
                           <button
                             type="button"
-                            onClick={async () => {
-                              if (confirm(`¿Eliminar ingreso ${inc.articulo}?`)) {
-                                setIncomes((prev) => prev.filter((p) => p.id !== inc.id));
-                                try {
-                                  await deleteDoc(doc(db, "finanzas_ingresos", inc.id));
-                                } catch (_) {}
-                                playChime("tick");
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 transition"
-                            title="Eliminar registro"
+                            onClick={() => handleOpenEditIngreso(inc)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                            title="Editar ingreso"
+                            aria-label={`Editar ingreso ${inc.articulo}`}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setIncomeToDelete(inc)}
+                            className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                            title="Eliminar ingreso"
+                            aria-label={`Eliminar ingreso ${inc.articulo}`}
                           >
                             <Trash2 size={13} />
                           </button>
@@ -2306,12 +2637,23 @@ export default function SaludFinancieraOS({
                         {d.historialPagos.map((p, pIdx) => (
                           <div
                             key={p.id || pIdx}
-                            className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-stone-50 dark:bg-stone-800 font-mono"
+                            className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-stone-50 dark:bg-stone-800 font-mono group"
                           >
                             <span className="text-stone-500">{p.fecha}</span>
-                            <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                              -${p.monto.toLocaleString()}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                -${p.monto.toLocaleString()}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAbonoDeuda(d.id, p.id, p.monto)}
+                                className="p-1 rounded text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                                title="Eliminar este abono y devolver saldo a la deuda"
+                                aria-label="Eliminar abono"
+                              >
+                                <Trash2 size={11} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -2344,10 +2686,7 @@ export default function SaludFinancieraOS({
 
             <button
               type="button"
-              onClick={() => {
-                setIsFixedConfigModalOpen(true);
-                playChime("tick");
-              }}
+              onClick={handleOpenCreateFixedConfig}
               className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition flex items-center gap-1.5 shadow-md cursor-pointer"
             >
               <Plus size={14} />
@@ -2396,7 +2735,7 @@ export default function SaludFinancieraOS({
                         </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
                         <span className="font-mono font-black text-xs sm:text-sm text-stone-900 dark:text-stone-100">
                           ${f.monto.toLocaleString()}
                         </span>
@@ -2415,6 +2754,26 @@ export default function SaludFinancieraOS({
                             Pagar
                           </button>
                         )}
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditFixedConfig(f)}
+                          className="p-1.5 rounded-lg text-stone-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition cursor-pointer"
+                          title="Editar plantilla de gasto fijo"
+                          aria-label={`Editar ${f.concepto}`}
+                        >
+                          <Edit2 size={12} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setFixedConfigToDelete(f)}
+                          className="p-1.5 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition cursor-pointer"
+                          title="Eliminar plantilla de gasto fijo"
+                          aria-label={`Eliminar ${f.concepto}`}
+                        >
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     </div>
                   );
@@ -2748,14 +3107,24 @@ export default function SaludFinancieraOS({
                 <span className="p-1.5 rounded-xl bg-rose-100 dark:bg-rose-950 text-rose-600 text-sm">
                   💸
                 </span>
-                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
-                  Registrar Nuevo Gasto
-                </h4>
+                <div>
+                  <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                    {editingExpense ? "Editar Gasto" : "Registrar Nuevo Gasto"}
+                  </h4>
+                  {editingExpense && (
+                    <p className="text-[11px] text-stone-400">
+                      Modifica los detalles del gasto {editingExpense.articulo}
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsGastoModalOpen(false)}
-                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600"
+                onClick={() => {
+                  setIsGastoModalOpen(false);
+                  setEditingExpense(null);
+                }}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 cursor-pointer"
               >
                 ✕
               </button>
@@ -2884,20 +3253,42 @@ export default function SaludFinancieraOS({
                 />
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsGastoModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-md cursor-pointer"
-                >
-                  Guardar Gasto
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                {editingExpense ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const toDel = editingExpense;
+                      setIsGastoModalOpen(false);
+                      setEditingExpense(null);
+                      setExpenseToDelete(toDel);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    title="Eliminar este gasto"
+                  >
+                    <Trash2 size={13} />
+                    <span>Eliminar Gasto</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGastoModalOpen(false);
+                      setEditingExpense(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black shadow-md cursor-pointer"
+                  >
+                    {editingExpense ? "Guardar Cambios" : "Guardar Gasto"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -2913,14 +3304,24 @@ export default function SaludFinancieraOS({
                 <span className="p-1.5 rounded-xl bg-emerald-100 dark:bg-emerald-950 text-emerald-600 text-sm">
                   💵
                 </span>
-                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
-                  Registrar Ingreso / Cobro
-                </h4>
+                <div>
+                  <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                    {editingIncome ? "Editar Ingreso / Cobro" : "Registrar Ingreso / Cobro"}
+                  </h4>
+                  {editingIncome && (
+                    <p className="text-[11px] text-stone-400">
+                      Modifica los detalles del ingreso {editingIncome.articulo}
+                    </p>
+                  )}
+                </div>
               </div>
               <button
                 type="button"
-                onClick={() => setIsIngresoModalOpen(false)}
-                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600"
+                onClick={() => {
+                  setIsIngresoModalOpen(false);
+                  setEditingIncome(null);
+                }}
+                className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 cursor-pointer"
               >
                 ✕
               </button>
@@ -3031,20 +3432,42 @@ export default function SaludFinancieraOS({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsIngresoModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md cursor-pointer"
-                >
-                  Guardar Ingreso
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                {editingIncome ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const toDel = editingIncome;
+                      setIsIngresoModalOpen(false);
+                      setEditingIncome(null);
+                      setIncomeToDelete(toDel);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    title="Eliminar este ingreso"
+                  >
+                    <Trash2 size={13} />
+                    <span>Eliminar Ingreso</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsIngresoModalOpen(false);
+                      setEditingIncome(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black shadow-md cursor-pointer"
+                  >
+                    {editingIncome ? "Guardar Cambios" : "Guardar Ingreso"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
@@ -3521,15 +3944,241 @@ export default function SaludFinancieraOS({
         </div>
       )}
 
-      {/* MODAL 5: CONFIGURAR GASTO FIJO RECURRENTE */}
+      {/* MODAL 4.6: CONFIRMAR ELIMINAR GASTO */}
+      {expenseToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-rose-200 dark:border-rose-900/50 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                  ¿Eliminar este gasto?
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  {expenseToDelete.articulo}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-stone-400">Monto:</span>
+                <span className="font-bold text-rose-600 dark:text-rose-400">
+                  -${expenseToDelete.monto.toLocaleString("es-MX")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-400">Fecha:</span>
+                <span className="text-stone-700 dark:text-stone-300">
+                  {expenseToDelete.fecha}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-400">Tipo / Método:</span>
+                <span className="text-stone-700 dark:text-stone-300">
+                  {expenseToDelete.tipo} • {expenseToDelete.metodo}
+                </span>
+              </div>
+              {expenseToDelete.referencia && (
+                <div className="flex justify-between">
+                  <span className="text-stone-400">Referencia:</span>
+                  <span className="text-stone-700 dark:text-stone-300">
+                    {expenseToDelete.referencia}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={deleteExpenseRefundBalance}
+                onChange={(e) => setDeleteExpenseRefundBalance(e.target.checked)}
+                className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+              />
+              <span className="text-[11px] font-medium text-emerald-900 dark:text-emerald-300 leading-tight">
+                <strong>Reintegrar ${expenseToDelete.monto.toLocaleString("es-MX")}</strong> al saldo disponible ({expenseToDelete.metodo === "Efectivo" ? "Caja Efectivo" : "Bancos / Tarjeta"}).
+              </span>
+            </label>
+
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              Esta acción quitará el gasto de tu registro contable y de tus estadísticas de desembolsos.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setExpenseToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteGasto(expenseToDelete, deleteExpenseRefundBalance)}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Sí, Eliminar Gasto</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4.7: CONFIRMAR ELIMINAR INGRESO */}
+      {incomeToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-rose-200 dark:border-rose-900/50 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                  ¿Eliminar este ingreso?
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  {incomeToDelete.articulo}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-stone-850 border border-stone-200 dark:border-stone-800 text-xs space-y-1.5 font-mono">
+              <div className="flex justify-between">
+                <span className="text-stone-400">Monto:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                  +${incomeToDelete.monto.toLocaleString("es-MX")}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-400">Fecha:</span>
+                <span className="text-stone-700 dark:text-stone-300">
+                  {incomeToDelete.fecha}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-stone-400">Estado / Método:</span>
+                <span className="text-stone-700 dark:text-stone-300">
+                  {incomeToDelete.estado} • {incomeToDelete.metodo}
+                </span>
+              </div>
+              {incomeToDelete.referencia && (
+                <div className="flex justify-between">
+                  <span className="text-stone-400">Referencia:</span>
+                  <span className="text-stone-700 dark:text-stone-300">
+                    {incomeToDelete.referencia}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {incomeToDelete.estado === "Recibido" && (
+              <label className="flex items-start gap-2.5 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteIncomeDeductBalance}
+                  onChange={(e) => setDeleteIncomeDeductBalance(e.target.checked)}
+                  className="mt-0.5 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                />
+                <span className="text-[11px] font-medium text-amber-900 dark:text-amber-300 leading-tight">
+                  <strong>Descontar ${incomeToDelete.monto.toLocaleString("es-MX")}</strong> del saldo disponible ({incomeToDelete.metodo === "Efectivo" ? "Caja Efectivo" : "Bancos / Tarjeta"}) ya que este cobro está siendo eliminado.
+                </span>
+              </label>
+            )}
+
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              Esta acción eliminará el ingreso de tu flujo de efectivo y métricas financieras.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setIncomeToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteIngreso(incomeToDelete, deleteIncomeDeductBalance)}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Sí, Eliminar Ingreso</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4.8: CONFIRMAR ELIMINAR PLANTILLA FIJA */}
+      {fixedConfigToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-rose-200 dark:border-rose-900/50 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 rounded-2xl bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                <Trash2 size={22} />
+              </div>
+              <div>
+                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                  ¿Eliminar plantilla de gasto fijo?
+                </h4>
+                <p className="text-xs text-stone-500 dark:text-stone-400">
+                  {fixedConfigToDelete.concepto} • Día {fixedConfigToDelete.diaVencimiento} (${fixedConfigToDelete.monto.toLocaleString("es-MX")})
+                </p>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-stone-500 dark:text-stone-400">
+              Se eliminará este gasto fijo de tus proyecciones recurrentes mensuales y del calendario de vencimientos.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+              <button
+                type="button"
+                onClick={() => setFixedConfigToDelete(null)}
+                className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold text-xs hover:bg-stone-100 dark:hover:bg-stone-800 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteFixedConfig(fixedConfigToDelete)}
+                className="px-5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition cursor-pointer flex items-center gap-1.5"
+              >
+                <Trash2 size={13} />
+                <span>Sí, Eliminar Plantilla</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: CONFIGURAR / EDITAR GASTO FIJO RECURRENTE */}
       {isFixedConfigModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-stone-950/75 backdrop-blur-xs animate-in fade-in duration-150">
           <div className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between border-b pb-3 border-stone-100 dark:border-stone-800">
-              <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
-                Configurar Gasto Fijo Recurrente
-              </h4>
-              <button onClick={() => setIsFixedConfigModalOpen(false)} className="text-stone-400">
+              <div>
+                <h4 className="font-black text-base text-stone-900 dark:text-stone-100">
+                  {editingFixedConfig ? "Editar Gasto Fijo Recurrente" : "Configurar Gasto Fijo Recurrente"}
+                </h4>
+                {editingFixedConfig && (
+                  <p className="text-[11px] text-stone-400">
+                    Modifica los parámetros del gasto recurrente {editingFixedConfig.concepto}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setIsFixedConfigModalOpen(false);
+                  setEditingFixedConfig(null);
+                }}
+                className="text-stone-400 hover:text-stone-600 p-1 cursor-pointer"
+              >
                 ✕
               </button>
             </div>
@@ -3612,20 +4261,42 @@ export default function SaludFinancieraOS({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
-                <button
-                  type="button"
-                  onClick={() => setIsFixedConfigModalOpen(false)}
-                  className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md cursor-pointer"
-                >
-                  Guardar Plantilla
-                </button>
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-stone-100 dark:border-stone-800">
+                {editingFixedConfig ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const toDel = editingFixedConfig;
+                      setIsFixedConfigModalOpen(false);
+                      setEditingFixedConfig(null);
+                      setFixedConfigToDelete(toDel);
+                    }}
+                    className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 font-bold transition flex items-center gap-1.5 cursor-pointer"
+                    title="Eliminar esta plantilla fija"
+                  >
+                    <Trash2 size={13} />
+                    <span>Eliminar Plantilla</span>
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsFixedConfigModalOpen(false);
+                      setEditingFixedConfig(null);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 font-bold cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black shadow-md cursor-pointer"
+                  >
+                    {editingFixedConfig ? "Guardar Cambios" : "Guardar Plantilla"}
+                  </button>
+                </div>
               </div>
             </form>
           </div>
