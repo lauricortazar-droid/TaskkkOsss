@@ -46,6 +46,7 @@ export interface TaskItem {
     nombre: string;
     telefono?: string;
   };
+  numeroFolio?: string | number; // Número de folio, orden o identificador numérico de referencia
   etiquetas?: string[]; // Array of tag names or IDs
   notas?: string; // Sub-notas u observaciones persistentes de la tarea
   fechaLimite?: string; // YYYY-MM-DD fecha límite / deadline de entrega

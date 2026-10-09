@@ -145,6 +145,16 @@ export default function TaskCardMobile({
               #{task.id}
             </span>
 
+            {/* Número / Folio de Referencia si existe */}
+            {task.numeroFolio && (
+              <span
+                className="px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-800 font-mono text-[10px] font-bold shrink-0"
+                title={`Folio / N°: ${task.numeroFolio}`}
+              >
+                N° {task.numeroFolio}
+              </span>
+            )}
+
             {/* Domain Pill */}
             <span
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border shrink-0 ${getDomainBadgeColor(

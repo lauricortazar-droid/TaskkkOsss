@@ -68,6 +68,8 @@ export default function ReconocimientoFormModal({
   initialData,
   onUpdated,
 }: ReconocimientoFormModalProps) {
+  const isEditMode = Boolean(initialData);
+
   // Form fields
   const [nombre, setNombre] = useState("");
   const [rolOption, setRolOption] = useState<string>("Líder");
@@ -1243,20 +1245,22 @@ export default function ReconocimientoFormModal({
                               </div>
                             </div>
 
-                            {/* Enlace Google Drive (Opcional) */}
-                            <div>
-                              <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                                <Link2 size={12} className="text-indigo-600" />
-                                <span>Link hacia el reconocimiento en Google Drive (Opcional)</span>
-                              </label>
-                              <input
-                                type="url"
-                                placeholder="https://drive.google.com/..."
-                                value={dip.driveUrl || ""}
-                                onChange={(e) => handleUpdateDiploma(dip.id, { driveUrl: e.target.value })}
-                                className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:outline-hidden"
-                              />
-                            </div>
+                            {/* Enlace Google Drive (Solo en modo edición interna de administración) */}
+                            {isEditMode && (
+                              <div>
+                                <label className="block text-[11px] font-semibold text-gray-700 mb-1 flex items-center gap-1">
+                                  <Link2 size={12} className="text-indigo-600" />
+                                  <span>Link hacia el reconocimiento en Google Drive (Admin)</span>
+                                </label>
+                                <input
+                                  type="url"
+                                  placeholder="https://drive.google.com/..."
+                                  value={dip.driveUrl || ""}
+                                  onChange={(e) => handleUpdateDiploma(dip.id, { driveUrl: e.target.value })}
+                                  className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-indigo-600 focus:outline-hidden"
+                                />
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

@@ -59,6 +59,7 @@ import {
 import { routeExecutiveInput } from "./lib/executiveRouter";
 import {
   saveTaskToFirestore,
+  deleteTaskFromFirestore,
   saveGlobalResourceToFirestore,
   deleteGlobalResourceFromFirestore,
   saveUrlLibraryItemToFirestore,
@@ -2026,6 +2027,76 @@ export default function App() {
     }
   };
 
+  const handleDirectCreateTask = (taskData: {
+    tarea: string;
+    solicitante?: string;
+    telefono?: string;
+    numeroFolio?: string;
+    etiquetas?: string[];
+    dominio?: string;
+    fechaLimite?: string;
+    notas?: string;
+    imagenReferencia?: string;
+    resources?: TaskResource[];
+  }) => {
+    const nextId = tasks.length > 0 ? Math.max(...tasks.map((t) => t.id)) + 1 : 1;
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const newTask: TaskItem = {
+      id: nextId,
+      solicitante: taskData.solicitante?.trim() || "Yo",
+      tarea: taskData.tarea.trim(),
+      estado: "Pendiente",
+      fechaIngreso: todayStr,
+      dominio: taskData.dominio || "General",
+      imagenReferencia: taskData.imagenReferencia,
+      contacto:
+        taskData.solicitante || taskData.telefono
+          ? {
+              nombre: taskData.solicitante?.trim() || "Contacto",
+              telefono: taskData.telefono?.trim() || undefined,
+            }
+          : undefined,
+      numeroFolio: taskData.numeroFolio?.trim() || undefined,
+      etiquetas:
+        taskData.etiquetas && taskData.etiquetas.length > 0
+          ? taskData.etiquetas
+          : undefined,
+      notas: taskData.notas?.trim() || undefined,
+      fechaLimite: taskData.fechaLimite || undefined,
+      resources:
+        taskData.resources && taskData.resources.length > 0
+          ? taskData.resources
+          : undefined,
+    };
+
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    try {
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(updatedTasks));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      saveTaskToFirestore(auth.currentUser.uid, newTask);
+    }
+
+    setUndoAction({
+      id: `undo-task-${Date.now()}`,
+      message: `Pendiente #${nextId} registrado con éxito en Ledger.`,
+      onUndo: () => {
+        setTasks((prev) => prev.filter((t) => t.id !== nextId));
+        if (auth.currentUser) {
+          deleteTaskFromFirestore(auth.currentUser.uid, nextId);
+        }
+        setLastActionSummary("Acción deshecha: Pendiente retirado del Ledger.");
+        playChime("tick");
+      },
+    });
+
+    setLastActionSummary(`Pendiente #${nextId} "${newTask.tarea.slice(0, 32)}..." guardado en Ledger.`);
+    playChime("success");
+  };
+
   const handleSetStatus = (
     id: number,
     newStatus: "Pendiente" | "En Proceso" | "Completado"
@@ -2952,8 +3023,10 @@ export default function App() {
 
                 <ExecutiveInput
                   onSubmit={handleProcessInput}
+                  onDirectCreateTask={handleDirectCreateTask}
                   isLoading={isLoading}
                   availableTags={tags}
+                  availableContacts={contacts}
                   onOpenManageTags={() => setIsTagsModalOpen(true)}
                   activeTaskTitle={activeTaskId && tasks.find((t) => t.id === activeTaskId) ? tasks.find((t) => t.id === activeTaskId)!.tarea : null}
                 />

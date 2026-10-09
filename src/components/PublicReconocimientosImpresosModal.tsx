@@ -8,7 +8,6 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
-  FileCheck,
   FolderOpen,
   Copy,
   Check,
@@ -17,6 +16,8 @@ import {
   ArrowRight,
   MessageCircle,
   HelpCircle,
+  Users,
+  ShieldCheck,
 } from "lucide-react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
@@ -29,20 +30,72 @@ interface PublicReconocimientosImpresosModalProps {
   onRequestNewClick?: () => void;
 }
 
-export interface ReconocimientoPublicoItem {
+export interface DiplomaRecord {
   id: string;
-  nombre: string;
   diplomado: string;
   year: string;
-  rol: string;
-  grupo?: string;
-  zona?: string;
   tipoImpresion: string;
   impreso: boolean;
   digital: boolean;
   entregado: boolean;
   driveUrl?: string;
+  folio?: string;
   createdAt?: string;
+}
+
+export interface GraduadoItem {
+  key: string;
+  nombreOriginal: string;
+  nombreFormateado: string;
+  primerApellido: string;
+  grupo: string;
+  zona: string;
+  rol: string;
+  diplomas: DiplomaRecord[];
+  yearsSummary: string; // e.g. "2022 - 2025 - 2026"
+  singleLineDisplay: string; // "- Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026"
+  hasAnyDrive: boolean;
+  driveCount: number;
+}
+
+/**
+ * Formatea el nombre de un participante para resaltar su primer apellido entre paréntesis.
+ * Ejemplo:
+ * - "Laura Cortazar" -> "Laura (Cortazar)"
+ * - "Edgar Iván Batún López" -> "Edgar Iván (Batún) López"
+ * - "Juan Carlos Pérez Gómez" -> "Juan Carlos (Pérez) Gómez"
+ */
+export function formatNombrePrimerApellido(nombre: string): {
+  formattedName: string;
+  primerApellido: string;
+} {
+  const clean = nombre.trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) {
+    return { formattedName: "Estudiante", primerApellido: "" };
+  }
+  if (parts.length === 1) {
+    return { formattedName: parts[0], primerApellido: parts[0] };
+  }
+  if (parts.length === 2) {
+    return { formattedName: `${parts[0]} (${parts[1]})`, primerApellido: parts[1] };
+  }
+  if (parts.length === 3) {
+    // Si la primera palabra es un nombre compuesto habitual
+    const compound = ["juan", "jose", "josé", "maria", "maría", "ana", "luis", "carlos", "edgar", "jorge", "pedro", "miguel"];
+    if (compound.includes(parts[0].toLowerCase())) {
+      return { formattedName: `${parts[0]} ${parts[1]} (${parts[2]})`, primerApellido: parts[2] };
+    }
+    return { formattedName: `${parts[0]} (${parts[1]}) ${parts[2]}`, primerApellido: parts[1] };
+  }
+  // 4 o más palabras (ej: Nombre1 Nombre2 ApellidoPaterno ApellidoMaterno)
+  const primerApellido = parts[parts.length - 2];
+  const nombres = parts.slice(0, parts.length - 2).join(" ");
+  const segundoApellido = parts[parts.length - 1];
+  return {
+    formattedName: `${nombres} (${primerApellido}) ${segundoApellido}`,
+    primerApellido,
+  };
 }
 
 export default function PublicReconocimientosImpresosModal({
@@ -50,14 +103,14 @@ export default function PublicReconocimientosImpresosModal({
   onClose,
   onRequestNewClick,
 }: PublicReconocimientosImpresosModalProps) {
-  const [records, setRecords] = useState<ReconocimientoPublicoItem[]>([]);
+  const [graduados, setGraduados] = useState<GraduadoItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedYear, setSelectedYear] = useState<string>("todos");
-  const [onlyWithDrive, setOnlyWithDrive] = useState(false);
+  const [onlyWithDrive, setOnlyWithDrive] = useState(true); // Default to true as user requested only those linked to drive
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // Firestore real-time listener
+  // Firestore real-time listener para reconocimientos
   useEffect(() => {
     if (!isOpen) return;
 
@@ -66,55 +119,108 @@ export default function PublicReconocimientosImpresosModal({
       const unsub = onSnapshot(
         collection(db, "reconocimientos"),
         (snapshot) => {
-          const list: ReconocimientoPublicoItem[] = [];
+          // Agrupar por participante normalizado
+          const studentMap = new Map<string, {
+            nombreOriginal: string;
+            grupo: string;
+            zona: string;
+            rol: string;
+            diplomas: DiplomaRecord[];
+          }>();
+
           snapshot.forEach((snapDoc) => {
             const d = snapDoc.data();
-            // Considerar reconocimientos que ya fueron impresos o marcados como digital/entregado
             const isImpreso = Boolean(d.impreso);
             const isDigital = Boolean(d.digital);
             const isEntregado = Boolean(d.entregado);
+            const hasDrive = Boolean(d.driveUrl && d.driveUrl.trim() !== "");
 
-            // Mostrar los que ya fueron impresos o listos digitalmente
-            if (isImpreso || isDigital || isEntregado || d.driveUrl) {
-              list.push({
+            // Considerar los que ya fueron impresos, o tienen driveUrl, o marcados como digital/entregado
+            if (isImpreso || hasDrive || isDigital || isEntregado) {
+              const rawName = (d.nombre || "Estudiante").trim();
+              const normKey = rawName.toLowerCase();
+
+              const diplomaObj: DiplomaRecord = {
                 id: snapDoc.id,
-                nombre: d.nombre || "Alumno",
                 diplomado: d.diplomado || "Diplomado de Liderazgo",
-                year: String(d.year || "2026"),
-                rol: d.rol || "Líder",
-                grupo: d.grupo || "G-1",
-                zona: d.zona || "General",
+                year: String(d.year || "2026").trim(),
                 tipoImpresion: d.tipoImpresion || "Primera Impresión",
                 impreso: isImpreso,
                 digital: isDigital,
                 entregado: isEntregado,
-                driveUrl: d.driveUrl || undefined,
+                driveUrl: d.driveUrl ? String(d.driveUrl).trim() : undefined,
+                folio: d.folio || undefined,
                 createdAt: d.createdAt,
-              });
-            }
-          });
+              };
 
-          // Deduplicar por nombre y año
-          const unique = new Map<string, ReconocimientoPublicoItem>();
-          list.forEach((item) => {
-            const key = `${item.nombre.trim().toLowerCase()}-${item.year}-${item.diplomado}`;
-            if (!unique.has(key)) {
-              unique.set(key, item);
-            } else {
-              // Si uno tiene driveUrl, preferirlo
-              const existing = unique.get(key)!;
-              if (!existing.driveUrl && item.driveUrl) {
-                unique.set(key, item);
+              if (!studentMap.has(normKey)) {
+                studentMap.set(normKey, {
+                  nombreOriginal: rawName,
+                  grupo: d.grupo || "G-1",
+                  zona: d.zona || "General",
+                  rol: d.rol || "Líder",
+                  diplomas: [diplomaObj],
+                });
+              } else {
+                const existing = studentMap.get(normKey)!;
+                // Si este registro tiene mejores datos de grupo o zona, usarlos
+                if (d.grupo && (!existing.grupo || existing.grupo === "G-1")) existing.grupo = d.grupo;
+                if (d.zona && (!existing.zona || existing.zona === "General")) existing.zona = d.zona;
+
+                // Evitar duplicar el mismo id o el mismo diploma en el mismo año
+                const dupIndex = existing.diplomas.findIndex(
+                  (dip) => dip.id === diplomaObj.id || (dip.year === diplomaObj.year && dip.diplomado === diplomaObj.diplomado)
+                );
+                if (dupIndex >= 0) {
+                  // Si el nuevo tiene driveUrl y el anterior no, actualizar
+                  if (!existing.diplomas[dupIndex].driveUrl && diplomaObj.driveUrl) {
+                    existing.diplomas[dupIndex] = diplomaObj;
+                  }
+                } else {
+                  existing.diplomas.push(diplomaObj);
+                }
               }
             }
           });
 
-          // Ordenar alfabéticamente por nombre
-          const sorted = Array.from(unique.values()).sort((a, b) =>
-            a.nombre.localeCompare(b.nombre)
-          );
+          // Convertir el Map en lista de GraduadoItem
+          const list: GraduadoItem[] = [];
+          studentMap.forEach((data, normKey) => {
+            const { formattedName, primerApellido } = formatNombrePrimerApellido(data.nombreOriginal);
 
-          setRecords(sorted);
+            // Ordenar los diplomas cronológicamente por año
+            const sortedDiplomas = [...data.diplomas].sort((a, b) => a.year.localeCompare(b.year));
+
+            // Extraer años únicos en orden
+            const uniqueYears = Array.from(new Set(sortedDiplomas.map((dip) => dip.year))).sort();
+            const yearsSummary = uniqueYears.length > 0 ? uniqueYears.join(" - ") : "2026";
+
+            // Formato exacto solicitado por el usuario:
+            // - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026
+            const singleLineDisplay = `- ${formattedName} ${data.grupo} ${data.zona} Diplomas: ${yearsSummary}`;
+
+            const driveCount = sortedDiplomas.filter((d) => Boolean(d.driveUrl)).length;
+
+            list.push({
+              key: normKey,
+              nombreOriginal: data.nombreOriginal,
+              nombreFormateado: formattedName,
+              primerApellido,
+              grupo: data.grupo,
+              zona: data.zona,
+              rol: data.rol,
+              diplomas: sortedDiplomas,
+              yearsSummary,
+              singleLineDisplay,
+              hasAnyDrive: driveCount > 0,
+              driveCount,
+            });
+          });
+
+          // Ordenar alfabéticamente por nombre
+          list.sort((a, b) => a.nombreOriginal.localeCompare(b.nombreOriginal));
+
+          setGraduados(list);
           setIsLoading(false);
         },
         (error) => {
@@ -130,36 +236,48 @@ export default function PublicReconocimientosImpresosModal({
     }
   }, [isOpen]);
 
-  // Available years
+  // Lista de años disponibles en los diplomas
   const availableYears = useMemo(() => {
     const years = new Set<string>();
-    records.forEach((r) => {
-      if (r.year) years.add(r.year);
+    graduados.forEach((g) => {
+      g.diplomas.forEach((d) => {
+        if (d.year) years.add(d.year);
+      });
     });
     return Array.from(years).sort((a, b) => b.localeCompare(a));
-  }, [records]);
+  }, [graduados]);
 
-  // Filtered list
-  const filteredRecords = useMemo(() => {
-    return records.filter((r) => {
-      if (selectedYear !== "todos" && r.year !== selectedYear) {
+  // Filtrado de graduados
+  const filteredGraduados = useMemo(() => {
+    return graduados.filter((g) => {
+      // Filtro por drive
+      if (onlyWithDrive && !g.hasAnyDrive) {
         return false;
       }
-      if (onlyWithDrive && !r.driveUrl) {
-        return false;
+
+      // Filtro por año
+      if (selectedYear !== "todos") {
+        const hasYear = g.diplomas.some((d) => d.year === selectedYear);
+        if (!hasYear) return false;
       }
+
+      // Filtro por buscador
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
-        const matchName = r.nombre.toLowerCase().includes(q);
-        const matchDip = r.diplomado.toLowerCase().includes(q);
-        const matchZona = (r.zona || "").toLowerCase().includes(q);
-        const matchGrupo = (r.grupo || "").toLowerCase().includes(q);
-        const matchId = r.id.toLowerCase().includes(q);
-        return matchName || matchDip || matchZona || matchGrupo || matchId;
+        const matchName = g.nombreOriginal.toLowerCase().includes(q);
+        const matchApellido = g.primerApellido.toLowerCase().includes(q);
+        const matchGrupo = g.grupo.toLowerCase().includes(q);
+        const matchZona = g.zona.toLowerCase().includes(q);
+        const matchSingle = g.singleLineDisplay.toLowerCase().includes(q);
+        const matchDiploma = g.diplomas.some(
+          (d) => d.diplomado.toLowerCase().includes(q) || d.year.includes(q)
+        );
+        return matchName || matchApellido || matchGrupo || matchZona || matchSingle || matchDiploma;
       }
+
       return true;
     });
-  }, [records, selectedYear, onlyWithDrive, searchQuery]);
+  }, [graduados, onlyWithDrive, selectedYear, searchQuery]);
 
   const handleCopyLink = (url: string, id: string) => {
     navigator.clipboard.writeText(url);
@@ -168,8 +286,8 @@ export default function PublicReconocimientosImpresosModal({
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const handleAskSupportWhatsApp = (rec: ReconocimientoPublicoItem) => {
-    const msg = `Hola Laura, consulto en el portal el reconocimiento de ${rec.nombre} (${rec.diplomado} ${rec.year}) con folio ${rec.id}. ¿Me podrías compartir el enlace de Google Drive para descargarlo? ¡Muchas gracias!`;
+  const handleAskSupportWhatsApp = (g: GraduadoItem) => {
+    const msg = `Hola Laura, consulto en el portal el reconocimiento de ${g.nombreOriginal} (${g.grupo} • ${g.zona} • Diplomas: ${g.yearsSummary}). ¿Me podrías compartir el enlace de Google Drive para descargarlo? ¡Muchas gracias!`;
     const url = buildWhatsAppUrl("19999011852", msg);
     window.open(url, "_blank");
   };
@@ -180,23 +298,23 @@ export default function PublicReconocimientosImpresosModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-stone-950/80 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
         
-        {/* Header Modal */}
-        <div className="p-5 sm:p-6 bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white flex items-center justify-between shrink-0 shadow-md">
+        {/* Header Modal - Destacado GRADUADOS */}
+        <div className="p-5 sm:p-6 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-900 text-white flex items-center justify-between shrink-0 shadow-md">
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner shrink-0">
               🎓
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg sm:text-xl font-black tracking-tight">
-                  Reconocimientos Impresos y Digitales
+                <h2 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
+                  <span>GRADUADOS</span>
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider">
-                  Google Drive Público
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider shadow-xs">
+                  Reconocimientos Impresos & Drive
                 </span>
               </div>
-              <p className="text-xs text-indigo-100 max-w-xl">
-                Consulta la lista de reconocimientos oficiales ya impresos. Haz clic en el enlace para abrir y descargar tu archivo digital en Google Drive.
+              <p className="text-xs sm:text-sm text-indigo-100 max-w-xl font-medium mt-0.5">
+                Consulta los reconocimientos oficiales ya impresos con enlace público a Google Drive. Haz clic en tu diploma para abrirlo y guardarlo.
               </p>
             </div>
           </div>
@@ -205,15 +323,16 @@ export default function PublicReconocimientosImpresosModal({
             type="button"
             onClick={onClose}
             className="p-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white transition cursor-pointer shrink-0"
+            title="Cerrar ventana"
           >
             <X size={20} />
           </button>
         </div>
 
-        {/* Search Bar & Filters */}
+        {/* Buscador & Filtros */}
         <div className="p-4 sm:p-5 bg-white dark:bg-stone-850 border-b border-stone-200 dark:border-stone-800 space-y-3 shrink-0">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-            {/* Search Input */}
+            {/* Buscador */}
             <div className="relative flex-1">
               <Search
                 size={16}
@@ -223,7 +342,7 @@ export default function PublicReconocimientosImpresosModal({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar por tu nombre, diplomado, zona o folio..."
+                placeholder="Buscar por tu nombre, apellido, grupo, zona o año..."
                 className="w-full pl-10 pr-10 py-2.5 rounded-2xl bg-stone-100 dark:bg-stone-800 border-none text-xs sm:text-sm font-medium text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-stone-400"
               />
               {searchQuery && (
@@ -237,195 +356,264 @@ export default function PublicReconocimientosImpresosModal({
               )}
             </div>
 
-            {/* Drive Toggle */}
+            {/* Toggle de Enlace a Drive */}
             <button
               type="button"
-              onClick={() => setOnlyWithDrive(!onlyWithDrive)}
+              onClick={() => {
+                setOnlyWithDrive(!onlyWithDrive);
+                playChime("tick");
+              }}
               className={`px-4 py-2.5 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0 ${
                 onlyWithDrive
-                  ? "bg-indigo-600 text-white shadow-sm"
+                  ? "bg-indigo-600 text-white shadow-sm ring-2 ring-indigo-500/30"
                   : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200"
               }`}
+              title="Filtrar solo los graduados con enlace público a Google Drive"
             >
               <FolderOpen size={14} />
-              <span>Solo con Enlace a Drive</span>
+              <span>Solo con Enlace a Drive ({graduados.filter((g) => g.hasAnyDrive).length})</span>
             </button>
           </div>
 
-          {/* Year Filter Chips */}
+          {/* Chips de filtro por Año / Generación */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1 text-xs">
-            <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mr-1">
-              Año / Generación:
+            <span className="text-[11px] font-bold text-stone-400 uppercase tracking-wider mr-1 flex items-center gap-1">
+              <Calendar size={12} className="text-indigo-600" />
+              <span>Diplomas / Años:</span>
             </span>
             <button
               type="button"
-              onClick={() => setSelectedYear("todos")}
-              className={`px-3 py-1 rounded-xl font-bold transition ${
+              onClick={() => {
+                setSelectedYear("todos");
+                playChime("tick");
+              }}
+              className={`px-3 py-1 rounded-xl font-bold transition cursor-pointer ${
                 selectedYear === "todos"
-                  ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900"
+                  ? "bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 shadow-2xs"
                   : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200"
               }`}
             >
-              Todos ({records.length})
+              Todos ({graduados.length})
             </button>
             {availableYears.map((yr) => {
-              const cnt = records.filter((r) => r.year === yr).length;
+              const cnt = graduados.filter((g) => g.diplomas.some((d) => d.year === yr)).length;
               return (
                 <button
                   key={yr}
                   type="button"
-                  onClick={() => setSelectedYear(yr)}
-                  className={`px-3 py-1 rounded-xl font-bold transition ${
+                  onClick={() => {
+                    setSelectedYear(yr);
+                    playChime("tick");
+                  }}
+                  className={`px-3 py-1 rounded-xl font-bold transition flex items-center gap-1 cursor-pointer ${
                     selectedYear === yr
-                      ? "bg-indigo-600 text-white"
+                      ? "bg-indigo-600 text-white shadow-2xs"
                       : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-400 hover:bg-stone-200"
                   }`}
                 >
-                  {yr} ({cnt})
+                  <span>{yr}</span>
+                  <span className="text-[10px] opacity-75">({cnt})</span>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Records List Body */}
+        {/* Lista de Graduados */}
         <div className="p-4 sm:p-6 overflow-y-auto space-y-3 flex-1">
           {isLoading ? (
             <div className="py-16 text-center space-y-3">
               <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto" />
               <p className="text-xs text-stone-500 font-medium">
-                Cargando lista de reconocimientos impresos...
+                Cargando lista oficial de graduados y enlaces a Google Drive...
               </p>
             </div>
-          ) : filteredRecords.length === 0 ? (
+          ) : filteredGraduados.length === 0 ? (
             <div className="py-14 text-center space-y-4 max-w-md mx-auto">
               <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center mx-auto">
                 <GraduationCap size={32} />
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-black text-stone-900 dark:text-stone-100">
-                  No se encontraron reconocimientos con esos criterios
+                  No se encontraron graduados con esos criterios
                 </h3>
                 <p className="text-xs text-stone-500">
                   {searchQuery
-                    ? `No hay coincidencias para "${searchQuery}". Verifica la ortografía de tu nombre.`
-                    : "Aún no hay reconocimientos registrados con estatus de impreso para este filtro."}
+                    ? `No hay coincidencias para "${searchQuery}". Verifica la ortografía de tu nombre o apellido.`
+                    : onlyWithDrive
+                    ? "No hay reconocimientos con enlace de Google Drive en este filtro. Desmarca el filtro de Drive para ver todos los impresos."
+                    : "Aún no hay graduados registrados con estatus de impreso para este filtro."}
                 </p>
               </div>
 
-              {onRequestNewClick && (
+              {onlyWithDrive && (
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    onRequestNewClick();
-                  }}
-                  className="px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs transition shadow-md inline-flex items-center gap-2 cursor-pointer"
+                  onClick={() => setOnlyWithDrive(false)}
+                  className="px-4 py-2 rounded-xl bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-bold text-xs hover:bg-stone-300 transition cursor-pointer"
                 >
-                  <span>📜 Solicitar Impresión de mi Reconocimiento</span>
-                  <ArrowRight size={14} />
+                  Ver todos los graduados impresos (con y sin link)
                 </button>
+              )}
+
+              {onRequestNewClick && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onRequestNewClick();
+                    }}
+                    className="px-5 py-2.5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs transition shadow-md inline-flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>📜 Solicitar Impresión de mi Reconocimiento</span>
+                    <ArrowRight size={14} />
+                  </button>
+                </div>
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {filteredRecords.map((item) => (
+            <div className="space-y-3">
+              {/* Encabezado descriptivo de la lista */}
+              <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 px-1 pb-1">
+                <span className="font-bold uppercase tracking-wider text-[11px] flex items-center gap-1.5">
+                  <Users size={13} className="text-indigo-600" />
+                  <span>Listado Oficial de Graduados</span>
+                </span>
+                <span>{filteredGraduados.length} participante(s)</span>
+              </div>
+
+              {/* Tarjetas de Graduados con el formato exacto requerido */}
+              {filteredGraduados.map((item) => (
                 <div
-                  key={item.id}
-                  className="p-4 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs hover:border-indigo-400 dark:hover:border-indigo-600 transition flex flex-col justify-between space-y-3 group"
+                  key={item.key}
+                  className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-850 border border-stone-200 dark:border-stone-800 shadow-xs hover:border-indigo-400 dark:hover:border-indigo-600 transition flex flex-col justify-between space-y-3 group"
                 >
-                  {/* Top info */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-black text-stone-900 dark:text-stone-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                          {item.nombre}
-                        </h4>
-                        <p className="text-xs font-bold text-stone-600 dark:text-stone-300 flex items-center gap-1.5 mt-0.5">
-                          <span>{item.diplomado}</span>
-                          <span className="text-stone-400">•</span>
-                          <span className="text-indigo-600 dark:text-indigo-400">
-                            Gen. {item.year}
+                  {/* Formato solicitado por el usuario */}
+                  <div className="space-y-2">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      {/* Texto representativo del graduado */}
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                            GRADUADO
                           </span>
-                        </p>
+                          <span className="text-xs font-mono font-bold text-stone-400">
+                            {item.grupo} • {item.zona}
+                          </span>
+                        </div>
+                        {/* Línea principal: - Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026 */}
+                        <h4 className="text-sm sm:text-base font-black text-stone-900 dark:text-stone-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors flex flex-wrap items-baseline gap-1.5">
+                          <span className="text-indigo-600 dark:text-indigo-400 font-black">•</span>
+                          <span>{item.nombreFormateado}</span>
+                          <span className="text-xs font-bold text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-lg">
+                            {item.grupo}
+                          </span>
+                          <span className="text-xs font-bold text-stone-600 dark:text-stone-300 bg-stone-100 dark:bg-stone-800 px-2 py-0.5 rounded-lg">
+                            Zona {item.zona}
+                          </span>
+                        </h4>
                       </div>
 
-                      {/* Status Badges */}
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        {item.impreso && (
-                          <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 text-[10px] font-black flex items-center gap-1">
-                            <Printer size={10} />
-                            <span>Impreso</span>
+                      {/* Resumen de diplomas */}
+                      <div className="flex items-center gap-2 self-start sm:self-auto">
+                        <div className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/60 text-purple-900 dark:text-purple-200 text-xs font-black">
+                          <span className="text-[10px] uppercase text-purple-600 dark:text-purple-400 block font-bold leading-none mb-0.5">
+                            Diplomas
                           </span>
-                        )}
-                        {item.digital && (
-                          <span className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-800 dark:text-indigo-300 text-[10px] font-bold">
-                            Digital OK
-                          </span>
-                        )}
+                          <span>{item.yearsSummary}</span>
+                        </div>
                       </div>
                     </div>
 
-                    {/* Metadata tags */}
-                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-500 dark:text-stone-400 pt-1">
-                      {item.rol && (
-                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 font-medium">
-                          {item.rol}
-                        </span>
-                      )}
-                      {item.zona && (
-                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 font-medium">
-                          Zona {item.zona}
-                        </span>
-                      )}
-                      {item.grupo && (
-                        <span className="px-2 py-0.5 rounded-md bg-stone-100 dark:bg-stone-800 font-medium">
-                          {item.grupo}
-                        </span>
-                      )}
+                    {/* Resumen en una línea tal como lo visualizó el usuario */}
+                    <div className="p-2.5 rounded-xl bg-stone-50 dark:bg-stone-900 border border-stone-200/80 dark:border-stone-800 text-xs font-mono text-stone-700 dark:text-stone-300 flex items-center justify-between gap-2 overflow-x-auto">
+                      <div className="truncate">
+                        <span className="font-bold text-indigo-600 dark:text-indigo-400">GRADUADOS: </span>
+                        <span>{item.singleLineDisplay}</span>
+                      </div>
+                      <span className="text-[10px] text-stone-400 font-sans shrink-0">
+                        {item.diplomas.length} diploma(s)
+                      </span>
                     </div>
                   </div>
 
-                  {/* Drive Action Button */}
-                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex items-center justify-between gap-2">
-                    {item.driveUrl ? (
-                      <div className="flex items-center gap-2 w-full">
-                        <a
-                          href={item.driveUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="flex-1 py-2 px-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs transition shadow-sm flex items-center justify-center gap-2 group/btn cursor-pointer"
-                        >
-                          <FolderOpen size={14} className="shrink-0" />
-                          <span>Abrir Reconocimiento Digital</span>
-                          <ExternalLink size={12} className="opacity-70 group-hover/btn:opacity-100" />
-                        </a>
+                  {/* Botones de acción directos a Google Drive para cada diploma */}
+                  <div className="pt-2 border-t border-stone-100 dark:border-stone-800 space-y-2">
+                    <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400 flex items-center gap-1.5">
+                      <FolderOpen size={13} className="text-indigo-600" />
+                      <span>Reconocimientos Digitales en Google Drive:</span>
+                    </span>
 
-                        <button
-                          type="button"
-                          onClick={() => handleCopyLink(item.driveUrl!, item.id)}
-                          className="p-2 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-stone-200 text-stone-600 dark:text-stone-300 transition shrink-0"
-                          title="Copiar enlace de Google Drive"
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {item.diplomas.map((dip) => (
+                        <div
+                          key={dip.id}
+                          className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs transition ${
+                            dip.driveUrl
+                              ? "bg-indigo-50/70 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800/60 text-indigo-950 dark:text-indigo-200"
+                              : "bg-stone-100 dark:bg-stone-800/60 border-stone-200 dark:border-stone-700 text-stone-500"
+                          }`}
                         >
-                          {copiedId === item.id ? (
-                            <Check size={14} className="text-emerald-600" />
+                          <div className="min-w-0 space-y-0.5">
+                            <div className="flex items-center gap-1.5 font-bold truncate">
+                              <span className="px-1.5 py-0.2 rounded-md bg-white dark:bg-stone-800 text-[10px] font-black border border-stone-300 dark:border-stone-700">
+                                {dip.year}
+                              </span>
+                              <span className="truncate">{dip.diplomado}</span>
+                            </div>
+                            <span className="text-[10px] text-stone-400 font-mono block">
+                              {dip.tipoImpresion}
+                            </span>
+                          </div>
+
+                          {dip.driveUrl ? (
+                            <div className="flex items-center gap-1 shrink-0">
+                              <a
+                                href={dip.driveUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                title="Abrir reconocimiento en Google Drive"
+                              >
+                                <span>Ver Drive</span>
+                                <ExternalLink size={12} />
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyLink(dip.driveUrl!, dip.id)}
+                                className="p-1.5 rounded-lg bg-white dark:bg-stone-800 hover:bg-stone-200 text-stone-600 dark:text-stone-300 transition cursor-pointer"
+                                title="Copiar enlace"
+                              >
+                                {copiedId === dip.id ? (
+                                  <Check size={13} className="text-emerald-600" />
+                                ) : (
+                                  <Copy size={13} />
+                                )}
+                              </button>
+                            </div>
                           ) : (
-                            <Copy size={14} />
+                            <span className="text-[10px] text-stone-400 italic shrink-0">
+                              En vinculación
+                            </span>
                           )}
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between w-full text-xs">
-                        <span className="text-[11px] text-stone-400 italic">
-                          Enlace Drive en vinculación
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Si no tiene Drive aún, botón de WhatsApp para pedirlo */}
+                    {!item.hasAnyDrive && (
+                      <div className="flex items-center justify-between text-xs bg-amber-50 dark:bg-amber-950/30 p-2 rounded-xl border border-amber-200 dark:border-amber-800/50">
+                        <span className="text-amber-800 dark:text-amber-300 text-[11px] font-medium">
+                          ⚠️ Tu enlace de Drive se está subiendo por administración.
                         </span>
                         <button
                           type="button"
                           onClick={() => handleAskSupportWhatsApp(item)}
-                          className="px-2.5 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 hover:bg-emerald-50 hover:text-emerald-700 dark:hover:bg-emerald-950/60 dark:hover:text-emerald-300 text-stone-600 dark:text-stone-400 font-bold text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+                          className="px-2.5 py-1 rounded-lg bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 font-bold text-[10px] flex items-center gap-1 cursor-pointer"
                         >
-                          <MessageCircle size={13} className="text-emerald-500" />
-                          <span>Solicitar archivo</span>
+                          <MessageCircle size={11} />
+                          <span>Solicitar por WhatsApp</span>
                         </button>
                       </div>
                     )}
@@ -441,7 +629,7 @@ export default function PublicReconocimientosImpresosModal({
           <div className="flex items-center gap-2 text-stone-500 dark:text-stone-400">
             <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
             <span>
-              Total mostrados: <strong>{filteredRecords.length}</strong> reconocimientos impresos/listos
+              Graduados mostrados: <strong>{filteredGraduados.length}</strong> ({filteredGraduados.filter((g) => g.hasAnyDrive).length} con enlace a Drive)
             </span>
           </div>
 
@@ -453,10 +641,10 @@ export default function PublicReconocimientosImpresosModal({
                   onClose();
                   onRequestNewClick();
                 }}
-                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs transition flex items-center gap-1.5 cursor-pointer"
+                className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs transition flex items-center gap-1.5 cursor-pointer shadow-xs"
               >
                 <GraduationCap size={14} />
-                <span>¿No estás en la lista? Solicitar Impresión</span>
+                <span>¿No apareces en la lista? Solicitar Impresión</span>
               </button>
             )}
 

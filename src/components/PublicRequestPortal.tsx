@@ -555,6 +555,21 @@ export default function PublicRequestPortal({
               </button>
             )}
 
+            {/* Botón Acceso Rápido Graduados */}
+            <button
+              type="button"
+              id="btn-nav-graduados"
+              onClick={() => {
+                setShowReconocimientosImpresosModal(true);
+                playChime("tick");
+              }}
+              className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-black shadow-xs flex items-center gap-1.5 transition-all transform active:scale-95 cursor-pointer"
+              title="Ver lista oficial de Graduados y enlaces a Google Drive"
+            >
+              <GraduationCap size={14} />
+              <span>Graduados 🎓</span>
+            </button>
+
             {/* Private Admin Mode Switch / Avión de Admin */}
             <button
               type="button"
@@ -650,27 +665,35 @@ export default function PublicRequestPortal({
             </button>
           </div>
 
-          {/* Tarjeta 2: Consultar Reconocimientos Impresos y Ver Digital en Drive */}
-          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-emerald-800 via-teal-850 to-stone-900 text-white shadow-xl border border-emerald-400/40 relative overflow-hidden flex flex-col justify-between space-y-4">
+          {/* Tarjeta 2: GRADUADOS - Reconocimientos Impresos y Enlace Drive */}
+          <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-br from-indigo-900 via-purple-900 to-stone-900 text-white shadow-xl border border-purple-400/40 relative overflow-hidden flex flex-col justify-between space-y-4">
             <div className="flex items-start gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/30 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 shadow-md border border-emerald-300/30">
-                📂
+              <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shrink-0 shadow-md border border-white/20">
+                🎓
               </div>
-              <div className="space-y-0.5">
+              <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/30 text-emerald-200 text-[10px] font-black uppercase tracking-wider">
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider">
                     Google Drive Público
                   </span>
-                  <span className="px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase">
-                    ¡Listos!
+                  <span className="px-2 py-0.5 rounded-full bg-purple-400/30 text-purple-200 text-[10px] font-bold">
+                    Lista Oficial
                   </span>
                 </div>
-                <h3 className="text-base font-black text-white tracking-tight">
-                  Reconocimientos Ya Impresos
+                <h3 className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                  <span>GRADUADOS</span>
                 </h3>
-                <p className="text-xs text-emerald-100 leading-relaxed">
-                  Consulta la lista oficial en vivo y abre el archivo digital en Drive de tu reconocimiento.
+                <p className="text-xs text-purple-100/90 leading-relaxed">
+                  Lista de reconocimientos que ya imprimí ligados al link de Google Drive donde puedes ver tu reconocimiento digital en modo público.
                 </p>
+
+                {/* Vista previa del formato solicitado por el usuario */}
+                <div className="pt-1">
+                  <div className="px-3 py-1.5 rounded-xl bg-black/30 border border-white/10 text-[11px] font-mono text-amber-200 truncate flex items-center gap-1.5">
+                    <span className="text-purple-300 font-bold shrink-0">Formato:</span>
+                    <span className="truncate">- Nombre (primer apellido) Grupo Zona Diplomas: 2022 - 2025 - 2026</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -681,9 +704,9 @@ export default function PublicRequestPortal({
                 setShowReconocimientosImpresosModal(true);
                 playChime("tick");
               }}
-              className="w-full px-5 py-3 rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-300 hover:from-emerald-300 hover:to-teal-200 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-emerald-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full px-5 py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-stone-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-lg shadow-amber-500/30 transition-all transform active:scale-95 flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>🌐 VER RECONOCIMIENTOS IMPRESOS (DRIVE)</span>
+              <span>🎓 GRADUADOS • VER RECONOCIMIENTOS DIGITALES (DRIVE)</span>
               <ExternalLink size={16} />
             </button>
           </div>

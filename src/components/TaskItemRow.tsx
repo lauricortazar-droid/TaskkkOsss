@@ -152,7 +152,15 @@ export default function TaskItemRow({
     >
       {/* Column 1: ID */}
       <td className="py-3.5 px-3 sm:px-4 font-mono font-bold text-stone-500 dark:text-stone-400 text-center align-top pt-4">
-        #{task.id}
+        <div>#{task.id}</div>
+        {task.numeroFolio && (
+          <span
+            className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+            title={`Folio / N° de referencia: ${task.numeroFolio}`}
+          >
+            N° {task.numeroFolio}
+          </span>
+        )}
       </td>
 
       {/* Column 2: Solicitante */}
