@@ -70,7 +70,7 @@ export default function TaskResourceCard({
 
         if (videoId) {
           thumbnail = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
-          previewEmbed = `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+          previewEmbed = `https://www.youtube.com/embed/${videoId}?autoplay=0`;
         }
       }
 

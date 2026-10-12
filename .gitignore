@@ -10,3 +10,6 @@ coverage/
 serviceAccountKey.json
 *.pem
 credentials.json
+*.bundle
+*.tar.gz
+*.zip

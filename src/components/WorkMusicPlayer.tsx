@@ -81,7 +81,7 @@ const DEFAULT_PRESETS: WorkPlaylist[] = [
     title: "Lofi Girl — Beats to Relax/Study to",
     platform: "youtube",
     url: "https://music.youtube.com/watch?v=jfKfPfyJRdk",
-    embedUrl: "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=1&mute=0",
+    embedUrl: "https://www.youtube.com/embed/jfKfPfyJRdk?autoplay=0",
     description: "Transmisión continua de lofi chill hip-hop para trabajar.",
   },
   {
@@ -89,7 +89,7 @@ const DEFAULT_PRESETS: WorkPlaylist[] = [
     title: "Música Clásica para Alta Concentración",
     platform: "youtube",
     url: "https://music.youtube.com/watch?v=WPni755-Krg",
-    embedUrl: "https://www.youtube.com/embed/WPni755-Krg?autoplay=1",
+    embedUrl: "https://www.youtube.com/embed/WPni755-Krg?autoplay=0",
     description: "Mozart, Bach y Chopin seleccionados para potenciar el enfoque.",
   },
   {
@@ -97,7 +97,7 @@ const DEFAULT_PRESETS: WorkPlaylist[] = [
     title: "Synthwave / Chillwave Productivo",
     platform: "youtube",
     url: "https://music.youtube.com/watch?v=4xDzrJKXOOY",
-    embedUrl: "https://www.youtube.com/embed/4xDzrJKXOOY?autoplay=1",
+    embedUrl: "https://www.youtube.com/embed/4xDzrJKXOOY?autoplay=0",
     description: "Atmósferas electrónicas retro y suaves de alta productividad.",
   },
   // Google Drive Presets
@@ -180,7 +180,7 @@ export default function WorkMusicPlayer({
     }
   });
 
-  const [isExternalPlaying, setIsExternalPlaying] = useState<boolean>(true);
+  const [isExternalPlaying, setIsExternalPlaying] = useState<boolean>(false);
 
   // Pomodoro Context connection for harmonic non-blocking positioning
   const pomodoroCtx = usePomodoro();
@@ -294,13 +294,13 @@ export default function WorkMusicPlayer({
 
       if (listId) {
         return {
-          embedUrl: `https://www.youtube.com/embed/videoseries?list=${listId}&autoplay=1`,
+          embedUrl: `https://www.youtube.com/embed/videoseries?list=${listId}&autoplay=0`,
           directUrl: cleanUrl,
         };
       }
       if (videoId) {
         return {
-          embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=1`,
+          embedUrl: `https://www.youtube.com/embed/${videoId}?autoplay=0`,
           directUrl: cleanUrl,
         };
       }
