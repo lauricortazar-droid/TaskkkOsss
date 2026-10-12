@@ -1,0 +1,603 @@
+export interface Contact {
+  id: string;
+  nombre: string;
+  telefono: string; // e.g. "5215512345678" or "+52 55 1234 5678" or "19999011852"
+  rol?: string; // e.g. "Coordinación", "Líder Zona", "Proveedor"
+  dominio?: string; // e.g. "Laura", "FGDLL", "Diseño", "Lonas", "Finanzas"
+  etiquetas?: string[]; // Array of tag names or IDs
+  email?: string;
+  empresa?: string;
+  notas?: string;
+}
+
+export interface WhatsAppMessageItem {
+  id: string;
+  destinatario: string;
+  telefono?: string;
+  mensaje: string;
+  tareaId?: number;
+  enviado?: boolean;
+}
+
+export type TagCategory = "prioridad" | "zona" | "area";
+
+export interface TagItem {
+  id: string;
+  nombre: string;
+  categoria: TagCategory;
+  color: string; // "rose" | "amber" | "blue" | "purple" | "cyan" | "emerald" | "orange" | "violet" | "stone"
+}
+
+export interface TaskResource {
+  url: string;
+  title: string;
+  addedAt: string;
+}
+
+export interface TaskItem {
+  id: number;
+  solicitante: string;
+  tarea: string;
+  estado: "Pendiente" | "En Proceso" | "Completado";
+  fechaIngreso: string;
+  dominio?: string;
+  imagenReferencia?: string; // Base64 data URL
+  contacto?: {
+    nombre: string;
+    telefono?: string;
+  };
+  numeroFolio?: string | number; // Número de folio, orden o identificador numérico de referencia
+  etiquetas?: string[]; // Array of tag names or IDs
+  notas?: string; // Sub-notas u observaciones persistentes de la tarea
+  fechaLimite?: string; // YYYY-MM-DD fecha límite / deadline de entrega
+  resources?: TaskResource[]; // Contextual links/resources attached to this task (Ley del Foco)
+  googleTaskId?: string; // ID de Google Tasks vinculado
+  googleCalendarEventId?: string; // ID del Evento en Google Calendar vinculado
+  googleCalendarHtmlLink?: string; // Enlace web directo al evento de Google Calendar
+  googleSyncStatus?: "synced" | "pending" | "conflict";
+  lastGoogleSync?: string; // Marca de tiempo ISO del último sincronizado
+  fechaCompletado?: string; // ISO timestamp when status changed to Completado
+}
+
+export interface GlobalResource {
+  id: string;
+  url: string;
+  title: string;
+  keywords: string[];
+  savedAt: string;
+}
+
+export interface UrlLibraryItem {
+  id: string;
+  url: string;
+  title: string;
+  categoria?: string;
+  descripcion?: string;
+  keywords?: string[];
+  icon?: string;
+  isFavorite?: boolean;
+  clicks?: number;
+  lastOpenedAt?: string;
+  isDesignFile?: boolean; // Indica si es el archivo de diseño creado en Google Drive
+  driveUrl?: string; // Link directo a Google Drive
+  relatedOrderId?: string; // ID del pedido de Lonas vinculado (ej. lon-008)
+  relatedOrderFolio?: number; // Folio de lona vinculado (ej. 8 para L-008)
+  clienteNombre?: string;
+  empresaZona?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type UrlViewMode = "grid" | "list" | "categories" | "daily";
+
+export interface QuickResponseMessage {
+  id: string;
+  titulo: string;
+  categoria: string;
+  mensaje: string;
+  etiquetas: string[];
+  fecha: string;
+  copiasCount?: number;
+  urlId?: string;
+  urlEnlace?: string;
+}
+
+export type RouterAction = "ROUTE_RESOURCE" | "CREATE_TASK" | "UNIVERSAL_SEARCH" | "SAVE_URL_LIBRARY";
+
+export interface RouterDestination {
+  type: "TASK" | "GLOBAL" | "URL_LIBRARY" | null;
+  taskId: string | null;
+}
+
+export interface RouterPayload {
+  url?: string;
+  urls?: string[];
+  title?: string;
+  keywords?: string[];
+  categoria?: string;
+  descripcion?: string;
+  taskText?: string;
+  searchQuery?: string;
+}
+
+export interface RouterStructuredOutput {
+  action: RouterAction;
+  payload: RouterPayload;
+  destination: RouterDestination;
+  system_log: string;
+  timestamp?: string;
+}
+
+export interface UniversalSearchResult {
+  id: string;
+  title: string;
+  url?: string;
+  source: string; // e.g. "Tarea: Revisar reconocimientos" or "Archivo global" or "Biblioteca URLs"
+  sourceType: "task_title" | "task_resource" | "global_resource" | "url_library";
+  taskId?: number;
+  taskTitle?: string;
+  keywords?: string[];
+  categoria?: string;
+  matchType: "title" | "keyword" | "content";
+  addedAt?: string;
+}
+
+export interface TaskOSExportData {
+  version: number;
+  exportedAt: string;
+  tasks: TaskItem[];
+  globalResources: GlobalResource[];
+  urlLibrary?: UrlLibraryItem[];
+  quickResponses?: QuickResponseMessage[];
+  contacts?: Contact[];
+  tags?: TagItem[];
+  esencialTaskId?: number | null;
+}
+
+export interface GoogleDriveBackupConfig {
+  enabled: boolean;
+  frequency: "daily" | "weekly";
+  preferredDayOfWeek?: number; // 0 = Domingo, 1 = Lunes, etc. (para semanal)
+  preferredHour?: number; // 0 - 23 (hora del día para respaldo)
+  lastBackupAt?: string;
+  nextScheduledBackupAt?: string;
+  lastBackupFileId?: string;
+  lastBackupFileName?: string;
+  lastBackupWebViewLink?: string;
+  lastBackupSizeBytes?: number;
+  lastBackupStatus?: "success" | "error" | "pending";
+  lastBackupError?: string;
+  totalBackupsRun?: number;
+}
+
+export interface GoogleDriveBackupRecord {
+  id: string;
+  fileId: string;
+  fileName: string;
+  fileSize: number;
+  createdAt: string;
+  webViewLink?: string;
+  status: "success" | "failed";
+  frequency?: "daily" | "weekly" | "manual";
+  tasksCount: number;
+  resourcesCount: number;
+  urlsCount: number;
+  quickResponsesCount?: number;
+}
+
+export interface TaskOSResponse {
+  mensajeParaEnviar?: string | null;
+  mensajesMultiples?: Array<{
+    destinatario: string;
+    telefono?: string;
+    mensaje: string;
+  }>;
+  tasks: TaskItem[];
+  tareaEsencialId?: number | null;
+  tareasSecundariasIds?: number[];
+  activarPomodoro?: boolean;
+  pomodoroTarea?: string | null;
+  pomodoroMinutos?: number;
+  resumenAccion?: string;
+  dominioDetectado?: string;
+}
+
+export type DomainType =
+  | "Todos"
+  | "FGDLL"
+  | "Universidad"
+  | "Tecnología"
+  | "Technology"
+  | "Diseño"
+  | "Profesional"
+  | "Personal"
+  | "Laura"
+  | "Lonas"
+  | "Finanzas";
+
+export type WorkspaceTab =
+  | "task-os"
+  | "pendientes"
+  | "lonas"
+  | "finanzas"
+  | "urls"
+  | "print"
+  | "pomodoro"
+  | "analytics"
+  | "portal"
+  | "reconocimientos";
+
+/* =========================================================
+   PRINT STATION & VOUCHER TYPES (🖨️ Comprobantes, Tickets y Recibos)
+========================================================= */
+export type PrintDocType =
+  | "ticket_lona"
+  | "comprobante_pago"
+  | "reporte_tarea"
+  | "estado_cuenta"
+  | "recibo_general";
+
+export interface PrintItem {
+  id: string;
+  tipo: PrintDocType;
+  folio?: string;
+  titulo: string;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  clienteEmail?: string;
+  empresaZona?: string;
+  fecha: string;
+  fechaEntrega?: string;
+  items?: Array<{
+    descripcion: string;
+    detalle?: string;
+    cantidad?: number;
+    subtotal?: number;
+  }>;
+  total: number;
+  anticipo?: number;
+  saldo?: number;
+  metodoPago?: string;
+  estado?: string;
+  notas?: string;
+  origen?: "lonas" | "finanzas" | "task-os" | "out" | "manual";
+  referenciaId?: string;
+  driveUrl?: string; // Link de Google Drive con el archivo del diseño creado
+  createdAt: string;
+}
+
+export type StatusFilter = "Todos" | "Pendiente" | "En Proceso" | "Completado" | "Activas";
+
+export interface SyncStatus {
+  email: string;
+  isSyncing: boolean;
+  lastSyncedAt: string | null;
+  error?: string | null;
+  isConnected?: boolean;
+  deviceType?: "mobile" | "desktop";
+}
+
+export interface CloudSyncPayload {
+  email: string;
+  tasks: TaskItem[];
+  globalResources?: GlobalResource[];
+  urlLibrary?: UrlLibraryItem[];
+  contacts?: Contact[];
+  tags?: TagItem[];
+  esencialTaskId?: number | null;
+  secundariasTaskIds?: number[];
+  deviceName?: string;
+  updatedAt?: string;
+}
+
+/* =========================================================
+   MUSIC & PLAYLIST PLAYER TYPES (Spotify, YouTube Music, Suno, Google Drive, Local Folder, Web)
+========================================================= */
+export type MusicPlatform = "spotify" | "youtube" | "suno" | "gdrive" | "local" | "web";
+
+export interface WorkPlaylist {
+  id: string;
+  title: string;
+  platform: MusicPlatform;
+  url: string;
+  embedUrl: string;
+  description: string;
+  isCustom?: boolean;
+}
+
+/* =========================================================
+   POMODORO LOGS & PERFORMANCE TYPES (Módulo de Rendimiento Semanal)
+========================================================= */
+export interface PomodoroLogEntry {
+  id: string;
+  taskId?: number | null;
+  taskName: string;
+  durationMinutes: number;
+  completedAt: string; // ISO string
+  date: string; // YYYY-MM-DD
+  mode: "work" | "shortBreak" | "longBreak";
+  category?: string;
+}
+
+/* =========================================================
+   LONAS OS TYPES (Gran Formato, Cotizaciones, Pedidos, Producción, Cobros)
+========================================================= */
+export type LonasStatus =
+  | "Cotización"
+  | "Anticipo recibido"
+  | "Diseño"
+  | "Esperando aprobación"
+  | "Aprobado"
+  | "Producción"
+  | "Acabados"
+  | "Listo"
+  | "Entregado"
+  | "Cancelado";
+
+export interface LonasOrderLink {
+  id: string;
+  titulo: string;
+  url: string;
+  tipo?: "drive" | "boceto" | "comprobante" | "otro";
+}
+
+export interface LonasOrderImage {
+  id: string;
+  nombre: string;
+  dataUrl: string; // base64 o URL
+  fecha: string;
+}
+
+export interface LonasOrderItemAcabados {
+  ojillos?: boolean;
+  ojillosCantidad?: number;
+  ojillosCostoUnitario?: number;
+  bastilla?: boolean;
+  bastillaMetrosLineales?: number;
+  bastillaCostoMetro?: number;
+  jaretas?: boolean;
+  jaretasCosto?: number;
+  refuerzoEsquinas?: boolean;
+  refuerzoCosto?: number;
+  otrosAcabadosTexto?: string;
+  otrosAcabadosCosto?: number;
+}
+
+export interface LonasOrderItemEstructura {
+  incluyeEstructura?: boolean;
+  tipoEstructura?: string; // "Roll-up 85x200", "Araña X 60x160", "Bastidor madera", "Bastidor herrería", "Otro"
+  costoEstructura?: number;
+  instalacionEnSitio?: boolean;
+  costoInstalacion?: number;
+  envioFlete?: number;
+}
+
+export interface LonasOrderItem {
+  id: string;
+  descripcion: string; // e.g. "Lona Front 13oz", "Vinil brillante", "Estructura banner"
+  material?: string;
+  ancho: number; // metros
+  alto: number; // metros
+  cantidad: number;
+  m2: number; // ancho * alto * cantidad
+  costoPorM2: number;
+  precioVentaPorM2: number;
+  costoCalculado: number;
+  precioCalculado: number;
+  precioFinal: number; // editable manualmente por ítem
+  costoFinal: number;
+  observaciones?: string;
+  acabados?: LonasOrderItemAcabados;
+  estructuraInstalacion?: LonasOrderItemEstructura;
+}
+
+export interface LonasPayment {
+  id: string;
+  fecha: string;
+  monto: number;
+  metodo: "Efectivo" | "Transferencia" | "Depósito" | "Tarjeta";
+  referencia?: string;
+  nota?: string;
+}
+
+export interface LonasOrder {
+  id: string;
+  folio: number; // e.g. 101, 102...
+  cliente: {
+    nombre: string;
+    telefono: string;
+    empresa?: string;
+    email?: string;
+  };
+  items: LonasOrderItem[];
+  subtotal: number;
+  descuento: number;
+  recargoUrgencia?: number;
+  costoTotalCalculado?: number; // Total calculado por las calculadoras
+  total: number; // Total final acordado (modificable por el usuario)
+  totalModificadoManualmente?: boolean;
+  anticipo: number;
+  pagos: LonasPayment[];
+  saldo: number; // total - suma de pagos
+  estado: LonasStatus;
+  fechaIngreso: string;
+  fechaEntregaEstimada: string;
+  comprobanteUrl?: string;
+  driveUrl?: string; // Link de Google Drive donde está el archivo del diseño creado
+  links?: LonasOrderLink[];
+  imagenesEjemplo?: LonasOrderImage[];
+  notasInternas?: string;
+  notasCliente?: string;
+  entregadoAt?: string;
+}
+
+/* =========================================================
+   MI SALUD FINANCIERA TYPES (Flujo de Efectivo, Disponible Real, Deudas)
+========================================================= */
+export type AccountType = "Efectivo" | "Cuenta Bancaria" | "Tarjeta Débito" | "Billetera Digital" | "Ahorro";
+export type ExpenseType = "Fijo" | "Variable";
+export type PaymentMethodType = "Efectivo" | "Tarjeta" | "Transferencia";
+
+export interface FinancialExpense {
+  id: string;
+  fecha: string; // YYYY-MM-DD
+  articulo: string; // Artículo / concepto del gasto
+  tipo: ExpenseType; // Fijo o Variable
+  referencia: string; // Factura, ticket, folio, referencia bancaria
+  metodo: PaymentMethodType; // Efectivo / Tarjeta / Transferencia
+  monto: number;
+  categoria: string; // Renta, Servicios, Comida, Insumos, etc.
+  notas?: string;
+  cuentaId?: string;
+  deudaId?: string;
+  createdAt?: string;
+}
+
+export interface FinancialIncomeItem {
+  id: string;
+  fecha: string; // YYYY-MM-DD
+  articulo: string; // Concepto o artículo del ingreso
+  monto: number;
+  tipo?: string; // Venta, Anticipo, Salario, etc.
+  categoria: string;
+  metodo: PaymentMethodType; // Efectivo / Tarjeta / Transferencia
+  referencia: string;
+  notas?: string;
+  estado: "Recibido" | "Esperado";
+  cuentaId?: string;
+  createdAt?: string;
+}
+
+export interface FinancialFixedExpenseConfig {
+  id: string;
+  concepto: string;
+  monto: number;
+  diaVencimiento: number; // Día del mes (1 al 31)
+  categoria: string;
+  metodo: PaymentMethodType;
+  referencia?: string;
+  activo: boolean;
+  notas?: string;
+}
+
+export interface FinancialAccount {
+  id: string;
+  nombre: string;
+  tipo: AccountType;
+  saldoActual: number;
+  notas?: string;
+}
+
+export interface ExpectedIncome {
+  id: string;
+  concepto: string;
+  montoEsperado: number;
+  fechaEsperada: string;
+  montoRecibido: number;
+  estado: "Esperado" | "Parcial" | "Recibido" | "Atrasado" | "Cancelado";
+  categoria: string;
+  cuentaDestinoId?: string;
+  notas?: string;
+}
+
+export interface FinancialDebtPayment {
+  id: string;
+  fecha: string;
+  monto: number;
+  cuentaOrigenId?: string;
+  metodo?: PaymentMethodType;
+  referencia?: string;
+  nota?: string;
+}
+
+export interface FinancialDebt {
+  id: string;
+  acreedor: string;
+  concepto: string;
+  montoOriginal: number;
+  saldoActual: number;
+  vencimiento: string;
+  pagoMinimo: number;
+  prioridad: "Alta" | "Media" | "Baja";
+  estado: "Activa" | "Liquidada";
+  historialPagos: FinancialDebtPayment[];
+  notas?: string;
+}
+
+export interface FinancialCommitment {
+  id: string;
+  concepto: string;
+  monto: number;
+  fechaVencimiento: string;
+  categoria: string;
+  esRecurrente?: boolean;
+  periodicidad?: "Semanal" | "Quincenal" | "Mensual" | "Anual";
+  pagado?: boolean;
+}
+
+export interface FinancialAllocation {
+  id: string;
+  concepto: string;
+  montoApartado: number;
+  estado: "Apartado" | "Usado" | "Liberado";
+  compromisoId?: string;
+}
+
+export interface EcosystemSyncPayload {
+  email: string;
+  tasks: TaskItem[];
+  lonasOrders: LonasOrder[];
+  financialAccounts: FinancialAccount[];
+  financialIncomes: ExpectedIncome[];
+  financialDebts: FinancialDebt[];
+  financialCommitments: FinancialCommitment[];
+  financialAllocations: FinancialAllocation[];
+  updatedAt: string;
+}
+
+export interface SolicitudItem {
+  id: string;
+  folio?: string; // e.g. "REQ-8492"
+  solicitante: string;
+  telefono?: string;
+  email?: string;
+  area?: string; // e.g. "FGDLL", "Universidad FGDLL", "Tecnología", "Diseño", "Psicología", "Administrativo"
+  categoria?: "lonas" | "playeras" | "diplomado" | "tecnologia" | "revision" | "otro";
+  titulo: string;
+  descripcion: string;
+  especificaciones?: {
+    medidas?: string; // para lonas (ej. 3x2m)
+    tallas?: string; // para playeras (ej. 2 M, 1 L)
+    modulo?: string; // para diplomado
+    fechaEvento?: string; // fecha requerida
+    detallesExtras?: string;
+  };
+  canal: "WhatsApp" | "ExecutiveInput" | "Web" | "Email" | "Sistema";
+  prioridad: "Alta" | "Media" | "Baja";
+  estado: "Nueva" | "Atendida" | "ConvertidaEnTarea" | "Descartada";
+  estadoTracking?: "espera" | "aceptado" | "proceso" | "completado" | "cancelado";
+  fechaIngreso: string;
+  fechaAceptado?: string;
+  fechaCompletado?: string;
+  leida: boolean;
+  tareaIdAsociada?: number;
+  adjuntoUrl?: string;
+}
+
+export interface NotificationCenterItem {
+  id: string;
+  tipo: "solicitud_nueva" | "tarea_completada" | "mensaje_cliente" | "alerta_sistema";
+  titulo: string;
+  mensaje: string;
+  solicitante?: string;
+  telefono?: string;
+  solicitudId?: string;
+  tareaId?: number;
+  leida: boolean;
+  creadaEn: string;
+  emailEnviado?: boolean;
+  pushEnviado?: boolean;
+}
+
+
+

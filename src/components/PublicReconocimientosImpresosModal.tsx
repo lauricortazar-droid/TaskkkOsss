@@ -140,10 +140,9 @@ export default function PublicReconocimientosImpresosModal({
             const isImpreso = Boolean(d.impreso);
             const isDigital = Boolean(d.digital);
             const isEntregado = Boolean(d.entregado);
-            const hasDrive = Boolean(d.driveUrl && d.driveUrl.trim() !== "");
 
-            // Considerar los que ya fueron impresos, o tienen driveUrl, o marcados como digital/entregado
-            if (isImpreso || hasDrive || isDigital || isEntregado) {
+            // Regla de negocio: Solo los alumnos con reconocimiento ya impreso (impreso === true) se muestran en GRADUADOS
+            if (isImpreso) {
               const rawName = (d.nombre || "Estudiante").trim();
               const normKey = rawName.toLowerCase();
 

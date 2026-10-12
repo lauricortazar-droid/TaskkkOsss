@@ -253,7 +253,7 @@ export default function PublicRequestPortal({
       onAdminLoginClick("laurcortazar@gmail.com");
       playChime("success");
     } else {
-      setAdminPinError("Contraseña incorrecta. Solo puedes entrar a Avión de Admin con la contraseña: 110809 o iniciando sesión con tu cuenta de Google (laurcortazar@gmail.com o jaguarcortazar@gmail.com).");
+      setAdminPinError("Contraseña incorrecta. Si no la recuerdas, puedes iniciar sesión con tu cuenta autorizada de Google (laurcortazar@gmail.com o jaguarcortazar@gmail.com) o solicitarla a tu correo.");
       playChime("urgent");
     }
   };
@@ -583,7 +583,7 @@ export default function PublicRequestPortal({
                 }
               }}
               className="px-3.5 py-1.5 rounded-xl bg-stone-900 hover:bg-black dark:bg-stone-100 dark:hover:bg-white text-white dark:text-stone-950 text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all transform active:scale-95"
-              title="Avión de Admin • Acceso para Laura o Pepe Cortazar (Contraseña: 110809 o Google)"
+              title="Avión de Admin • Acceso privado para Laura o Pepe Cortazar"
             >
               <Plane size={13} className="text-amber-400 dark:text-amber-600" />
               <span>{isAdminLoggedIn ? "👑 Volver a Task-OS" : "Avión de Admin ✈️"}</span>
@@ -1466,15 +1466,22 @@ export default function PublicRequestPortal({
                     type="password"
                     autoFocus
                     required
-                    placeholder="Contraseña (110809)"
+                    placeholder="••••••••"
                     value={adminPinInput}
                     onChange={(e) => setAdminPinInput(e.target.value)}
                     className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800/60 text-stone-900 dark:text-stone-100 text-sm font-mono tracking-widest text-center focus:ring-2 focus:ring-amber-500 focus:outline-none"
                   />
                 </div>
-                <p className="text-[10px] text-stone-400 mt-1 text-center">
-                  Contraseña autorizada: <strong>110809</strong>
-                </p>
+                <div className="flex items-center justify-between mt-1.5 text-[10px] text-stone-400">
+                  <span>Acceso confidencial de administradores</span>
+                  <a
+                    href="mailto:laurcortazar@gmail.com?subject=Solicitud%20de%20Clave%20Avión%20de%20Admin&body=Hola%20Laura,%20por%20favor%20envíame%20la%20clave%20de%20acceso%20a%20Avión%20de%20Admin."
+                    className="text-amber-600 dark:text-amber-400 hover:underline font-semibold"
+                    title="Solicitar por correo a laurcortazar@gmail.com"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </a>
+                </div>
               </div>
 
               <button

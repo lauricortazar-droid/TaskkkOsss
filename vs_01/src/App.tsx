@@ -1,0 +1,3361 @@
+import React, { useState, useEffect, useRef } from "react";
+import Header from "./components/Header";
+import ExecutiveInput from "./components/ExecutiveInput";
+import MessageOutputCard from "./components/MessageOutputCard";
+import PomodoroArtifact from "./components/PomodoroArtifact";
+import LedgerTable from "./components/LedgerTable";
+import ContactsModal from "./components/ContactsModal";
+import TagsModal, { DEFAULT_TAGS } from "./components/TagsModal";
+import SyncModal from "./components/SyncModal";
+import ConnectionSyncMenuModal, { NotificationSettings } from "./components/ConnectionSyncMenuModal";
+import GoogleWorkspaceModal from "./components/GoogleWorkspaceModal";
+import MobileNavBar from "./components/MobileNavBar";
+import WeeklyPerformanceDashboard from "./components/WeeklyPerformanceDashboard";
+import WorkMusicPlayer from "./components/WorkMusicPlayer";
+import LonasOS, { STORAGE_KEY_LONAS, INITIAL_LONAS_ORDERS } from "./components/LonasOS";
+import SaludFinancieraOS from "./components/SaludFinancieraOS";
+import ActiveTaskSelector from "./components/ActiveTaskSelector";
+import RouterLogViewer from "./components/RouterLogViewer";
+import UniversalSearchModal from "./components/UniversalSearchModal";
+import ExportImportModal from "./components/ExportImportModal";
+import UndoToast, { UndoActionPayload } from "./components/UndoToast";
+import UrlLibraryOS, { INITIAL_URL_LIBRARY, INITIAL_QUICK_RESPONSES } from "./components/UrlLibraryOS";
+import PrintOS from "./components/PrintOS";
+import NotificationsModal from "./components/NotificationsModal";
+import PublicRequestPortal from "./components/PublicRequestPortal";
+import ReconocimientosOS from "./components/ReconocimientosOS";
+import ReconocimientoFormModal from "./components/ReconocimientoFormModal";
+import PendientesHubOS from "./components/PendientesHubOS";
+import MiniPomodoroWidget from "./components/MiniPomodoroWidget";
+import MiniTasksBlocWidget from "./components/MiniTasksBlocWidget";
+import {
+  notifyTaskCompleted,
+  notifyClientMessageReceived,
+  listenForegroundMessages,
+  getNotificationPermission,
+  registerMessagingServiceWorker,
+  notifyNewSolicitud,
+  triggerSolicitudEmailAlert,
+} from "./lib/fcmNotifications";
+import {
+  Contact,
+  TaskItem,
+  TaskResource,
+  GlobalResource,
+  UrlLibraryItem,
+  QuickResponseMessage,
+  RouterStructuredOutput,
+  TaskOSExportData,
+  TaskOSResponse,
+  WhatsAppMessageItem,
+  TagItem,
+  SyncStatus,
+  CloudSyncPayload,
+  WorkspaceTab,
+  PrintItem,
+  LonasOrder,
+  SolicitudItem,
+} from "./types";
+import { routeExecutiveInput } from "./lib/executiveRouter";
+import {
+  saveTaskToFirestore,
+  deleteTaskFromFirestore,
+  saveGlobalResourceToFirestore,
+  deleteGlobalResourceFromFirestore,
+  saveUrlLibraryItemToFirestore,
+  deleteUrlLibraryItemFromFirestore,
+  subscribeToFirestoreTasks,
+  subscribeToGlobalResources,
+  subscribeToUrlLibrary,
+  batchSyncTasksToFirestore,
+  batchSyncGlobalResourcesToFirestore,
+  batchSyncUrlLibraryToFirestore,
+  saveSolicitudToFirestore,
+  deleteSolicitudFromFirestore,
+  subscribeToSolicitudes,
+} from "./lib/firestoreService";
+import { auth, initAuth, getAccessToken, db } from "./lib/firebase";
+import { collection, onSnapshot } from "firebase/firestore";
+import { uploadJsonBackupToGoogleDrive } from "./lib/googleWorkspace";
+import { playChime } from "./utils/audio";
+import { Flame, Sparkles, Users, Tag as TagIcon, Cloud, Printer, Wallet, Bookmark } from "lucide-react";
+
+const STORAGE_KEY_TASKS = "task_os_pepe_cortazar_ledger_v1";
+const STORAGE_KEY_GLOBAL_RESOURCES = "task_os_global_resources_v1";
+const STORAGE_KEY_URL_LIBRARY = "task_os_url_library_v1";
+const STORAGE_KEY_QUICK_RESPONSES = "task_os_quick_responses_v1";
+const STORAGE_KEY_ACTIVE_TASK_ID = "task_os_active_task_id_v1";
+const STORAGE_KEY_CONTACTS = "task_os_pepe_contacts_v1";
+const STORAGE_KEY_TAGS = "task_os_pepe_tags_v1";
+const STORAGE_KEY_USER_EMAIL = "task_os_user_email_v1";
+const DEFAULT_USER_EMAIL = "laurcortazar@gmail.com";
+const STORAGE_KEY_SOLICITUDES = "task_os_solicitudes_v1";
+
+const INITIAL_SOLICITUDES: SolicitudItem[] = [
+  {
+    id: "sol-101",
+    solicitante: "Laura",
+    telefono: "+52 55 1234 5678",
+    email: "laura@universidad-fgdll.org",
+    titulo: "Revisar lista de diplomas y reconocimientos de graduación",
+    descripcion: "Por favor verificar los nombres de los 45 graduados antes de imprimir los reconocimientos oficiales.",
+    canal: "WhatsApp",
+    prioridad: "Alta",
+    estado: "Nueva",
+    fechaIngreso: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+    leida: false,
+  },
+  {
+    id: "sol-102",
+    solicitante: "Líder Zona Tiburón",
+    telefono: "+52 55 9876 5432",
+    titulo: "Diseño y cotización de lona 3x2m para evento del sábado",
+    descripcion: "Requerimos lona en material front brillante con ojillos cada 50cm para el acceso principal.",
+    canal: "WhatsApp",
+    prioridad: "Alta",
+    estado: "Nueva",
+    fechaIngreso: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
+    leida: false,
+  },
+  {
+    id: "sol-103",
+    solicitante: "Taller Impresión",
+    telefono: "+52 55 4567 8901",
+    titulo: "Validación de perfil de color en archivo Figma",
+    descripcion: "El archivo enviado está en RGB, requerimos confirmación si lo convertimos a CMYK Fogra39.",
+    canal: "Web",
+    prioridad: "Media",
+    estado: "Atendida",
+    fechaIngreso: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+    leida: true,
+  },
+];
+
+const INITIAL_CONTACTS: Contact[] = [
+  {
+    id: "c-1",
+    nombre: "Laura",
+    telefono: "+52 55 1234 5678",
+    rol: "Coordinación y Proyectos",
+    dominio: "Laura",
+  },
+  {
+    id: "c-2",
+    nombre: "Líder Zona Tiburón",
+    telefono: "+52 55 9876 5432",
+    rol: "Líder de Zona FGDLL",
+    dominio: "FGDLL",
+  },
+  {
+    id: "c-3",
+    nombre: "Director Gladiadores",
+    telefono: "+52 55 4567 8901",
+    rol: "Director de Zona",
+    dominio: "FGDLL",
+  },
+  {
+    id: "c-4",
+    nombre: "Proveedor de Lonas",
+    telefono: "+52 55 2345 6789",
+    rol: "Taller Impresión y Montaje",
+    dominio: "Diseño",
+  },
+  {
+    id: "c-5",
+    nombre: "Coordinación Universidad FGDLL",
+    telefono: "+52 55 8765 4321",
+    rol: "Diplomados y Reconocimientos",
+    dominio: "Universidad",
+  },
+];
+
+const INITIAL_GLOBAL_RESOURCES: GlobalResource[] = [
+  {
+    id: "g-res-1",
+    url: "https://drive.google.com/drive/folders/1FGDLL-Plantillas",
+    title: "Carpeta Drive • Plantillas y Formatos Oficiales FGDLL",
+    keywords: ["plantillas", "formatos", "fgdll", "drive", "documentos"],
+    savedAt: "2026-09-21T10:00:00.000Z",
+  },
+  {
+    id: "g-res-2",
+    url: "https://www.figma.com/file/lonas-gran-formato",
+    title: "Guía de Especificaciones y Perfiles de Color para Lonas",
+    keywords: ["lonas", "especificaciones", "impresión", "color", "diseño"],
+    savedAt: "2026-09-21T11:30:00.000Z",
+  },
+];
+
+const INITIAL_TASKS: TaskItem[] = [
+  {
+    id: 1,
+    solicitante: "Laura",
+    tarea: "Revisar y corregir los reconocimientos antes de enviarlos",
+    estado: "En Proceso",
+    fechaIngreso: "2026-09-21",
+    fechaLimite: "2026-09-23",
+    dominio: "Laura",
+    etiquetas: ["Urgente", "Universidad", "Reconocimientos"],
+    contacto: {
+      nombre: "Laura",
+      telefono: "+52 55 1234 5678",
+    },
+    notas: "Validar ortografía en apellidos compuestos y fecha de emisión con el archivo Excel de graduados.",
+    resources: [
+      {
+        url: "https://docs.google.com/spreadsheets/d/graduados-2026",
+        title: "Lista Excel de Graduados y Validaciones",
+        addedAt: "2026-09-21T10:15:00.000Z",
+      },
+    ],
+  },
+  {
+    id: 2,
+    solicitante: "Líder Zona Tiburón",
+    tarea: "Preparar y enviar la lona para la experiencia. Fecha límite: mañana",
+    estado: "En Proceso",
+    fechaIngreso: "2026-09-21",
+    fechaLimite: "2026-09-22",
+    dominio: "FGDLL",
+    etiquetas: ["Importante", "Zona Tiburón", "Diseño"],
+    contacto: {
+      nombre: "Líder Zona Tiburón",
+      telefono: "+52 55 9876 5432",
+    },
+    notas: "Medidas solicitadas: 3.0 x 2.0 m en lona front brillante con ojillos perimetrales reforzados cada 50 cm.",
+    resources: [
+      {
+        url: "https://drive.google.com/file/d/lona-tiburon-arte-final",
+        title: "Arte Final Lona Tiburón (3.0 x 2.0m)",
+        addedAt: "2026-09-21T12:00:00.000Z",
+      },
+    ],
+  },
+  {
+    id: 3,
+    solicitante: "Pepe",
+    tarea: "Revisar el panel de administración de FGDLL e incluir opción de eliminar centros mañana",
+    estado: "Pendiente",
+    fechaIngreso: "2026-09-21",
+    fechaLimite: "2026-09-25",
+    dominio: "Tecnología",
+    etiquetas: ["Pendiente", "Tecnología"],
+    resources: [],
+  },
+];
+
+export default function App() {
+  const [tasks, setTasks] = useState<TaskItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_TASKS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved ledger", e);
+    }
+    return INITIAL_TASKS;
+  });
+
+  const [contacts, setContacts] = useState<Contact[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_CONTACTS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved contacts", e);
+    }
+    return INITIAL_CONTACTS;
+  });
+
+  const [tags, setTags] = useState<TagItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_TAGS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved tags", e);
+    }
+    return DEFAULT_TAGS;
+  });
+
+  const [solicitudes, setSolicitudes] = useState<SolicitudItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_SOLICITUDES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved solicitudes", e);
+    }
+    return INITIAL_SOLICITUDES;
+  });
+
+  const [isContactsModalOpen, setIsContactsModalOpen] = useState(false);
+  const [isTagsModalOpen, setIsTagsModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isConnectionMenuOpen, setIsConnectionMenuOpen] = useState(false);
+  const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+  const [isNotificationsModalOpen, setIsNotificationsModalOpen] = useState(false);
+  const [isPushActive, setIsPushActive] = useState(false);
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = useState<boolean>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("admin") === "true") return true;
+        if (params.get("portal") === "true") return false;
+        const saved = localStorage.getItem("taskos_is_admin_active");
+        if (saved === "true") return true;
+      }
+    } catch (_) {}
+    return false;
+  });
+
+  const handleLogoutAdmin = () => {
+    setIsAdminAuthenticated(false);
+    try {
+      localStorage.removeItem("taskos_is_admin_active");
+    } catch (_) {}
+    setCurrentWorkspace("portal");
+    playChime("tick");
+  };
+
+  const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceTab>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        if (params.get("admin") === "true") return "task-os";
+        if (params.get("portal") === "true") return "portal";
+        const saved = localStorage.getItem("taskos_is_admin_active");
+        if (saved === "true") return "task-os";
+      }
+    } catch (_) {}
+    return "portal";
+  });
+  const [currentPrintItem, setCurrentPrintItem] = useState<PrintItem | null>(null);
+
+  // Reconocimientos & Diplomas state (Mini Web App + Tracking)
+  const [showReconocimientoModal, setShowReconocimientoModal] = useState(false);
+  const [reconocimientosCount, setReconocimientosCount] = useState<number>(0);
+  const [pendingReconocimientosCount, setPendingReconocimientosCount] = useState<number>(0);
+  const [newReconocimientoAlert, setNewReconocimientoAlert] = useState<{
+    id: string;
+    nombre: string;
+    rol: string;
+    grupo: string;
+    zona: string;
+    diplomado: string;
+    year: string;
+    tipoImpresion: string;
+    costo: number;
+  } | null>(null);
+
+  // Cloud Sync state (Email synchronization for Phone ↔ PC)
+  const [syncEmail, setSyncEmail] = useState<string>(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const paramEmail = params.get("syncEmail");
+        if (paramEmail && paramEmail.includes("@")) {
+          localStorage.setItem(STORAGE_KEY_USER_EMAIL, paramEmail);
+          // Clean URL without reload
+          const cleanUrl = window.location.pathname;
+          window.history.replaceState({}, "", cleanUrl);
+          return paramEmail;
+        }
+        const saved = localStorage.getItem(STORAGE_KEY_USER_EMAIL);
+        if (saved) return saved;
+      }
+    } catch (e) {
+      console.error("Failed to read syncEmail from url/storage", e);
+    }
+    return DEFAULT_USER_EMAIL;
+  });
+
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({
+    email: DEFAULT_USER_EMAIL,
+    isSyncing: false,
+    lastSyncedAt: null,
+    error: null,
+  });
+
+  // Auto-Sync & Periodic Polling State
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem("taskos_auto_sync_enabled");
+      if (saved !== null) return saved === "true";
+    } catch (_) {}
+    return true;
+  });
+
+  const [autoSyncInterval, setAutoSyncInterval] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem("taskos_auto_sync_interval");
+      if (saved) {
+        const parsed = parseInt(saved, 10);
+        if (parsed > 0) return parsed;
+      }
+    } catch (_) {}
+    return 60; // Sincronización automática cada 1 minuto (60 segundos)
+  });
+
+  const [secondsUntilSync, setSecondsUntilSync] = useState<number>(60);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+  const [syncHistory, setSyncHistory] = useState<{ time: string; count: number; email: string }[]>([]);
+  const isInitialSyncCompletedRef = useRef(false);
+
+  // Notification Configuration state
+  const [notifConfig, setNotifConfig] = useState<NotificationSettings>(() => {
+    try {
+      const saved = localStorage.getItem("taskos_notification_config");
+      if (saved) return JSON.parse(saved);
+    } catch (_) {}
+    return {
+      pushEnabled: true,
+      taskCompleted: true,
+      pomodoroEnded: true,
+      newSolicitudes: true,
+      urgentReminders: true,
+      soundChimes: true,
+      soundVolume: 0.8,
+      soundType: "bell",
+      focusDoNotDisturb: false,
+    };
+  });
+
+  const [globalResources, setGlobalResources] = useState<GlobalResource[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_GLOBAL_RESOURCES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved global resources", e);
+    }
+    return INITIAL_GLOBAL_RESOURCES;
+  });
+
+  // URL Library state (Biblioteca de URLs del Día a Día)
+  const [urlLibrary, setUrlLibrary] = useState<UrlLibraryItem[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_URL_LIBRARY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved url library", e);
+    }
+    return INITIAL_URL_LIBRARY;
+  });
+
+  // Quick Responses state (Plantillas y respuestas rápidas)
+  const [quickResponses, setQuickResponses] = useState<QuickResponseMessage[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_QUICK_RESPONSES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load saved quick responses", e);
+    }
+    return INITIAL_QUICK_RESPONSES;
+  });
+
+  // Lonas Orders state for cross-linking (Drive, Print, OUT, URLs)
+  const [lonasOrders, setLonasOrders] = useState<LonasOrder[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_LONAS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return INITIAL_LONAS_ORDERS;
+  });
+
+  const [activeTaskId, setActiveTaskId] = useState<number | null>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY_ACTIVE_TASK_ID);
+      if (saved !== null && saved !== "") return JSON.parse(saved);
+    } catch (_) {}
+    return 1;
+  });
+
+  const [lastRouterOutput, setLastRouterOutput] = useState<RouterStructuredOutput | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoActionPayload | null>(null);
+  const [isUniversalSearchOpen, setIsUniversalSearchOpen] = useState(false);
+  const [universalSearchInitialQuery, setUniversalSearchInitialQuery] = useState("");
+  const [isExportImportOpen, setIsExportImportOpen] = useState(false);
+
+  const [esencialTaskId, setEsencialTaskId] = useState<number | null>(1);
+  const [secundariasTaskIds, setSecundariasTaskIds] = useState<number[]>([2]);
+
+  const [lastMessage, setLastMessage] = useState<string | null>(
+    "Sí, ya lo tengo anotado. Reviso los reconocimientos antes de enviarlos y te aviso cuando queden listos."
+  );
+  const [lastSolicitante, setLastSolicitante] = useState<string>("Laura");
+  const [multiMessages, setMultiMessages] = useState<WhatsAppMessageItem[]>([]);
+
+  const [lastActionSummary, setLastActionSummary] = useState<string | null>(
+    "Sistema Task-OS inicializado con nodo de enrutamiento determinista, índice universal y música de enfoque."
+  );
+
+  // Pomodoro state
+  const [isPomodoroActive, setIsPomodoroActive] = useState(false);
+  const [pomodoroTaskName, setPomodoroTaskName] = useState<string>(
+    "Revisar y corregir los reconocimientos antes de enviarlos"
+  );
+  const [pomodoroTaskId, setPomodoroTaskId] = useState<number | null>(1);
+  const [pomodoroMinutes, setPomodoroMinutes] = useState<number>(25);
+
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Save tasks
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(tasks));
+    } catch (e) {
+      console.error("Failed to save ledger", e);
+    }
+  }, [tasks]);
+
+  // Save global resources
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_GLOBAL_RESOURCES, JSON.stringify(globalResources));
+    } catch (e) {
+      console.error("Failed to save global resources", e);
+    }
+  }, [globalResources]);
+
+  // Save url library
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_URL_LIBRARY, JSON.stringify(urlLibrary));
+    } catch (e) {
+      console.error("Failed to save url library", e);
+    }
+  }, [urlLibrary]);
+
+  // Save quick responses
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_QUICK_RESPONSES, JSON.stringify(quickResponses));
+    } catch (e) {
+      console.error("Failed to save quick responses", e);
+    }
+  }, [quickResponses]);
+
+  // Save lonas orders
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_LONAS, JSON.stringify(lonasOrders));
+    } catch (e) {
+      console.error("Failed to save lonas orders", e);
+    }
+  }, [lonasOrders]);
+
+  // Save active task ID
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_ACTIVE_TASK_ID, JSON.stringify(activeTaskId));
+    } catch (_) {}
+  }, [activeTaskId]);
+
+  // Save contacts
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_CONTACTS, JSON.stringify(contacts));
+    } catch (e) {
+      console.error("Failed to save contacts", e);
+    }
+  }, [contacts]);
+
+  // Save tags
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_TAGS, JSON.stringify(tags));
+    } catch (e) {
+      console.error("Failed to save tags", e);
+    }
+  }, [tags]);
+
+  // Save solicitudes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY_SOLICITUDES, JSON.stringify(solicitudes));
+    } catch (e) {
+      console.error("Failed to save solicitudes", e);
+    }
+  }, [solicitudes]);
+
+  // Real-time Firestore sync when authenticated
+  useEffect(() => {
+    const unsubAuth = initAuth((user) => {
+      if (user && user.email) {
+        const cleanEmail = user.email.toLowerCase().trim();
+        const allowedAdmins = ["laurcortazar@gmail.com", "jaguarcortazar@gmail.com"];
+        if (allowedAdmins.includes(cleanEmail)) {
+          setIsAdminAuthenticated(true);
+          setSyncEmail(cleanEmail);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+            localStorage.setItem(STORAGE_KEY_USER_EMAIL, cleanEmail);
+          } catch (_) {}
+          handleForceSync(true);
+        }
+      }
+
+      const unsubTasks = subscribeToFirestoreTasks(
+        user.uid,
+        (syncedTasks) => {
+          if (syncedTasks.length > 0) setTasks(syncedTasks);
+        },
+        (err) => console.warn("Firestore tasks sync warning:", err)
+      );
+
+      const unsubGlobal = subscribeToGlobalResources(
+        user.uid,
+        (syncedGlobal) => {
+          if (syncedGlobal.length > 0) setGlobalResources(syncedGlobal);
+        },
+        (err) => console.warn("Firestore global resources sync warning:", err)
+      );
+
+      const unsubUrlLib = subscribeToUrlLibrary(
+        user.uid,
+        (syncedUrls) => {
+          if (syncedUrls.length > 0) setUrlLibrary(syncedUrls);
+        },
+        (err) => console.warn("Firestore url library sync warning:", err)
+      );
+
+      const unsubSolicitudes = subscribeToSolicitudes(
+        user.uid,
+        (synced) => {
+          if (synced && synced.length > 0) setSolicitudes(synced);
+        },
+        (err) => console.warn("Firestore solicitudes sync warning:", err)
+      );
+
+      return () => {
+        unsubTasks();
+        unsubGlobal();
+        unsubUrlLib();
+        unsubSolicitudes();
+      };
+    });
+
+    return () => unsubAuth();
+  }, []);
+
+  // Initialize Push Notifications status and foreground message listener
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsPushActive(getNotificationPermission() === "granted");
+      registerMessagingServiceWorker();
+
+      // Check if URL has ?openNotifications=true from a push notification click
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("openNotifications") === "true") {
+        setIsNotificationsModalOpen(true);
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, "", cleanUrl);
+      }
+
+      let cleanup = () => {};
+      listenForegroundMessages((payload) => {
+        setLastActionSummary(`🔔 Alerta Push: ${payload.title}`);
+      }).then((unsub) => {
+        cleanup = unsub;
+      });
+
+      return () => cleanup();
+    }
+  }, []);
+
+  // Real-time listener for Solicitudes de Reconocimiento (Webapp alert, sound & email notification to laurcortazar@gmail.com)
+  useEffect(() => {
+    let isInitialLoad = true;
+    const unsub = onSnapshot(
+      collection(db, "solicitudes"),
+      (snapshot) => {
+        setReconocimientosCount(snapshot.size);
+
+        let pendingCount = 0;
+        snapshot.forEach((snapDoc) => {
+          const d = snapDoc.data();
+          // Solicitudes nuevas o pendientes de procesar
+          if (d && (!d.entregado || !d.pagado || !d.revisado)) {
+            pendingCount++;
+          }
+        });
+        setPendingReconocimientosCount(pendingCount);
+
+        if (!isInitialLoad) {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type === "added") {
+              const data = change.doc.data();
+              if (data && data.nombre) {
+                playChime("notification");
+
+                const alertPayload = {
+                  id: change.doc.id,
+                  nombre: data.nombre || "Graduado",
+                  rol: data.rol || "Alumno",
+                  grupo: data.grupo || "G-1",
+                  zona: data.zona || "General",
+                  diplomado: data.diplomado || "Liderazgo I",
+                  year: String(data.year || "2026"),
+                  tipoImpresion: data.tipoImpresion || "Primera Impresión",
+                  costo: Number(data.costo || 100),
+                };
+
+                setNewReconocimientoAlert(alertPayload);
+
+                // Desktop / browser Notification
+                if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+                  try {
+                    new Notification("🎓 ¡Solicitud de Reconocimiento!", {
+                      body: `${alertPayload.nombre} (${alertPayload.rol}, Grupo ${alertPayload.grupo}) solicitó ${alertPayload.tipoImpresion} ($${alertPayload.costo}) para ${alertPayload.diplomado} (${alertPayload.year})`,
+                      icon: "/icon-192.svg",
+                    });
+                  } catch (_) {}
+                }
+
+                // Dispatch notification to email laurcortazar@gmail.com
+                fetch("/api/reconocimientos/notify", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    nombre: alertPayload.nombre,
+                    rol: alertPayload.rol,
+                    grupo: alertPayload.grupo,
+                    zona: alertPayload.zona,
+                    diplomado: alertPayload.diplomado,
+                    year: alertPayload.year,
+                    tipoImpresion: alertPayload.tipoImpresion,
+                    costo: alertPayload.costo,
+                    telefono: data.telefono,
+                    targetEmail: "laurcortazar@gmail.com",
+                  }),
+                }).catch(() => null);
+              }
+            }
+          });
+        }
+        isInitialLoad = false;
+      },
+      (err) => {
+        console.warn("Notice in app solicitudes snapshot:", err);
+      }
+    );
+
+    return () => unsub();
+  }, []);
+
+  // Keep essential task valid if tasks change
+  useEffect(() => {
+    const activeTasks = tasks.filter((t) => t.estado !== "Completado");
+    if (activeTasks.length > 0) {
+      if (!esencialTaskId || !tasks.some((t) => t.id === esencialTaskId && t.estado !== "Completado")) {
+        setEsencialTaskId(activeTasks[0].id);
+      }
+    } else {
+      setEsencialTaskId(null);
+    }
+  }, [tasks, esencialTaskId]);
+
+  // Keep active task valid if tasks change
+  useEffect(() => {
+    if (activeTaskId !== null && !tasks.some((t) => t.id === activeTaskId)) {
+      const firstActive = tasks.find((t) => t.estado !== "Completado");
+      setActiveTaskId(firstActive ? firstActive.id : null);
+    }
+  }, [tasks, activeTaskId]);
+
+  // Helper to push state to cloud
+  // Safe HTTP JSON fetcher that handles offline states, non-JSON HTML error pages (502/503), and network hiccups without throwing
+  const safeFetchJson = async <T = any,>(
+    input: RequestInfo | URL,
+    init?: RequestInit
+  ): Promise<{ ok: boolean; status: number; data: T | null; error?: string }> => {
+    try {
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return {
+          ok: false,
+          status: 0,
+          data: null,
+          error: "Dispositivo sin conexión a internet",
+        };
+      }
+
+      const CLOUD_RUN_CANONICAL = "https://ais-pre-dwgikgfu64evytiqb4nzms-347865637985.us-east1.run.app";
+      let urlStr = typeof input === "string" ? input : input.toString();
+
+      // If running on static host (e.g. l.fgdll.org), route API requests to Cloud Run backend
+      if (typeof window !== "undefined" && window.location.hostname === "l.fgdll.org" && urlStr.startsWith("/")) {
+        urlStr = `${CLOUD_RUN_CANONICAL}${urlStr}`;
+      }
+
+      let res = await fetch(urlStr, {
+        ...init,
+        headers: {
+          Accept: "application/json",
+          ...(init?.headers || {}),
+        },
+      });
+
+      let contentType = res.headers.get("content-type") || "";
+
+      // Fallback: If relative URL returned 404/HTML (e.g. static CDN or proxy issue), retry against Cloud Run
+      if (!contentType.includes("application/json") && urlStr.startsWith("/")) {
+        try {
+          const fallbackRes = await fetch(`${CLOUD_RUN_CANONICAL}${urlStr}`, {
+            ...init,
+            headers: {
+              Accept: "application/json",
+              ...(init?.headers || {}),
+            },
+          });
+          const fbType = fallbackRes.headers.get("content-type") || "";
+          if (fbType.includes("application/json")) {
+            res = fallbackRes;
+            contentType = fbType;
+          }
+        } catch (_) {}
+      }
+
+      if (!contentType.includes("application/json")) {
+        await res.text().catch(() => "");
+        return {
+          ok: false,
+          status: res.status,
+          data: null,
+          error: `Servidor devolvió respuesta no-JSON (${res.status} ${res.statusText})`,
+        };
+      }
+
+      const json = await res.json();
+      return {
+        ok: res.ok && json?.success !== false,
+        status: res.status,
+        data: json,
+        error: json?.error || (!res.ok ? `HTTP ${res.status}` : undefined),
+      };
+    } catch (err: any) {
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        error: err?.message || "Error de red al conectar con el servidor",
+      };
+    }
+  };
+
+  // Helper to push state to cloud
+  const pushCloudState = async (
+    email: string,
+    curTasks: TaskItem[],
+    curGlobal: GlobalResource[],
+    curUrlLib: UrlLibraryItem[],
+    curContacts: Contact[],
+    curTags: TagItem[],
+    curEsencial: number | null,
+    curSecundarias: number[],
+    curQuickResponses?: QuickResponseMessage[]
+  ) => {
+    if (!email || !email.trim()) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) return;
+
+    try {
+      const pushResult = await safeFetchJson<any>("/api/sync/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          tasks: curTasks,
+          globalResources: curGlobal,
+          urlLibrary: curUrlLib,
+          quickResponses: curQuickResponses || quickResponses,
+          contacts: curContacts,
+          tags: curTags,
+          esencialTaskId: curEsencial,
+          secundariasTaskIds: curSecundarias,
+        }),
+      });
+
+      if (pushResult.ok && pushResult.data) {
+        const data = pushResult.data;
+        setSyncStatus((prev) => ({
+          ...prev,
+          email,
+          isSyncing: false,
+          lastSyncedAt: data.updatedAt || data.data?.updatedAt || new Date().toISOString(),
+          error: null,
+        }));
+      } else {
+        // In static hosting (e.g. l.fgdll.org) or offline mode, state is saved safely in localStorage & Firestore
+        setSyncStatus((prev) => ({
+          ...prev,
+          email,
+          isSyncing: false,
+          lastSyncedAt: new Date().toISOString(),
+          error: null,
+        }));
+      }
+    } catch (err: any) {
+      console.warn("Cloud sync push notice:", err?.message || err);
+      setSyncStatus((prev) => ({
+        ...prev,
+        isSyncing: false,
+        lastSyncedAt: new Date().toISOString(),
+        error: null,
+      }));
+    }
+  };
+
+  // Initial pull from cloud for syncEmail
+  useEffect(() => {
+    let isMounted = true;
+
+    async function pullCloudState() {
+      if (!syncEmail) return;
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        isInitialSyncCompletedRef.current = true;
+        return;
+      }
+      setSyncStatus((prev) => ({ ...prev, email: syncEmail, isSyncing: true, error: null }));
+
+      try {
+        const pullResult = await safeFetchJson<any>(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
+        if (!pullResult.ok || !pullResult.data) {
+          isInitialSyncCompletedRef.current = true;
+          if (isMounted) {
+            setSyncStatus((prev) => ({
+              ...prev,
+              email: syncEmail,
+              isSyncing: false,
+              lastSyncedAt: new Date().toISOString(),
+              error: null,
+            }));
+          }
+          return;
+        }
+
+        const data = pullResult.data;
+        if (isMounted) {
+          if (data.exists && data.data) {
+            const cloud = data.data as CloudSyncPayload & {
+              globalResources?: GlobalResource[];
+              urlLibrary?: UrlLibraryItem[];
+              quickResponses?: QuickResponseMessage[];
+            };
+            if (Array.isArray(cloud.tasks) && cloud.tasks.length > 0) {
+              setTasks(cloud.tasks);
+            }
+            if (Array.isArray(cloud.globalResources) && cloud.globalResources.length > 0) {
+              setGlobalResources(cloud.globalResources);
+            }
+            if (Array.isArray(cloud.urlLibrary) && cloud.urlLibrary.length > 0) {
+              setUrlLibrary(cloud.urlLibrary);
+            }
+            if (Array.isArray(cloud.quickResponses) && cloud.quickResponses.length > 0) {
+              setQuickResponses(cloud.quickResponses);
+            }
+            if (Array.isArray(cloud.contacts) && cloud.contacts.length > 0) {
+              setContacts(cloud.contacts);
+            }
+            if (Array.isArray(cloud.tags) && cloud.tags.length > 0) {
+              setTags(cloud.tags);
+            }
+            if (typeof cloud.esencialTaskId === "number") {
+              setEsencialTaskId(cloud.esencialTaskId);
+            }
+            if (Array.isArray(cloud.secundariasTaskIds)) {
+              setSecundariasTaskIds(cloud.secundariasTaskIds);
+            }
+            const syncTime = cloud.updatedAt || new Date().toISOString();
+            setSyncStatus({
+              email: syncEmail,
+              isSyncing: false,
+              lastSyncedAt: syncTime,
+              error: null,
+            });
+            const now = new Date();
+            setLastSyncTime(now);
+            setSyncHistory((prev) => [
+              {
+                time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+                count: Array.isArray(cloud.tasks) ? cloud.tasks.length : tasks.length,
+                email: syncEmail,
+              },
+              ...prev.slice(0, 4),
+            ]);
+            isInitialSyncCompletedRef.current = true;
+          } else {
+            // First time this email connects or empty cloud: push current local state to cloud
+            await pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, quickResponses);
+            isInitialSyncCompletedRef.current = true;
+          }
+        }
+      } catch (err: any) {
+        console.warn("Cloud sync pull offline or error:", err);
+        if (isMounted) {
+          setSyncStatus((prev) => ({
+            ...prev,
+            email: syncEmail,
+            isSyncing: false,
+            error: err.message,
+          }));
+          isInitialSyncCompletedRef.current = true;
+        }
+      }
+    }
+
+    pullCloudState();
+    return () => {
+      isMounted = false;
+    };
+  }, [syncEmail]);
+
+  // Debounced auto-push whenever tasks, globalResources, urlLibrary, contacts, or tags change
+  useEffect(() => {
+    if (!syncEmail || !isInitialSyncCompletedRef.current) return;
+
+    const timer = setTimeout(() => {
+      setSyncStatus((prev) => ({ ...prev, isSyncing: true }));
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds);
+    }, 1500);
+
+    return () => clearTimeout(timer);
+  }, [tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, syncEmail]);
+
+  const handleChangeSyncEmail = (newEmail: string) => {
+    const clean = newEmail.trim().toLowerCase();
+    setSyncEmail(clean);
+    try {
+      localStorage.setItem(STORAGE_KEY_USER_EMAIL, clean);
+    } catch (_) {}
+    setLastActionSummary(`Sincronización vinculada al correo ${clean}`);
+  };
+
+  const handleForceSync = async (isBackground = false) => {
+    if (!syncEmail || !syncEmail.trim()) return;
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      if (!isBackground) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: "Sin conexión a internet",
+        }));
+      }
+      return;
+    }
+
+    if (!isBackground) {
+      setSyncStatus((prev) => ({ ...prev, isSyncing: true, error: null }));
+    }
+
+    try {
+      const pullResult = await safeFetchJson<any>(`/api/sync/pull?email=${encodeURIComponent(syncEmail)}`);
+      let currentTasksState = tasks;
+      let currentQuickRespState = quickResponses;
+
+      if (pullResult.ok && pullResult.data?.exists && pullResult.data?.data) {
+        const cloud = pullResult.data.data as CloudSyncPayload & {
+          globalResources?: GlobalResource[];
+          urlLibrary?: UrlLibraryItem[];
+          quickResponses?: QuickResponseMessage[];
+        };
+        if (Array.isArray(cloud.tasks) && cloud.tasks.length > 0) {
+          setTasks(cloud.tasks);
+          currentTasksState = cloud.tasks;
+        }
+        if (Array.isArray(cloud.globalResources)) setGlobalResources(cloud.globalResources);
+        if (Array.isArray(cloud.urlLibrary)) setUrlLibrary(cloud.urlLibrary);
+        if (Array.isArray(cloud.quickResponses) && cloud.quickResponses.length > 0) {
+          setQuickResponses(cloud.quickResponses);
+          currentQuickRespState = cloud.quickResponses;
+        }
+        if (Array.isArray(cloud.contacts)) setContacts(cloud.contacts);
+        if (Array.isArray(cloud.tags)) setTags(cloud.tags);
+        if (typeof cloud.esencialTaskId === "number") setEsencialTaskId(cloud.esencialTaskId);
+        if (Array.isArray(cloud.secundariasTaskIds)) setSecundariasTaskIds(cloud.secundariasTaskIds);
+      }
+
+      await pushCloudState(syncEmail, currentTasksState, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, currentQuickRespState);
+      const now = new Date();
+      setLastSyncTime(now);
+      setSyncStatus((prev) => ({
+        ...prev,
+        email: syncEmail,
+        isSyncing: false,
+        lastSyncedAt: now.toISOString(),
+        error: null,
+      }));
+      setSyncHistory((prev) => [
+        {
+          time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+          count: currentTasksState.length,
+          email: syncEmail,
+        },
+        ...prev.slice(0, 4),
+      ]);
+      if (!isBackground) {
+        setLastActionSummary(`Sincronización activa con Firebase Cloud (${syncEmail})`);
+      }
+      return;
+    } catch (err: any) {
+      console.warn("Force sync notice (handled):", err?.message || err);
+      if (!isBackground) {
+        setSyncStatus((prev) => ({
+          ...prev,
+          isSyncing: false,
+          error: err?.message || "Error al sincronizar",
+        }));
+      }
+    }
+  };
+
+  // Auto-sync ticker interval countdown
+  useEffect(() => {
+    if (!autoSyncEnabled || !syncEmail) return;
+
+    const interval = setInterval(() => {
+      setSecondsUntilSync((prev) => {
+        if (prev <= 1) {
+          handleForceSync(true);
+          return autoSyncInterval;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [autoSyncEnabled, autoSyncInterval, syncEmail, tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId, secundariasTaskIds]);
+
+  // Event-based background sync triggers (Tab Visibility, Window Focus, Online)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible" && autoSyncEnabled && syncEmail) {
+        handleForceSync(true);
+      }
+    };
+    const handleFocus = () => {
+      if (autoSyncEnabled && syncEmail) {
+        handleForceSync(true);
+      }
+    };
+    const handleOnline = () => {
+      if (syncEmail) {
+        handleForceSync(true);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("online", handleOnline);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("online", handleOnline);
+    };
+  }, [autoSyncEnabled, syncEmail, tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId, secundariasTaskIds]);
+
+  // Automated Weekly Google Drive Backup Runner
+  useEffect(() => {
+    const runWeeklyDriveBackupCheck = async () => {
+      try {
+        const savedConfig = localStorage.getItem("taskos_drive_backup_config");
+        if (!savedConfig) return;
+        const config = JSON.parse(savedConfig);
+        if (!config || !config.enabled) return;
+
+        const now = Date.now();
+        const lastBackupTime = config.lastBackupAt ? new Date(config.lastBackupAt).getTime() : 0;
+        const intervalMs = config.frequency === "daily" ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
+
+        // If scheduled interval has passed (or never backed up before)
+        if (now - lastBackupTime >= intervalMs) {
+          const token = await getAccessToken();
+          if (!token) return; // Wait until Google credentials are authenticated
+
+          const payload: TaskOSExportData = {
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            tasks,
+            globalResources,
+            urlLibrary,
+            quickResponses,
+            contacts,
+            tags,
+            esencialTaskId,
+          };
+
+          const dateStr = new Date().toISOString().split("T")[0];
+          const uploadRes = await uploadJsonBackupToGoogleDrive(
+            token,
+            payload,
+            `task-os-backup-${dateStr}.json`
+          );
+
+          const nextScheduled = new Date(now + intervalMs).toISOString();
+          const updatedConfig = {
+            ...config,
+            lastBackupAt: new Date().toISOString(),
+            nextScheduledBackupAt: nextScheduled,
+            lastBackupFileId: uploadRes.id,
+            lastBackupFileName: uploadRes.name,
+            lastBackupWebViewLink: uploadRes.webViewLink,
+            lastBackupStatus: "success",
+            totalBackupsRun: (config.totalBackupsRun || 0) + 1,
+          };
+          localStorage.setItem("taskos_drive_backup_config", JSON.stringify(updatedConfig));
+
+          // Save to drive backup history
+          try {
+            const histStr = localStorage.getItem("taskos_drive_backup_history");
+            const history = histStr ? JSON.parse(histStr) : [];
+            const newRecord = {
+              id: `rec-${Date.now()}`,
+              fileId: uploadRes.id,
+              fileName: uploadRes.name,
+              fileSize: uploadRes.size ? parseInt(uploadRes.size, 10) : JSON.stringify(payload).length,
+              createdAt: new Date().toISOString(),
+              webViewLink: uploadRes.webViewLink,
+              status: "success",
+              frequency: config.frequency || "weekly",
+              tasksCount: tasks.length,
+              resourcesCount: globalResources.length,
+              urlsCount: urlLibrary.length,
+              quickResponsesCount: quickResponses.length,
+            };
+            localStorage.setItem("taskos_drive_backup_history", JSON.stringify([newRecord, ...history.slice(0, 19)]));
+          } catch (_) {}
+
+          setLastActionSummary(`☁️ Respaldo automático (${config.frequency === "daily" ? "diario" : "semanal"}) guardado exitosamente en Google Drive.`);
+        }
+      } catch (err) {
+        console.warn("Weekly Google Drive backup notice:", err);
+      }
+    };
+
+    // Run check on startup and periodically
+    runWeeklyDriveBackupCheck();
+    const interval = setInterval(runWeeklyDriveBackupCheck, 30 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [tasks, globalResources, urlLibrary, quickResponses, contacts, tags, esencialTaskId]);
+
+  const handleToggleAutoSync = (enabled: boolean) => {
+    setAutoSyncEnabled(enabled);
+    try {
+      localStorage.setItem("taskos_auto_sync_enabled", enabled ? "true" : "false");
+    } catch (_) {}
+    if (enabled) {
+      setSecondsUntilSync(autoSyncInterval);
+      handleForceSync(true);
+    }
+  };
+
+  const handleChangeAutoSyncInterval = (newInterval: number) => {
+    setAutoSyncInterval(newInterval);
+    setSecondsUntilSync(newInterval);
+    try {
+      localStorage.setItem("taskos_auto_sync_interval", newInterval.toString());
+    } catch (_) {}
+  };
+
+  const handleUpdateNotifConfig = (updates: Partial<NotificationSettings>) => {
+    setNotifConfig((prev) => {
+      const next = { ...prev, ...updates };
+      try {
+        localStorage.setItem("taskos_notification_config", JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  // Solicitudes & Centro de Notificaciones Handlers
+  const handleConvertSolicitudToTask = (solicitud: SolicitudItem) => {
+    const nextId = tasks.length > 0 ? Math.max(...tasks.map((t) => t.id)) + 1 : 1;
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    // Determine domain intelligently
+    let taskDominio = "General";
+    const solLower = (solicitud.solicitante + " " + solicitud.titulo).toLowerCase();
+    if (solLower.includes("laura")) taskDominio = "Laura";
+    else if (solLower.includes("tiburón") || solLower.includes("lona") || solLower.includes("fgdll")) taskDominio = "FGDLL";
+    else if (solLower.includes("universidad") || solLower.includes("diploma")) taskDominio = "Universidad";
+    else if (solLower.includes("impresión") || solLower.includes("diseño")) taskDominio = "Diseño";
+
+    const customTags = ["Solicitud"];
+    if (solicitud.prioridad === "Alta") customTags.push("Urgente");
+    if (solicitud.area) customTags.push(solicitud.area);
+    if (solicitud.categoria) {
+      const catLabels: Record<string, string> = {
+        lonas: "Lonas",
+        playeras: "Playeras",
+        diplomado: "Diplomado",
+        tecnologia: "Tecnología",
+        revision: "Revisión",
+      };
+      if (catLabels[solicitud.categoria]) customTags.push(catLabels[solicitud.categoria]);
+    }
+
+    const newTask: TaskItem = {
+      id: nextId,
+      solicitante: solicitud.solicitante,
+      tarea: solicitud.titulo,
+      estado: "Pendiente",
+      fechaIngreso: todayStr,
+      dominio: taskDominio,
+      contacto: {
+        nombre: solicitud.solicitante,
+        telefono: solicitud.telefono,
+      },
+      notas: `${solicitud.descripcion}${solicitud.folio ? `\n[Ticket: ${solicitud.folio}]` : ""}`,
+      etiquetas: Array.from(new Set(customTags)),
+    };
+
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    try {
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(updatedTasks));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      saveTaskToFirestore(auth.currentUser.uid, newTask);
+    }
+
+    // Update solicitud status to ConvertidaEnTarea
+    const updatedSolicitudes = solicitudes.map((s) =>
+      s.id === solicitud.id
+        ? {
+            ...s,
+            estado: "ConvertidaEnTarea" as const,
+            leida: true,
+            tareaIdAsociada: nextId,
+          }
+        : s
+    );
+    setSolicitudes(updatedSolicitudes);
+    try {
+      localStorage.setItem(STORAGE_KEY_SOLICITUDES, JSON.stringify(updatedSolicitudes));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      const targetSol = updatedSolicitudes.find((s) => s.id === solicitud.id);
+      if (targetSol) saveSolicitudToFirestore(auth.currentUser.uid, targetSol);
+    }
+
+    // Update backend store
+    fetch(`/api/solicitudes/${solicitud.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        estado: "ConvertidaEnTarea",
+        leida: true,
+        tareaIdAsociada: nextId,
+        targetUserEmail: syncEmail,
+      }),
+    }).catch(() => {});
+
+    setLastActionSummary(
+      `✅ Solicitud de ${solicitud.solicitante} convertida en Tarea #${nextId} en el Ledger.`
+    );
+    playChime("success");
+  };
+
+  const handleUpdateSolicitud = (id: string, updates: Partial<SolicitudItem>) => {
+    const updated = solicitudes.map((s) => (s.id === id ? { ...s, ...updates } : s));
+    setSolicitudes(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_SOLICITUDES, JSON.stringify(updated));
+    } catch (_) {}
+
+    const target = updated.find((s) => s.id === id);
+    if (target && auth.currentUser) {
+      saveSolicitudToFirestore(auth.currentUser.uid, target);
+    }
+
+    fetch(`/api/solicitudes/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...updates, targetUserEmail: syncEmail }),
+    }).catch(() => {});
+  };
+
+  const handleDeleteSolicitud = (id: string) => {
+    const target = solicitudes.find((s) => s.id === id);
+    const updated = solicitudes.filter((s) => s.id !== id);
+    setSolicitudes(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_SOLICITUDES, JSON.stringify(updated));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      deleteSolicitudFromFirestore(auth.currentUser.uid, id);
+    }
+
+    if (target) {
+      setUndoAction({
+        id: `undo-sol-${Date.now()}`,
+        message: `Solicitud de "${target.solicitante}" eliminada.`,
+        onUndo: () => {
+          setSolicitudes((prev) => [target, ...prev]);
+          if (auth.currentUser) {
+            saveSolicitudToFirestore(auth.currentUser.uid, target);
+          }
+          setLastActionSummary("Acción deshecha: Solicitud restaurada.");
+          playChime("tick");
+        },
+      });
+    }
+  };
+
+  const handleCreateSolicitud = async (
+    newSolData: Omit<SolicitudItem, "id" | "fechaIngreso">
+  ) => {
+    const newId = `sol-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newSolicitud: SolicitudItem = {
+      ...newSolData,
+      id: newId,
+      fechaIngreso: new Date().toISOString(),
+    };
+
+    const updated = [newSolicitud, ...solicitudes];
+    setSolicitudes(updated);
+    try {
+      localStorage.setItem(STORAGE_KEY_SOLICITUDES, JSON.stringify(updated));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      saveSolicitudToFirestore(auth.currentUser.uid, newSolicitud);
+    }
+
+    // Call server to persist and prepare push & email record
+    try {
+      fetch("/api/solicitudes/crear", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newSolicitud,
+          targetUserEmail: syncEmail,
+        }),
+      }).catch(() => {});
+    } catch (_) {}
+
+    // Dispatch Native Push Notification (Service Worker banner + sound + vibration)
+    await notifyNewSolicitud({
+      id: newSolicitud.id,
+      solicitante: newSolicitud.solicitante,
+      titulo: newSolicitud.titulo,
+      descripcion: newSolicitud.descripcion,
+      prioridad: newSolicitud.prioridad,
+      telefono: newSolicitud.telefono,
+    });
+
+    // Dispatch Email Alert (server + mailto)
+    await triggerSolicitudEmailAlert(newSolicitud.id, syncEmail);
+
+    setLastActionSummary(
+      `🚨 Nueva solicitud de ${newSolicitud.solicitante} recibida. Notificación Push y Alerta Email despachadas.`
+    );
+    playChime("notification");
+  };
+
+  const handleImportBackup = async (data: TaskOSExportData) => {
+    if (data.tasks && Array.isArray(data.tasks)) setTasks(data.tasks);
+    if (data.globalResources && Array.isArray(data.globalResources)) setGlobalResources(data.globalResources);
+    if (data.urlLibrary && Array.isArray(data.urlLibrary)) setUrlLibrary(data.urlLibrary);
+    if (data.contacts && Array.isArray(data.contacts)) setContacts(data.contacts);
+    if (data.tags && Array.isArray(data.tags)) setTags(data.tags);
+    if (typeof data.esencialTaskId === "number") setEsencialTaskId(data.esencialTaskId);
+
+    if (auth.currentUser) {
+      if (data.tasks) await batchSyncTasksToFirestore(auth.currentUser.uid, data.tasks);
+      if (data.globalResources) await batchSyncGlobalResourcesToFirestore(auth.currentUser.uid, data.globalResources);
+      if (data.urlLibrary) await batchSyncUrlLibraryToFirestore(auth.currentUser.uid, data.urlLibrary);
+    }
+
+    await pushCloudState(
+      syncEmail,
+      data.tasks || tasks,
+      data.globalResources || globalResources,
+      data.urlLibrary || urlLibrary,
+      data.contacts || contacts,
+      data.tags || tags,
+      data.esencialTaskId ?? esencialTaskId,
+      secundariasTaskIds
+    );
+
+    setLastActionSummary("Respaldo JSON importado y sincronizado con éxito.");
+  };
+
+  // URL Library CRUD handlers
+  const handleAddUrlItem = (item: Omit<UrlLibraryItem, "id" | "createdAt">) => {
+    const newItem: UrlLibraryItem = {
+      ...item,
+      id: `url-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const updated = [newItem, ...urlLibrary];
+    setUrlLibrary(updated);
+    if (auth.currentUser) {
+      saveUrlLibraryItemToFirestore(auth.currentUser.uid, newItem);
+    }
+    setLastActionSummary(`"${newItem.title}" agregada a la Biblioteca de URLs.`);
+    playChime("success");
+  };
+
+  const handleUpdateUrlItem = (updatedItem: UrlLibraryItem) => {
+    setUrlLibrary((prev) => prev.map((u) => (u.id === updatedItem.id ? updatedItem : u)));
+    if (auth.currentUser) {
+      saveUrlLibraryItemToFirestore(auth.currentUser.uid, updatedItem);
+    }
+    setLastActionSummary(`Enlace "${updatedItem.title}" actualizado.`);
+  };
+
+  const handleDeleteUrlItem = (id: string) => {
+    const target = urlLibrary.find((u) => u.id === id);
+    if (!target) return;
+    setUrlLibrary((prev) => prev.filter((u) => u.id !== id));
+    if (auth.currentUser) {
+      deleteUrlLibraryItemFromFirestore(auth.currentUser.uid, id);
+    }
+    setUndoAction({
+      id: `undo-delete-url-${Date.now()}`,
+      message: `Se eliminó "${target.title}" de tu biblioteca.`,
+      onUndo: () => {
+        setUrlLibrary((prev) => [target, ...prev]);
+        if (auth.currentUser) {
+          saveUrlLibraryItemToFirestore(auth.currentUser.uid, target);
+        }
+        setLastActionSummary(`Acción deshecha: "${target.title}" restaurada.`);
+        playChime("tick");
+      },
+    });
+    setLastActionSummary(`Enlace eliminado de la biblioteca.`);
+  };
+
+  // Quick Responses CRUD handlers (Plantillas y respuestas rápidas)
+  const handleAddQuickResponse = (item: Omit<QuickResponseMessage, "id">) => {
+    const newItem: QuickResponseMessage = {
+      ...item,
+      id: `qr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    };
+    const updated = [newItem, ...quickResponses];
+    setQuickResponses(updated);
+    setLastActionSummary(`Respuesta rápida "${newItem.titulo}" creada.`);
+    playChime("success");
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
+  };
+
+  const handleUpdateQuickResponse = (updatedItem: QuickResponseMessage) => {
+    const updated = quickResponses.map((r) => (r.id === updatedItem.id ? updatedItem : r));
+    setQuickResponses(updated);
+    setLastActionSummary(`Respuesta rápida "${updatedItem.titulo}" actualizada.`);
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
+  };
+
+  const handleDeleteQuickResponse = (id: string) => {
+    const target = quickResponses.find((r) => r.id === id);
+    if (!target) return;
+    const updated = quickResponses.filter((r) => r.id !== id);
+    setQuickResponses(updated);
+    setUndoAction({
+      id: `undo-delete-qr-${Date.now()}`,
+      message: `Se eliminó "${target.titulo}" de tus respuestas rápidas.`,
+      onUndo: () => {
+        setQuickResponses((prev) => [target, ...prev]);
+        setLastActionSummary(`Acción deshecha: "${target.titulo}" restaurada.`);
+        playChime("tick");
+      },
+    });
+    setLastActionSummary(`Respuesta rápida eliminada.`);
+    if (syncEmail) {
+      pushCloudState(syncEmail, tasks, globalResources, urlLibrary, contacts, tags, esencialTaskId, secundariasTaskIds, updated);
+    }
+  };
+
+  const handleAttachUrlToActiveTask = (url: string, title: string) => {
+    if (!activeTaskId) {
+      alert("Selecciona primero una tarea activa en el selector superior para adjuntar este enlace.");
+      return;
+    }
+    const activeTask = tasks.find((t) => t.id === activeTaskId);
+    if (!activeTask) return;
+
+    const alreadyAttached = (activeTask.resources || []).some(
+      (r) => r.url.toLowerCase() === url.toLowerCase()
+    );
+    if (alreadyAttached) {
+      setLastActionSummary(`La URL ya está adjunta a la tarea #${activeTaskId}.`);
+      return;
+    }
+
+    const updatedTasks = tasks.map((t) => {
+      if (t.id === activeTaskId) {
+        return {
+          ...t,
+          resources: [
+            ...(t.resources || []),
+            { url, title, addedAt: new Date().toISOString() },
+          ],
+        };
+      }
+      return t;
+    });
+
+    setTasks(updatedTasks);
+    const targetTask = updatedTasks.find((t) => t.id === activeTaskId);
+    if (targetTask && auth.currentUser) {
+      saveTaskToFirestore(auth.currentUser.uid, targetTask);
+    }
+    setLastActionSummary(`"${title}" adjuntado a la Tarea #${activeTaskId}.`);
+    playChime("success");
+  };
+
+  const handleSendToPrint = (item: PrintItem) => {
+    setCurrentPrintItem(item);
+    setCurrentWorkspace("print");
+    setLastActionSummary(`Documento "${item.titulo}" enviado a PRINT (🖨️).`);
+    playChime("tick");
+  };
+
+  const handleSaveIncomeToFinanzas = (income: any) => {
+    setLastActionSummary(`Comprobante guardado en Salud Financiera: ${income.concepto || ""}`);
+    playChime("success");
+  };
+
+  const handleSaveToLonas = (order: Partial<LonasOrder>) => {
+    const cliente = order.cliente;
+    if (cliente?.nombre) {
+      setLonasOrders((prev) => {
+        const nextFolio = prev.length > 0 ? Math.max(...prev.map((o) => o.folio)) + 1 : 1;
+        const newOrder: LonasOrder = {
+          id: order.id || `lon-${Date.now()}`,
+          folio: order.folio || nextFolio,
+          cliente: {
+            nombre: cliente.nombre,
+            telefono: cliente.telefono || "",
+            empresa: cliente.empresa || "Zona Jaguar",
+          },
+          items: order.items || [
+            {
+              id: `item-${Date.now()}`,
+              descripcion: "Pedido desde comprobante / OUT",
+              ancho: 1,
+              alto: 1,
+              cantidad: 1,
+              m2: 1,
+              costoPorM2: 50,
+              precioVentaPorM2: 100,
+              costoCalculado: 50,
+              precioCalculado: order.total || 100,
+              precioFinal: order.total || 100,
+              costoFinal: 50,
+            },
+          ],
+          subtotal: order.subtotal || order.total || 0,
+          descuento: 0,
+          total: order.total || 0,
+          anticipo: order.anticipo || 0,
+          pagos: [],
+          saldo: order.saldo ?? Math.max(0, (order.total || 0) - (order.anticipo || 0)),
+          estado: order.estado || "Cotización",
+          fechaIngreso: new Date().toISOString().slice(0, 10),
+          fechaEntregaEstimada: order.fechaEntregaEstimada || "Pendiente",
+          driveUrl: order.driveUrl,
+        };
+        const updated = [newOrder, ...prev];
+        try {
+          localStorage.setItem(STORAGE_KEY_LONAS, JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
+    }
+    setLastActionSummary(`Comprobante vinculado a Pedidos de Lonas: ${order.cliente?.nombre || ""}`);
+    playChime("success");
+  };
+
+  const handleProcessInput = async (
+    input: string,
+    imageBase64?: string,
+    imageMimeType?: string,
+    selectedTags?: string[],
+    preassignedCategory?: string,
+    urlDestinationOverride?: "TASK" | "GLOBAL" | "URL_LIBRARY" | null
+  ) => {
+    setIsLoading(true);
+    setLastActionSummary(null);
+
+    // 1. Evaluate input deterministically through the Executive Router Node
+    let routerResult;
+    try {
+      routerResult = await routeExecutiveInput(
+        input,
+        activeTaskId,
+        tasks,
+        globalResources,
+        urlLibrary,
+        urlDestinationOverride
+      );
+      setLastRouterOutput(routerResult.structuredOutput);
+    } catch (routerErr) {
+      console.warn("Router execution error, using standard fallback:", routerErr);
+    }
+
+    // Branch A: ROUTE_RESOURCE or SAVE_URL_LIBRARY (URLs detected)
+    if (
+      routerResult &&
+      (routerResult.structuredOutput.action === "ROUTE_RESOURCE" ||
+        routerResult.structuredOutput.action === "SAVE_URL_LIBRARY")
+    ) {
+      setIsLoading(false);
+      const plans = routerResult.resourcePlans;
+      const validNew = plans.filter((p) => !p.isDuplicate);
+
+      if (validNew.length > 0) {
+        if (routerResult.structuredOutput.destination.type === "URL_LIBRARY") {
+          // Destination: Daily URL Library
+          const newUrlItems: UrlLibraryItem[] = validNew.map((p) => ({
+            id: `url-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            url: p.url,
+            title: p.title,
+            categoria: p.categoria || "Herramientas & Web",
+            descripcion: p.descripcion,
+            keywords: p.keywords,
+            icon: p.icon || undefined,
+            isFavorite: true,
+            clicks: 1,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }));
+
+          const updatedUrls = [...newUrlItems, ...urlLibrary];
+          setUrlLibrary(updatedUrls);
+          try {
+            localStorage.setItem(STORAGE_KEY_URL_LIBRARY, JSON.stringify(updatedUrls));
+          } catch (_) {}
+
+          if (auth.currentUser) {
+            newUrlItems.forEach((u) => saveUrlLibraryItemToFirestore(auth.currentUser!.uid, u));
+          }
+
+          // Register reversible undo action
+          setUndoAction({
+            id: `undo-url-${Date.now()}`,
+            message: `Se guardó ${newUrlItems.length} enlace(s) en tu Biblioteca de URLs.`,
+            onUndo: () => {
+              setUrlLibrary((prev) =>
+                prev.filter((u) => !newUrlItems.some((nu) => nu.id === u.id))
+              );
+              if (auth.currentUser) {
+                newUrlItems.forEach((u) =>
+                  deleteUrlLibraryItemFromFirestore(auth.currentUser!.uid, u.id)
+                );
+              }
+              setLastActionSummary("Acción deshecha: Enlaces eliminados de la biblioteca.");
+              playChime("tick");
+            },
+          });
+        } else if (routerResult.structuredOutput.destination.type === "TASK" && activeTaskId) {
+          const newResources: TaskResource[] = validNew.map((p) => ({
+            url: p.url,
+            title: p.title,
+            addedAt: new Date().toISOString(),
+          }));
+
+          const updatedTasks = tasks.map((t) => {
+            if (t.id === activeTaskId) {
+              const curRes = t.resources || [];
+              return { ...t, resources: [...curRes, ...newResources] };
+            }
+            return t;
+          });
+
+          setTasks(updatedTasks);
+          const targetTask = updatedTasks.find((t) => t.id === activeTaskId);
+          if (targetTask && auth.currentUser) {
+            saveTaskToFirestore(auth.currentUser.uid, targetTask);
+          }
+
+          // Register reversible undo action
+          setUndoAction({
+            id: `undo-res-${Date.now()}`,
+            message: `Se adjuntaron ${newResources.length} recurso(s) a la Tarea #${activeTaskId}.`,
+            onUndo: () => {
+              setTasks((prev) =>
+                prev.map((t) => {
+                  if (t.id === activeTaskId) {
+                    const filtered = (t.resources || []).filter(
+                      (r) => !newResources.some((added) => added.url.toLowerCase() === r.url.toLowerCase())
+                    );
+                    const reverted = { ...t, resources: filtered };
+                    if (auth.currentUser) {
+                      saveTaskToFirestore(auth.currentUser.uid, reverted);
+                    }
+                    return reverted;
+                  }
+                  return t;
+                })
+              );
+              setLastActionSummary("Acción deshecha: Recursos retirados de la tarea.");
+              playChime("tick");
+            },
+          });
+        } else {
+          // Global Resource routing
+          const newGlobalItems: GlobalResource[] = validNew.map((p) => ({
+            id: `res-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            url: p.url,
+            title: p.title,
+            keywords: p.keywords,
+            savedAt: new Date().toISOString(),
+          }));
+
+          const mergedGlobal = [...newGlobalItems, ...globalResources];
+          setGlobalResources(mergedGlobal);
+          try {
+            localStorage.setItem(STORAGE_KEY_GLOBAL_RESOURCES, JSON.stringify(mergedGlobal));
+          } catch (_) {}
+
+          if (auth.currentUser) {
+            newGlobalItems.forEach((g) => saveGlobalResourceToFirestore(auth.currentUser!.uid, g));
+          }
+
+          // Register reversible undo action
+          setUndoAction({
+            id: `undo-global-${Date.now()}`,
+            message: `Se indexaron ${newGlobalItems.length} recurso(s) en el Archivo Global.`,
+            onUndo: () => {
+              setGlobalResources((prev) => {
+                const filtered = prev.filter(
+                  (g) => !newGlobalItems.some((ng) => ng.id === g.id)
+                );
+                try {
+                  localStorage.setItem(STORAGE_KEY_GLOBAL_RESOURCES, JSON.stringify(filtered));
+                } catch (_) {}
+                return filtered;
+              });
+              if (auth.currentUser) {
+                newGlobalItems.forEach((g) =>
+                  deleteGlobalResourceFromFirestore(auth.currentUser!.uid, g.id)
+                );
+              }
+              setLastActionSummary("Acción deshecha: Recursos eliminados del archivo global.");
+              playChime("tick");
+            },
+          });
+        }
+      }
+
+      setLastActionSummary(routerResult.notification);
+      playChime("success");
+      return;
+    }
+
+    // Branch B: UNIVERSAL_SEARCH
+    if (routerResult && routerResult.structuredOutput.action === "UNIVERSAL_SEARCH") {
+      setIsLoading(false);
+      const query = routerResult.structuredOutput.payload.searchQuery || input;
+      setUniversalSearchInitialQuery(query);
+      setIsUniversalSearchOpen(true);
+      setLastActionSummary(routerResult.notification);
+      playChime("tick");
+      return;
+    }
+
+    // Branch C: CREATE_TASK (Standard Task creation pipeline)
+    const todayStr = new Date().toISOString().split("T")[0];
+    const previousMaxId = tasks.length > 0 ? Math.max(...tasks.map((t) => t.id)) : 0;
+
+    try {
+      const response = await fetch("/api/task-os/process", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input,
+          currentTasks: tasks,
+          currentDate: todayStr,
+          imageBase64,
+          imageMimeType,
+          contacts,
+          selectedTags,
+          preassignedCategory,
+        }),
+      });
+
+      if (!response.ok) {
+        let errDetail = `HTTP ${response.status}`;
+        try {
+          const ct = response.headers.get("content-type") || "";
+          if (ct.includes("application/json")) {
+            const errJson = await response.json();
+            if (errJson?.error) errDetail = errJson.error;
+          }
+        } catch (_) {}
+        throw new Error(errDetail);
+      }
+
+      const ct = response.headers.get("content-type") || "";
+      if (!ct.includes("application/json")) {
+        throw new Error("El servidor devolvió una respuesta no válida");
+      }
+
+      const data: TaskOSResponse = await response.json();
+
+      if (data.tasks) {
+        const newTasks = data.tasks.filter((t) => t.id > previousMaxId);
+
+        // Ensure new tasks keep selectedTags if applicable
+        if (selectedTags && selectedTags.length > 0) {
+          if (newTasks.length > 0) {
+            newTasks.forEach((target) => {
+              if (!target.etiquetas || target.etiquetas.length === 0) {
+                target.etiquetas = [...selectedTags];
+              }
+            });
+          } else {
+            const maxId = Math.max(...data.tasks.map((t) => t.id));
+            const target = data.tasks.find((t) => t.id === maxId);
+            if (target && (!target.etiquetas || target.etiquetas.length === 0)) {
+              target.etiquetas = [...selectedTags];
+            }
+          }
+        }
+
+        // Ensure new tasks receive preassigned category if specified
+        if (preassignedCategory) {
+          if (newTasks.length > 0) {
+            newTasks.forEach((target) => {
+              target.dominio = preassignedCategory;
+            });
+          } else if (data.tasks.length > tasks.length) {
+            const latest = data.tasks[data.tasks.length - 1];
+            if (latest) latest.dominio = preassignedCategory;
+          }
+        }
+
+        setTasks(data.tasks);
+
+        // Sync new tasks to Firestore if user logged in
+        if (auth.currentUser && newTasks.length > 0) {
+          newTasks.forEach((nt) => saveTaskToFirestore(auth.currentUser!.uid, nt));
+        }
+
+        // Setup undo for task creation
+        if (newTasks.length > 0) {
+          const createdIds = newTasks.map((t) => t.id);
+          setUndoAction({
+            id: `undo-task-${Date.now()}`,
+            message: `Tarea #${createdIds[0]} creada con éxito.`,
+            onUndo: () => {
+              setTasks((prev) => prev.filter((t) => !createdIds.includes(t.id)));
+              setLastActionSummary("Acción deshecha: Tarea eliminada del Ledger.");
+              playChime("tick");
+            },
+          });
+        }
+      }
+
+      if (data.tareaEsencialId !== undefined) {
+        setEsencialTaskId(data.tareaEsencialId);
+      }
+
+      if (data.tareasSecundariasIds !== undefined) {
+        setSecundariasTaskIds(data.tareasSecundariasIds);
+      }
+
+      if (data.mensajeParaEnviar !== undefined) {
+        setLastMessage(data.mensajeParaEnviar);
+      }
+
+      // Populate multiple messages queue if returned
+      if (data.mensajesMultiples && data.mensajesMultiples.length > 0) {
+        const mapped: WhatsAppMessageItem[] = data.mensajesMultiples.map((m, idx) => ({
+          id: `msg-${Date.now()}-${idx}`,
+          destinatario: m.destinatario,
+          telefono: m.telefono,
+          mensaje: m.mensaje,
+          enviado: false,
+        }));
+        setMultiMessages(mapped);
+      }
+
+      if (data.resumenAccion) {
+        setLastActionSummary(data.resumenAccion);
+      }
+
+      // Check if Pomodoro requested
+      if (data.activarPomodoro) {
+        const targetTask = data.pomodoroTarea || "Sesión de Enfoque";
+        setPomodoroTaskName(targetTask);
+        if (data.pomodoroMinutos) setPomodoroMinutes(data.pomodoroMinutos);
+
+        const matched = data.tasks.find((t) =>
+          targetTask.toLowerCase().includes(t.tarea.toLowerCase().slice(0, 15))
+        );
+        setPomodoroTaskId(matched ? matched.id : null);
+        setIsPomodoroActive(true);
+        playChime("tick");
+      }
+
+      playChime("success");
+    } catch (err) {
+      console.error("Error processing input:", err);
+      setLastActionSummary("Error al conectar con el servidor. Revisa tu conexión.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDirectCreateTask = (taskData: {
+    tarea: string;
+    solicitante?: string;
+    telefono?: string;
+    numeroFolio?: string;
+    etiquetas?: string[];
+    dominio?: string;
+    fechaLimite?: string;
+    notas?: string;
+    imagenReferencia?: string;
+    resources?: TaskResource[];
+  }) => {
+    const nextId = tasks.length > 0 ? Math.max(...tasks.map((t) => t.id)) + 1 : 1;
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const newTask: TaskItem = {
+      id: nextId,
+      solicitante: taskData.solicitante?.trim() || "Yo",
+      tarea: taskData.tarea.trim(),
+      estado: "Pendiente",
+      fechaIngreso: todayStr,
+      dominio: taskData.dominio || "General",
+      imagenReferencia: taskData.imagenReferencia,
+      contacto:
+        taskData.solicitante || taskData.telefono
+          ? {
+              nombre: taskData.solicitante?.trim() || "Contacto",
+              telefono: taskData.telefono?.trim() || undefined,
+            }
+          : undefined,
+      numeroFolio: taskData.numeroFolio?.trim() || undefined,
+      etiquetas:
+        taskData.etiquetas && taskData.etiquetas.length > 0
+          ? taskData.etiquetas
+          : undefined,
+      notas: taskData.notas?.trim() || undefined,
+      fechaLimite: taskData.fechaLimite || undefined,
+      resources:
+        taskData.resources && taskData.resources.length > 0
+          ? taskData.resources
+          : undefined,
+    };
+
+    const updatedTasks = [newTask, ...tasks];
+    setTasks(updatedTasks);
+    try {
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(updatedTasks));
+    } catch (_) {}
+
+    if (auth.currentUser) {
+      saveTaskToFirestore(auth.currentUser.uid, newTask);
+    }
+
+    setUndoAction({
+      id: `undo-task-${Date.now()}`,
+      message: `Pendiente #${nextId} registrado con éxito en Ledger.`,
+      onUndo: () => {
+        setTasks((prev) => prev.filter((t) => t.id !== nextId));
+        if (auth.currentUser) {
+          deleteTaskFromFirestore(auth.currentUser.uid, nextId);
+        }
+        setLastActionSummary("Acción deshecha: Pendiente retirado del Ledger.");
+        playChime("tick");
+      },
+    });
+
+    setLastActionSummary(`Pendiente #${nextId} "${newTask.tarea.slice(0, 32)}..." guardado en Ledger.`);
+    playChime("success");
+  };
+
+  const handleSetStatus = (
+    id: number,
+    newStatus: "Pendiente" | "En Proceso" | "Completado"
+  ) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const updated = {
+            ...t,
+            estado: newStatus,
+            fechaCompletado:
+              newStatus === "Completado"
+                ? t.fechaCompletado || new Date().toISOString()
+                : undefined,
+          };
+          if (auth.currentUser) {
+            saveTaskToFirestore(auth.currentUser.uid, updated);
+          }
+          // If task completed and delegated by someone else, generate delivery notice (Ley 16)
+          if (newStatus === "Completado" && t.solicitante && t.solicitante.toLowerCase() !== "pepe") {
+            const reply = `Ya quedó listo lo que me pediste (${t.tarea}). Te lo comparto por aquí.`;
+            setLastMessage(reply);
+            setLastSolicitante(t.solicitante);
+
+            // Also queue in multiMessages
+            const contactMatch = contacts.find((c) =>
+              c.nombre.toLowerCase().includes(t.solicitante.toLowerCase())
+            );
+            setMultiMessages((prevMsgs) => [
+              {
+                id: `deliv-${Date.now()}`,
+                destinatario: t.solicitante,
+                telefono: contactMatch?.telefono || t.contacto?.telefono,
+                mensaje: reply,
+                tareaId: t.id,
+                enviado: false,
+              },
+              ...prevMsgs,
+            ]);
+
+            setLastActionSummary(`Tarea #${t.id} completada. Aviso de entrega generado para ${t.solicitante}.`);
+          } else if (newStatus === "Completado") {
+            setLastActionSummary(`Tarea #${t.id} completada.`);
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
+    if (newStatus === "Completado") {
+      const isMutedByDnd = notifConfig.focusDoNotDisturb && isPomodoroActive;
+      if (notifConfig.soundChimes && !isMutedByDnd) {
+        playChime(notifConfig.soundType || "bell", { volume: notifConfig.soundVolume });
+      }
+      if (
+        notifConfig.taskCompleted &&
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        try {
+          const finishedTask = tasks.find((item) => item.id === id);
+          new Notification("✅ Tarea Completada — Task-OS", {
+            body: finishedTask ? finishedTask.tarea : `Tarea #${id} marcada como completada`,
+            icon: "/icon-192.svg",
+          });
+        } catch (_) {}
+      }
+    } else {
+      playChime("tick", { volume: notifConfig.soundVolume });
+    }
+  };
+
+  const handleToggleStatus = (id: number) => {
+    const task = tasks.find((t) => t.id === id);
+    if (!task) return;
+    const nextStatus =
+      task.estado === "Pendiente"
+        ? "En Proceso"
+        : task.estado === "En Proceso"
+        ? "Completado"
+        : "Pendiente";
+    handleSetStatus(id, nextStatus);
+  };
+
+  const handleStartFocus = (task: TaskItem) => {
+    setPomodoroTaskName(task.tarea);
+    setPomodoroTaskId(task.id);
+    setPomodoroMinutes(25);
+    setIsPomodoroActive(true);
+    setLastActionSummary(`Sesión de enfoque activada para: ${task.tarea}`);
+    playChime("tick");
+  };
+
+  const handleCompleteTaskFromPomodoro = (taskId: number | null, taskName: string) => {
+    if (taskId) {
+      handleSetStatus(taskId, "Completado");
+    } else {
+      const found = tasks.find((t) => t.tarea === taskName);
+      if (found) {
+        handleSetStatus(found.id, "Completado");
+      }
+    }
+    setLastActionSummary(`¡Enfoque completado con éxito! Tarea marcada como Completada.`);
+  };
+
+  const handleUpdateTaskFechaLimite = (id: number, fechaLimite: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === id) {
+          const updated = { ...t, fechaLimite: fechaLimite || undefined };
+          if (auth.currentUser) {
+            saveTaskToFirestore(auth.currentUser.uid, updated);
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
+    setLastActionSummary(
+      fechaLimite
+        ? `Fecha límite de la tarea #${id} actualizada al ${fechaLimite}.`
+        : `Fecha límite de la tarea #${id} eliminada.`
+    );
+  };
+
+  const handleResetLedger = () => {
+    if (window.confirm("¿Deseas restablecer el Ledger y contactos a las opciones iniciales?")) {
+      setTasks(INITIAL_TASKS);
+      setContacts(INITIAL_CONTACTS);
+      setEsencialTaskId(1);
+      setSecundariasTaskIds([2]);
+      setLastMessage(
+        "Sí, ya lo tengo anotado. Reviso los reconocimientos antes de enviarlos y te aviso cuando queden listos."
+      );
+      setLastActionSummary("Ledger y contactos restablecidos a valores iniciales.");
+    }
+  };
+
+  // Contacts handlers
+  const handleAddContact = (newContact: Omit<Contact, "id">) => {
+    const contact: Contact = {
+      ...newContact,
+      id: `c-${Date.now()}`,
+    };
+    setContacts((prev) => [...prev, contact]);
+    setLastActionSummary(`Contacto ${contact.nombre} añadido a la agenda.`);
+  };
+
+  const handleUpdateContact = (updated: Contact) => {
+    setContacts((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    setLastActionSummary(`Contacto ${updated.nombre} actualizado.`);
+  };
+
+  const handleDeleteContact = (id: string) => {
+    setContacts((prev) => prev.filter((c) => c.id !== id));
+    setLastActionSummary("Contacto eliminado de la agenda.");
+  };
+
+  const handleBulkAddContacts = (newContacts: Contact[]) => {
+    setContacts((prev) => [...prev, ...newContacts]);
+    setLastActionSummary(`${newContacts.length} contactos importados con etiquetas a la agenda.`);
+  };
+
+  const handleSelectContactForMessage = (c: Contact) => {
+    const msg = lastMessage && lastMessage !== "No aplica."
+      ? lastMessage
+      : `Hola ${c.nombre}, te escribo respecto al seguimiento de las tareas.`;
+    setLastMessage(msg);
+    setLastSolicitante(c.nombre);
+    setMultiMessages((prev) => [
+      {
+        id: `contact-msg-${Date.now()}`,
+        destinatario: c.nombre,
+        telefono: c.telefono,
+        mensaje: msg,
+        enviado: false,
+      },
+      ...prev,
+    ]);
+  };
+
+  const handleMessageTaskContact = (task: TaskItem) => {
+    const contactMatch = contacts.find((c) =>
+      c.nombre.toLowerCase().includes(task.solicitante.toLowerCase())
+    );
+    const phone = contactMatch?.telefono || task.contacto?.telefono;
+    const msg = `Hola ${task.solicitante}, sobre la tarea: "${task.tarea}"...`;
+
+    setLastMessage(msg);
+    setLastSolicitante(task.solicitante);
+    setMultiMessages((prev) => [
+      {
+        id: `task-msg-${Date.now()}`,
+        destinatario: task.solicitante,
+        telefono: phone,
+        mensaje: msg,
+        tareaId: task.id,
+        enviado: false,
+      },
+      ...prev,
+    ]);
+    setLastActionSummary(`Mensaje preparado para ${task.solicitante}.`);
+  };
+
+  const handleMarkMessageSent = (id: string) => {
+    setMultiMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, enviado: true } : m))
+    );
+  };
+
+  // Tags handlers
+  const handleAddTag = (newTag: Omit<TagItem, "id">) => {
+    const created: TagItem = {
+      ...newTag,
+      id: `tag-${Date.now()}`,
+    };
+    setTags((prev) => [...prev, created]);
+    setLastActionSummary(`Etiqueta "${created.nombre}" creada.`);
+  };
+
+  const handleUpdateTag = (updated: TagItem) => {
+    setTags((prev) => prev.map((t) => (t.id === updated.id ? updated : t)));
+    setLastActionSummary(`Etiqueta "${updated.nombre}" actualizada.`);
+  };
+
+  const handleDeleteTag = (id: string) => {
+    const target = tags.find((t) => t.id === id);
+    setTags((prev) => prev.filter((t) => t.id !== id));
+    // Also remove tag from any task that has it
+    if (target) {
+      setTasks((prev) =>
+        prev.map((t) => ({
+          ...t,
+          etiquetas: t.etiquetas?.filter((e) => e !== target.nombre),
+        }))
+      );
+    }
+    setLastActionSummary(`Etiqueta eliminada.`);
+  };
+
+  const handleResetTags = () => {
+    setTags(DEFAULT_TAGS);
+    setLastActionSummary(`Etiquetas restablecidas a valores predeterminados.`);
+  };
+
+  const handleToggleTaskTag = (taskId: number, tagName: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          const current = t.etiquetas || [];
+          const exists = current.includes(tagName);
+          const next = exists
+            ? current.filter((e) => e !== tagName)
+            : [...current, tagName];
+          const updated = { ...t, etiquetas: next };
+          if (auth.currentUser) {
+            saveTaskToFirestore(auth.currentUser.uid, updated);
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
+  };
+
+  const handleUpdateTaskNotes = (taskId: number, notes: string) => {
+    setTasks((prev) =>
+      prev.map((t) => {
+        if (t.id === taskId) {
+          const updated = { ...t, notas: notes };
+          if (auth.currentUser) {
+            saveTaskToFirestore(auth.currentUser.uid, updated);
+          }
+          return updated;
+        }
+        return t;
+      })
+    );
+    setLastActionSummary(`Observaciones actualizadas para la tarea #${taskId}.`);
+  };
+
+  // Google Workspace & Firebase Handlers
+  const handleImportGoogleContacts = (imported: Contact[]) => {
+    setContacts((prev) => {
+      const existingNames = new Set(prev.map((c) => c.nombre.toLowerCase().trim()));
+      const filteredNew = imported.filter(
+        (c) => !existingNames.has(c.nombre.toLowerCase().trim())
+      );
+      const merged = [...prev, ...filteredNew];
+      try {
+        localStorage.setItem(STORAGE_KEY_CONTACTS, JSON.stringify(merged));
+      } catch (e) {
+        console.error("Error saving contacts", e);
+      }
+      return merged;
+    });
+    setLastActionSummary(`Se importaron contactos de Google a tu agenda.`);
+  };
+
+  const handleImportGoogleTasks = (importedTasks: TaskItem[]) => {
+    setTasks((prev) => {
+      const merged = [...prev, ...importedTasks];
+      try {
+        localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(merged));
+      } catch (e) {
+        console.error("Error saving tasks", e);
+      }
+      return merged;
+    });
+    setLastActionSummary(`Se agregaron ${importedTasks.length} tareas desde Google Tasks.`);
+  };
+
+  const handleTasksSyncedFromFirestore = (syncedTasks: TaskItem[]) => {
+    setTasks(syncedTasks);
+    try {
+      localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(syncedTasks));
+    } catch (e) {
+      console.error("Error saving synced tasks", e);
+    }
+    setLastActionSummary(`Ledger sincronizado con Firebase Firestore.`);
+  };
+
+  const essentialTask = tasks.find((t) => t.id === esencialTaskId);
+
+  // If visitor is not authenticated as admin, show dedicated public request portal directly
+  if (!isAdminAuthenticated) {
+    return (
+      <PublicRequestPortal
+        onAdminLoginClick={(adminEmail?: string) => {
+          setIsAdminAuthenticated(true);
+          const emailToUse = adminEmail || (syncEmail && syncEmail.includes("@") ? syncEmail : "laurcortazar@gmail.com");
+          setSyncEmail(emailToUse);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+            localStorage.setItem(STORAGE_KEY_USER_EMAIL, emailToUse);
+            localStorage.setItem("taskos_auto_sync_enabled", "true");
+            localStorage.setItem("taskos_auto_sync_interval", "60");
+          } catch (_) {}
+          setAutoSyncEnabled(true);
+          setAutoSyncInterval(60);
+          setSecondsUntilSync(60);
+          setCurrentWorkspace("task-os");
+          playChime("tick");
+          setTimeout(() => {
+            handleForceSync(true);
+          }, 150);
+        }}
+        onRequestCreated={(newSol) => {
+          handleCreateSolicitud(newSol);
+        }}
+        existingSolicitudes={solicitudes}
+        isAdminLoggedIn={false}
+        onGoToAdminDashboard={() => {
+          setIsAdminAuthenticated(true);
+          try {
+            localStorage.setItem("taskos_is_admin_active", "true");
+          } catch (_) {}
+          setCurrentWorkspace("task-os");
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-stone-50 dark:bg-stone-950 text-stone-900 dark:text-stone-100 flex flex-col font-sans selection:bg-amber-200 selection:text-stone-900">
+      {/* Global Header */}
+      <Header
+        onOpenPomodoro={() => {
+          if (!isPomodoroActive) {
+            const taskToFocus = essentialTask?.tarea || "Sesión de Enfoque";
+            setPomodoroTaskName(taskToFocus);
+            setPomodoroTaskId(essentialTask?.id || null);
+          }
+          setIsPomodoroActive(!isPomodoroActive);
+        }}
+        isPomodoroActive={isPomodoroActive}
+        essentialTaskName={essentialTask?.tarea}
+        onOpenContacts={() => setIsContactsModalOpen(true)}
+        onOpenTags={() => setIsTagsModalOpen(true)}
+        onResetLedger={handleResetLedger}
+        syncStatus={syncStatus}
+        onOpenSync={() => setIsSyncModalOpen(true)}
+        onOpenConnectionMenu={() => setIsConnectionMenuOpen(true)}
+        onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
+        onOpenUniversalSearch={() => setIsUniversalSearchOpen(true)}
+        onOpenExportImport={() => setIsExportImportOpen(true)}
+        onOpenUrlLibrary={() => setCurrentWorkspace("urls")}
+        urlCount={urlLibrary.length}
+        onOpenNotifications={() => setIsNotificationsModalOpen(true)}
+        isPushActive={isPushActive}
+        unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+        onOpenPortal={() => {
+          setCurrentWorkspace((prev) => (prev === "portal" ? "task-os" : "portal"));
+          playChime("tick");
+        }}
+        isPortalActive={currentWorkspace === "portal"}
+        onLogoutAdmin={handleLogoutAdmin}
+      />
+
+      {/* Ecosystem Navigation Bar (🌐 • 🔥 • 💻 • 🤑 • 🔗 • 🖨️ • ⏱️) */}
+      <div className="border-b border-stone-200 dark:border-stone-800 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md sticky top-16 z-20">
+        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Portal Público de Requerimientos: 🌐 */}
+            <button
+              type="button"
+              id="ws-tab-portal"
+              onClick={() => setCurrentWorkspace("portal")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "portal"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20 font-bold"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Portal Público de Requerimientos (l.fgdll.org): 🌐"
+              aria-label="Portal Público: 🌐"
+            >
+              <span>🌐</span>
+              {solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[9px] font-black leading-tight shadow-xs">
+                  {solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+                </span>
+              )}
+            </button>
+
+            {/* Task: 🔥 */}
+            <button
+              type="button"
+              id="ws-tab-task-os"
+              onClick={() => setCurrentWorkspace("task-os")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "task-os"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Task: 🔥"
+              aria-label="Task: 🔥"
+            >
+              <span>🔥</span>
+              {tasks.filter((t) => t.estado !== "Completado").length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-[#f2ad00] text-[#1d1d1b] text-[9px] font-black leading-tight shadow-xs">
+                  {tasks.filter((t) => t.estado !== "Completado").length}
+                </span>
+              )}
+            </button>
+
+            {/* Centro de Pendientes: ⚡ (Tasks, Lonas, Reconocimientos, Pagos) */}
+            <button
+              type="button"
+              id="ws-tab-pendientes"
+              onClick={() => {
+                setCurrentWorkspace("pendientes");
+                playChime("tick");
+              }}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "pendientes"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Centro de Pendientes: ⚡ (Tasks, Lonas, Reconocimientos y Pagos)"
+              aria-label="Pendientes: ⚡"
+            >
+              <span>⚡</span>
+              {(tasks.filter((t) => t.estado !== "Completado").length +
+                lonasOrders.filter((o) => o.estado !== "Entregado" && o.estado !== "Cancelado").length +
+                pendingReconocimientosCount) > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-amber-500 text-stone-950 text-[9px] font-black leading-tight shadow-xs">
+                  {tasks.filter((t) => t.estado !== "Completado").length +
+                    lonasOrders.filter((o) => o.estado !== "Entregado" && o.estado !== "Cancelado").length +
+                    pendingReconocimientosCount}
+                </span>
+              )}
+            </button>
+
+            {/* URLs: 🔗 */}
+            <button
+              type="button"
+              id="ws-tab-urls"
+              onClick={() => setCurrentWorkspace("urls")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                currentWorkspace === "urls"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="URLs: 🔗"
+              aria-label="URLs: 🔗"
+            >
+              <span>🔗</span>
+              {urlLibrary.length > 0 && (
+                <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full bg-[#f2ad00] text-[#1d1d1b] text-[9px] font-black">
+                  {urlLibrary.length}
+                </span>
+              )}
+            </button>
+
+            {/* Lonas: 💻 */}
+            <button
+              type="button"
+              id="ws-tab-lonas"
+              onClick={() => setCurrentWorkspace("lonas")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "lonas"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Lonas: 💻"
+              aria-label="Lonas: 💻"
+            >
+              <span>💻</span>
+            </button>
+
+            {/* Salud Financiera: 🤑 */}
+            <button
+              type="button"
+              id="ws-tab-finanzas"
+              onClick={() => setCurrentWorkspace("finanzas")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "finanzas"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Salud Financiera: 🤑"
+              aria-label="Salud Financiera: 🤑"
+            >
+              <span>🤑</span>
+            </button>
+
+            {/* Print: 🖨️ */}
+            <button
+              type="button"
+              id="ws-tab-print"
+              onClick={() => setCurrentWorkspace("print")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "print"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Print: 🖨️"
+              aria-label="Print: 🖨️"
+            >
+              <span>🖨️</span>
+            </button>
+
+            {/* Pomodoro: ⏱️ */}
+            <button
+              type="button"
+              id="ws-tab-pomodoro"
+              onClick={() => {
+                setCurrentWorkspace("pomodoro");
+                setIsPomodoroActive(true);
+              }}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "pomodoro"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Pomodoro: ⏱️"
+              aria-label="Pomodoro: ⏱️"
+            >
+              <span>⏱️</span>
+            </button>
+
+            {/* Rendimiento Semanal: 📊 */}
+            <button
+              type="button"
+              id="ws-tab-analytics"
+              onClick={() => setCurrentWorkspace("analytics")}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] active:scale-95 ${
+                currentWorkspace === "analytics"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Rendimiento Semanal: 📊"
+              aria-label="Rendimiento Semanal: 📊"
+            >
+              <span>📊</span>
+            </button>
+
+            {/* Reconocimientos: 🎓 */}
+            <button
+              type="button"
+              id="ws-tab-reconocimientos"
+              onClick={() => {
+                setCurrentWorkspace("reconocimientos");
+                setNewReconocimientoAlert(null);
+                playChime("tick");
+              }}
+              className={`p-2.5 sm:px-3.5 sm:py-2 rounded-2xl text-base sm:text-lg font-black flex items-center justify-center transition-all shrink-0 min-h-[44px] min-w-[44px] relative active:scale-95 ${
+                pendingReconocimientosCount > 0
+                  ? "pulse-warning ring-2 ring-[#f2ad00] shadow-md shadow-[#f2ad00]/30"
+                  : newReconocimientoAlert
+                  ? "animate-heartbeat-soft ring-2 ring-[#f2ad00] shadow-md shadow-[#f2ad00]/30"
+                  : ""
+              } ${
+                currentWorkspace === "reconocimientos"
+                  ? "bg-[#042f66] text-white shadow-md shadow-[#042f66]/25 ring-2 ring-[#042f66]/20 font-bold"
+                  : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100 hover:bg-stone-100 dark:hover:bg-stone-800"
+              }`}
+              title="Reconocimientos y Diplomas: 🎓 (Pago, Cuadernillos, Audio, Digital, Impreso y Entrega)"
+              aria-label="Reconocimientos: 🎓"
+            >
+              <span className={pendingReconocimientosCount > 0 || newReconocimientoAlert ? "animate-pulse" : ""}>🎓</span>
+              {reconocimientosCount > 0 && (
+                <span className={`absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[9px] font-black leading-tight shadow-xs ${
+                  pendingReconocimientosCount > 0 || newReconocimientoAlert
+                    ? "bg-[#f2ad00] text-[#1d1d1b] animate-bounce font-black ring-1 ring-white"
+                    : "bg-[#f2ad00] text-[#1d1d1b]"
+                }`}>
+                  {reconocimientosCount}
+                </span>
+              )}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="hidden md:inline-flex items-center gap-1.5 text-[11px] font-bold text-stone-500">
+              <Cloud size={13} className="text-emerald-500" />
+              Sincronizado: {syncEmail}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-6 pb-28 md:pb-12">
+        {/* Render Workspace based on tab selection */}
+        {currentWorkspace === "portal" ? (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 dark:text-amber-200">
+              <span className="font-bold flex items-center gap-2">
+                👑 Modo Administradora Activo — Estás visualizando el portal público tal como lo ven tus clientes y solicitantes.
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentWorkspace("task-os")}
+                  className="px-3 py-1.5 rounded-xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs"
+                >
+                  Volver a Task-OS
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLogoutAdmin}
+                  className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs"
+                >
+                  Cerrar Sesión Administradora
+                </button>
+              </div>
+            </div>
+            <PublicRequestPortal
+              onAdminLoginClick={() => setCurrentWorkspace("task-os")}
+              onRequestCreated={(newSol) => handleCreateSolicitud(newSol)}
+              existingSolicitudes={solicitudes}
+              isAdminLoggedIn={true}
+              onGoToAdminDashboard={() => setCurrentWorkspace("task-os")}
+            />
+          </div>
+        ) : currentWorkspace === "pendientes" ? (
+          <PendientesHubOS
+            tasks={tasks}
+            lonasOrders={lonasOrders}
+            onNavigateToWorkspace={(ws) => {
+              setCurrentWorkspace(ws);
+              playChime("tick");
+            }}
+            onCompleteTask={(taskId) => {
+              handleToggleStatus(taskId);
+            }}
+            onUpdateLonasOrderStatus={(orderId, newStatus) => {
+              setLonasOrders((prev) =>
+                prev.map((o) => (o.id === orderId ? { ...o, estado: newStatus } : o))
+              );
+            }}
+            onSendToPrint={(title, desc, cost) => {
+              handleSendToPrint({
+                id: `hub-print-${Date.now()}`,
+                tipo: "recibo_general",
+                titulo: title,
+                clienteNombre: desc,
+                total: cost,
+                fecha: new Date().toISOString().split("T")[0],
+                estado: "Listo para Impresión",
+                createdAt: new Date().toISOString(),
+              });
+            }}
+          />
+        ) : currentWorkspace === "urls" ? (
+          <UrlLibraryOS
+            urls={urlLibrary}
+            activeTaskId={activeTaskId}
+            tasks={tasks}
+            lonasOrders={lonasOrders}
+            onAddUrl={handleAddUrlItem}
+            onUpdateUrl={handleUpdateUrlItem}
+            onDeleteUrl={handleDeleteUrlItem}
+            onAttachToActiveTask={handleAttachUrlToActiveTask}
+            onNavigateToLonas={() => setCurrentWorkspace("lonas")}
+            onNavigateToPrint={handleSendToPrint}
+            quickResponses={quickResponses}
+            onAddQuickResponse={handleAddQuickResponse}
+            onUpdateQuickResponse={handleUpdateQuickResponse}
+            onDeleteQuickResponse={handleDeleteQuickResponse}
+            onSendToProcessor={(text) => {
+              setCurrentWorkspace("task-os");
+              setTimeout(() => {
+                const el = document.getElementById("task-os-input") as HTMLTextAreaElement;
+                if (el) {
+                  el.value = text;
+                  el.focus();
+                }
+              }, 50);
+            }}
+          />
+        ) : currentWorkspace === "lonas" ? (
+          <LonasOS
+            userEmail={syncEmail}
+            onSendToPrint={handleSendToPrint}
+            onNavigateToFinanzas={() => setCurrentWorkspace("finanzas")}
+            onNavigateToUrls={() => setCurrentWorkspace("urls")}
+            onSaveUrlToLibrary={(item) => handleAddUrlItem(item)}
+          />
+        ) : currentWorkspace === "finanzas" ? (
+          <SaludFinancieraOS
+            userEmail={syncEmail}
+            onSendToPrint={handleSendToPrint}
+            onNavigateToLonas={() => setCurrentWorkspace("lonas")}
+          />
+        ) : currentWorkspace === "print" ? (
+          <PrintOS
+            currentPrintItem={currentPrintItem}
+            onSaveToFinanzas={handleSaveIncomeToFinanzas}
+            onSaveToLonas={handleSaveToLonas}
+            onSwitchWorkspace={(ws) => setCurrentWorkspace(ws)}
+          />
+        ) : currentWorkspace === "reconocimientos" ? (
+          <ReconocimientosOS
+            userEmail={syncEmail}
+            onOpenPortal={() => setCurrentWorkspace("portal")}
+            onSendToPrint={(title, desc, cost) => {
+              handleSendToPrint({
+                id: `rec-print-${Date.now()}`,
+                tipo: "recibo_general",
+                titulo: title,
+                clienteNombre: desc,
+                total: cost,
+                fecha: new Date().toISOString().split("T")[0],
+                estado: "Listo para Impresión",
+                createdAt: new Date().toISOString(),
+              });
+            }}
+          />
+        ) : currentWorkspace === "pomodoro" ? (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                  MÓDULO DE FOCO ABSOLUTO • LEY 27
+                </span>
+                <h2 className="text-xl sm:text-2xl font-black text-stone-950 dark:text-white tracking-tight">
+                  ⏱️ Sesión Pomodoro (Enfoque Total)
+                </h2>
+                <p className="text-xs text-stone-500">
+                  Protección contra interrupciones, temporizador con alarma automática y sincronización de música
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCurrentWorkspace("analytics")}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs shadow-xs transition-transform active:scale-95"
+                >
+                  <span>📊 Ver Rendimiento Semanal</span>
+                </button>
+                <button
+                  onClick={() => setCurrentWorkspace("task-os")}
+                  className="px-4 py-2 rounded-2xl bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-bold text-xs"
+                >
+                  Volver a Task-OS
+                </button>
+              </div>
+            </div>
+            <PomodoroArtifact
+              taskName={pomodoroTaskName}
+              taskId={pomodoroTaskId}
+              initialMinutes={pomodoroMinutes}
+              onCompleteTask={handleCompleteTaskFromPomodoro}
+              onClose={() => setCurrentWorkspace("task-os")}
+            />
+          </div>
+        ) : currentWorkspace === "analytics" ? (
+          <WeeklyPerformanceDashboard
+            tasks={tasks}
+            onOpenPomodoro={() => {
+              setCurrentWorkspace("pomodoro");
+              setIsPomodoroActive(true);
+            }}
+            onSelectTask={(id) => {
+              setCurrentWorkspace("task-os");
+              setTimeout(() => {
+                const el = document.getElementById(`task-row-${id}`);
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+              }, 100);
+            }}
+            onClose={() => setCurrentWorkspace("task-os")}
+          />
+        ) : (
+          <>
+            {/* Action feedback bar if present */}
+            {lastActionSummary && (
+              <div
+                id="task-os-action-banner"
+                className="rounded-xl bg-stone-100 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 px-4 py-2.5 flex items-center justify-between text-xs text-stone-600 dark:text-stone-300"
+              >
+                <div className="flex items-center gap-2">
+                  <Sparkles size={14} className="text-amber-500 shrink-0" />
+                  <span>{lastActionSummary}</span>
+                </div>
+                <button
+                  onClick={() => setLastActionSummary(null)}
+                  className="text-stone-400 hover:text-stone-600 dark:hover:text-stone-200 text-xs"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
+            {/* Alerta flotante en tiempo real: Nueva Solicitud de Reconocimiento */}
+            {newReconocimientoAlert && (
+              <div className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white p-4 shadow-xl border border-indigo-400/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in slide-in-from-top duration-300">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl p-2 rounded-xl bg-white/20 shrink-0">🎓</span>
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                      ¡Nueva Solicitud de Reconocimiento en Tiempo Real!
+                    </div>
+                    <div className="text-sm font-bold">
+                      {newReconocimientoAlert.nombre} ({newReconocimientoAlert.rol}, Grupo {newReconocimientoAlert.grupo})
+                    </div>
+                    <div className="text-xs text-indigo-200">
+                      {newReconocimientoAlert.tipoImpresion} (${newReconocimientoAlert.costo}) • {newReconocimientoAlert.diplomado} {newReconocimientoAlert.year} • Zona {newReconocimientoAlert.zona}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCurrentWorkspace("reconocimientos");
+                      setNewReconocimientoAlert(null);
+                      playChime("tick");
+                    }}
+                    className="flex-1 sm:flex-none px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs shadow-md transition"
+                  >
+                    Ver en Reconocimientos 🎓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewReconocimientoAlert(null)}
+                    className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs"
+                    title="Descartar aviso"
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* BOTÓN DESTACADO: QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO */}
+            <div className="rounded-2xl bg-gradient-to-r from-blue-700 via-indigo-700 to-indigo-900 text-white p-3.5 sm:p-4 shadow-md border border-indigo-500/30 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-3 w-full sm:w-auto">
+                <span className="text-2xl p-2 rounded-xl bg-white/20 shrink-0">🎓</span>
+                <div>
+                  <div className="text-xs sm:text-sm font-black text-white flex items-center gap-2">
+                    <span>Diplomas Oficiales • Liderazgo I</span>
+                    <span className="text-[10px] font-bold px-2 py-0.2 rounded-full bg-white/20 text-indigo-100">
+                      Universidad FGDLL
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-indigo-100">
+                    Control de alumnos: Pago, Cuadernillos, Audio, Digital, Impreso y Entrega
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                <button
+                  type="button"
+                  id="btn-solicitar-reconocimiento-main"
+                  onClick={() => {
+                    setShowReconocimientoModal(true);
+                    playChime("tick");
+                  }}
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-stone-950 font-black text-xs uppercase tracking-wider shadow-sm transition active:scale-95 flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <span>📜 QUIERO SOLICITAR LA IMPRESIÓN DE MI RECONOCIMIENTO</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCurrentWorkspace("reconocimientos");
+                    playChime("tick");
+                  }}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs transition flex items-center gap-1.5 cursor-pointer"
+                  title="Ir a lista de reconocimientos"
+                >
+                  <span>Ver Lista 🎓</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Top Split: Executive Input (with active task context selector & tags) + Output WhatsApp Message */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              <div className="lg:col-span-7 space-y-3">
+                {/* Active Task Context Selector (Ley del Foco) */}
+                <ActiveTaskSelector
+                  activeTaskId={activeTaskId}
+                  tasks={tasks}
+                  onSelectActiveTask={(taskId) => {
+                    setActiveTaskId(taskId);
+                    playChime("tick");
+                  }}
+                  onOpenUniversalSearch={() => setIsUniversalSearchOpen(true)}
+                  onOpenExportImport={() => setIsExportImportOpen(true)}
+                />
+
+                <ExecutiveInput
+                  onSubmit={handleProcessInput}
+                  onDirectCreateTask={handleDirectCreateTask}
+                  isLoading={isLoading}
+                  availableTags={tags}
+                  availableContacts={contacts}
+                  onOpenManageTags={() => setIsTagsModalOpen(true)}
+                  activeTaskTitle={activeTaskId && tasks.find((t) => t.id === activeTaskId) ? tasks.find((t) => t.id === activeTaskId)!.tarea : null}
+                />
+
+                {/* Internal Structured Router Log */}
+                {lastRouterOutput && (
+                  <RouterLogViewer lastOutput={lastRouterOutput} />
+                )}
+              </div>
+
+              <div className="lg:col-span-5 space-y-4">
+                <MessageOutputCard
+                  message={lastMessage}
+                  solicitante={lastSolicitante}
+                  multiMessages={multiMessages}
+                  contacts={contacts}
+                  tasks={tasks}
+                  lonasOrders={lonasOrders}
+                  onOpenContactsModal={() => setIsContactsModalOpen(true)}
+                  onMarkSent={handleMarkMessageSent}
+                  onSendToPrint={handleSendToPrint}
+                  onSaveToFinanzas={handleSaveIncomeToFinanzas}
+                  onSaveToLonas={handleSaveToLonas}
+                />
+
+                {/* Foco status widget */}
+                {essentialTask && (
+                  <div className="rounded-xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/50 dark:bg-amber-950/20 p-3.5 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <span className="p-1.5 rounded-lg bg-amber-500 text-stone-950 font-bold mt-0.5">
+                        <Flame size={14} />
+                      </span>
+                      <div>
+                        <span className="font-semibold text-amber-950 dark:text-amber-200 uppercase tracking-wider text-[10px]">
+                          Prioridad Principal (Ley 8)
+                        </span>
+                        <p className="font-medium text-stone-800 dark:text-stone-200 line-clamp-1">
+                          #{essentialTask.id}: {essentialTask.tarea}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleStartFocus(essentialTask)}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold transition-all shrink-0 active:scale-95"
+                    >
+                      Enfocar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Interactive Pomodoro Artifact Section (Ley 27) */}
+            {isPomodoroActive && (
+              <div className="pt-2 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                      ⏱️ Sesión de Enfoque Activa (Módulo Pomodoro • Ley 27)
+                    </h3>
+                  </div>
+                </div>
+                <PomodoroArtifact
+                  taskName={pomodoroTaskName}
+                  taskId={pomodoroTaskId}
+                  initialMinutes={pomodoroMinutes}
+                  onCompleteTask={handleCompleteTaskFromPomodoro}
+                  onClose={() => setIsPomodoroActive(false)}
+                />
+              </div>
+            )}
+
+            {/* Ledger Maestro de Tareas (Ley 1) */}
+            <div className="pt-2">
+              <LedgerTable
+                tasks={tasks}
+                esencialTaskId={esencialTaskId}
+                secundariasTaskIds={secundariasTaskIds}
+                availableTags={tags}
+                onToggleStatus={handleToggleStatus}
+                onSetStatus={handleSetStatus}
+                onStartFocus={handleStartFocus}
+                onSetEsencial={(id) => setEsencialTaskId(id)}
+                onMessageContact={handleMessageTaskContact}
+                onToggleTaskTag={handleToggleTaskTag}
+                onOpenManageTags={() => setIsTagsModalOpen(true)}
+                onUpdateTaskNotes={handleUpdateTaskNotes}
+                onUpdateTaskFechaLimite={handleUpdateTaskFechaLimite}
+                onOpenWorkspaceModal={() => setIsWorkspaceModalOpen(true)}
+              />
+            </div>
+          </>
+        )}
+      </main>
+
+      {/* Persistent Focus Music Player Engine (Plays continuously across all portal tabs) */}
+      <WorkMusicPlayer
+        isPomodoroActive={isPomodoroActive}
+        currentWorkspace={currentWorkspace}
+        onNavigateToPomodoro={() => {
+          setCurrentWorkspace("pomodoro");
+          setIsPomodoroActive(true);
+        }}
+      />
+
+      {/* Google Workspace & Firebase Hub Modal */}
+      <GoogleWorkspaceModal
+        isOpen={isWorkspaceModalOpen}
+        onClose={() => setIsWorkspaceModalOpen(false)}
+        tasks={tasks}
+        contacts={contacts}
+        onImportContacts={handleImportGoogleContacts}
+        onImportTasks={handleImportGoogleTasks}
+        onTasksSynced={handleTasksSyncedFromFirestore}
+        onUpdateTasks={(updated) => {
+          setTasks(updated);
+          if (auth.currentUser) {
+            batchSyncTasksToFirestore(auth.currentUser.uid, updated);
+          }
+          try {
+            localStorage.setItem(STORAGE_KEY_TASKS, JSON.stringify(updated));
+          } catch (e) {
+            console.error("Error saving tasks", e);
+          }
+        }}
+      />
+
+      {/* Contacts Management Modal */}
+      <ContactsModal
+        isOpen={isContactsModalOpen}
+        onClose={() => setIsContactsModalOpen(false)}
+        contacts={contacts}
+        tags={tags}
+        onAddContact={handleAddContact}
+        onUpdateContact={handleUpdateContact}
+        onDeleteContact={handleDeleteContact}
+        onSelectContactForMessage={handleSelectContactForMessage}
+        onBulkAddContacts={handleBulkAddContacts}
+        onOpenGoogleContacts={() => {
+          setIsContactsModalOpen(false);
+          setIsWorkspaceModalOpen(true);
+        }}
+      />
+
+      {/* Tags Management Modal */}
+      <TagsModal
+        isOpen={isTagsModalOpen}
+        onClose={() => setIsTagsModalOpen(false)}
+        tags={tags}
+        onAddTag={handleAddTag}
+        onUpdateTag={handleUpdateTag}
+        onDeleteTag={handleDeleteTag}
+        onResetDefaultTags={handleResetTags}
+      />
+
+      {/* Cloud Synchronization Modal (Phone ↔ PC) */}
+      <SyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        syncStatus={syncStatus}
+        onChangeEmail={handleChangeSyncEmail}
+        onForceSync={handleForceSync}
+        tasks={tasks}
+        esencialTaskId={esencialTaskId}
+        secundariasTaskIds={secundariasTaskIds}
+      />
+
+      {/* Universal Search Modal (Motor de Recuperación Unificada) */}
+      <UniversalSearchModal
+        isOpen={isUniversalSearchOpen}
+        initialQuery={universalSearchInitialQuery}
+        onClose={() => setIsUniversalSearchOpen(false)}
+        tasks={tasks}
+        globalResources={globalResources}
+        urlLibrary={urlLibrary}
+        onSelectTask={(id) => {
+          setActiveTaskId(id);
+          const el = document.getElementById(`task-row-${id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        }}
+      />
+
+      {/* Export / Import JSON Portability Backup Modal */}
+      <ExportImportModal
+        isOpen={isExportImportOpen}
+        onClose={() => setIsExportImportOpen(false)}
+        tasks={tasks}
+        globalResources={globalResources}
+        urlLibrary={urlLibrary}
+        quickResponses={quickResponses}
+        contacts={contacts}
+        tags={tags}
+        esencialTaskId={esencialTaskId}
+        userEmail={syncEmail}
+        onImportData={handleImportBackup}
+      />
+
+      {/* Reversible Action Toast (Deshacer) */}
+      <UndoToast
+        action={undoAction}
+        onDismiss={() => setUndoAction(null)}
+      />
+
+      {/* Reconocimiento Form Modal (Mini Web App) */}
+      <ReconocimientoFormModal
+        isOpen={showReconocimientoModal}
+        onClose={() => setShowReconocimientoModal(false)}
+        onSuccess={() => {
+          setNewReconocimientoAlert(null);
+        }}
+      />
+
+      {/* Centro de Notificaciones & Solicitudes Modal (Push + Email) */}
+      <NotificationsModal
+        isOpen={isNotificationsModalOpen}
+        onClose={() => setIsNotificationsModalOpen(false)}
+        userEmail={syncEmail}
+        solicitudes={solicitudes}
+        onConvertSolicitudToTask={handleConvertSolicitudToTask}
+        onUpdateSolicitud={handleUpdateSolicitud}
+        onDeleteSolicitud={handleDeleteSolicitud}
+        onCreateSolicitud={handleCreateSolicitud}
+      />
+
+      {/* Mobile-First Bottom Navigation Bar */}
+      <MobileNavBar
+        activeCount={tasks.filter((t) => t.estado !== "Completado").length}
+        urlsCount={urlLibrary.length}
+        isPomodoroActive={isPomodoroActive}
+        syncStatus={syncStatus}
+        currentWorkspace={currentWorkspace}
+        onChangeWorkspace={setCurrentWorkspace}
+        onNewTaskClick={() => {
+          if (currentWorkspace !== "task-os") setCurrentWorkspace("task-os");
+          setTimeout(() => {
+            const el = document.getElementById("task-os-input");
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.focus();
+            }
+          }, 50);
+        }}
+        onOpenPomodoro={() => {
+          if (!isPomodoroActive) {
+            const taskToFocus = essentialTask?.tarea || "Sesión de Enfoque";
+            setPomodoroTaskName(taskToFocus);
+            setPomodoroTaskId(essentialTask?.id || null);
+          }
+          setIsPomodoroActive(!isPomodoroActive);
+        }}
+        onOpenSync={() => setIsSyncModalOpen(true)}
+        onOpenConnectionMenu={() => setIsConnectionMenuOpen(true)}
+        onOpenContacts={() => setIsContactsModalOpen(true)}
+        onOpenNotifications={() => setIsNotificationsModalOpen(true)}
+        unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+        onScrollToLedger={() => {
+          if (currentWorkspace !== "task-os") setCurrentWorkspace("task-os");
+          setTimeout(() => {
+            const el = document.getElementById("ledger-maestro-section");
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+          }, 50);
+        }}
+      />
+
+      {/* Unified Connection & Sync Menu Modal (Mobile-first iPhone 16 Pro Max & Desktop Hub) */}
+      <ConnectionSyncMenuModal
+        isOpen={isConnectionMenuOpen}
+        onClose={() => setIsConnectionMenuOpen(false)}
+        syncStatus={syncStatus}
+        isPushActive={isPushActive}
+        unreadSolicitudesCount={solicitudes.filter((s) => !s.leida || s.estado === "Nueva").length}
+        tasksCount={tasks.length}
+        onForceSync={() => handleForceSync(false)}
+        onChangeEmail={handleChangeSyncEmail}
+        onOpenQRAndCloudSync={() => setIsSyncModalOpen(true)}
+        onOpenGoogleWorkspace={() => setIsWorkspaceModalOpen(true)}
+        onOpenNotifications={() => setIsNotificationsModalOpen(true)}
+        onOpenExportImport={() => setIsExportImportOpen(true)}
+        onOpenContacts={() => setIsContactsModalOpen(true)}
+        onOpenTags={() => setIsTagsModalOpen(true)}
+        onNavigateToWorkspace={(ws) => setCurrentWorkspace(ws)}
+        onResetLedger={handleResetLedger}
+        autoSyncEnabled={autoSyncEnabled}
+        onToggleAutoSync={handleToggleAutoSync}
+        autoSyncInterval={autoSyncInterval}
+        onChangeAutoSyncInterval={handleChangeAutoSyncInterval}
+        secondsUntilSync={secondsUntilSync}
+        lastSyncTime={lastSyncTime}
+        syncHistory={syncHistory}
+        notifConfig={notifConfig}
+        onUpdateNotifConfig={handleUpdateNotifConfig}
+        onSendTestNotification={() => {
+          const tone = notifConfig.soundType || "bell";
+          playChime(tone as any, { volume: notifConfig.soundVolume });
+        }}
+      />
+
+      {/* Mini Bloc Google Tasks (Notas rápidas al instante, ubicado del otro lado: esquina inferior izquierda) */}
+      <MiniTasksBlocWidget
+        onPromoteToTaskOS={(texto) => {
+          handleProcessInput(texto);
+          playChime("success");
+        }}
+      />
+
+      {/* Floating Persistent Mini Pomodoro Widget (Never restarts on tab switch, sleek & non-intrusive) */}
+      <MiniPomodoroWidget
+        onNavigateToPomodoro={() => {
+          setCurrentWorkspace("pomodoro");
+          playChime("tick");
+        }}
+        isFullPomodoroOpen={currentWorkspace === "pomodoro"}
+      />
+
+      {/* Footer */}
+      <footer className="border-t border-stone-200 dark:border-stone-800 py-6 text-center text-xs text-stone-400 dark:text-stone-500 bg-white/50 dark:bg-stone-900/50">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <span>
+            <strong>Task-OS</strong> — Sistema Operativo Personal de Pepe Cortazar
+          </span>
+          <span className="text-[11px]">
+            Menos tareas activas • Más tareas terminadas • Enfoque protegido
+          </span>
+        </div>
+      </footer>
+    </div>
+  );
+}

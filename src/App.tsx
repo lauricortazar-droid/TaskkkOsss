@@ -2499,7 +2499,7 @@ export default function App() {
 
       {/* Ecosystem Navigation Bar (🌐 • 🔥 • 💻 • 🤑 • 🔗 • 🖨️ • ⏱️) */}
       <div className="border-b border-stone-200 dark:border-stone-800 bg-white/90 dark:bg-stone-900/90 backdrop-blur-md sticky top-16 z-20">
-        <div className="max-w-6xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 py-2 flex items-center justify-between gap-2 overflow-x-auto">
           <div className="flex items-center gap-1.5 sm:gap-2">
             {/* Portal Público de Requerimientos: 🌐 */}
             <button
@@ -2721,7 +2721,7 @@ export default function App() {
       </div>
 
       {/* Main Content Area */}
-      <main className="flex-1 max-w-6xl w-full mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-6 pb-28 md:pb-12">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 space-y-4 sm:space-y-6 pb-28 md:pb-12 transition-all">
         {/* Render Workspace based on tab selection */}
         {currentWorkspace === "portal" ? (
           <div className="space-y-4 animate-in fade-in duration-300">
@@ -3347,7 +3347,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-stone-200 dark:border-stone-800 py-6 text-center text-xs text-stone-400 dark:text-stone-500 bg-white/50 dark:bg-stone-900/50">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
           <span>
             <strong>Task-OS</strong> — Sistema Operativo Personal de Pepe Cortazar
           </span>

@@ -280,6 +280,23 @@ export default function ReconocimientosOS({
   const [extraNotas, setExtraNotas] = useState("");
   const [isSavingExtra, setIsSavingExtra] = useState(false);
 
+  // Estados específicos para gestión manual de GRADUADOS como Administradora (Agregar, Editar, Eliminar)
+  const [showAddGraduadoModal, setShowAddGraduadoModal] = useState(false);
+  const [graduadoModalNombre, setGraduadoModalNombre] = useState("");
+  const [graduadoModalRol, setGraduadoModalRol] = useState("Líder");
+  const [graduadoModalOtroRol, setGraduadoModalOtroRol] = useState("");
+  const [graduadoModalGrupo, setGraduadoModalGrupo] = useState("G-1");
+  const [graduadoModalZona, setGraduadoModalZona] = useState("Jaguar");
+  const [graduadoModalOtraZona, setGraduadoModalOtraZona] = useState("");
+  const [graduadoModalEmail, setGraduadoModalEmail] = useState("");
+  const [graduadoModalTelefono, setGraduadoModalTelefono] = useState("");
+  const [graduadoModalDiplomado, setGraduadoModalDiplomado] = useState("Diplomado de Liderazgo");
+  const [graduadoModalYear, setGraduadoModalYear] = useState("2026");
+  const [graduadoModalTipo, setGraduadoModalTipo] = useState<"Primera Impresión" | "Re-impresión">("Primera Impresión");
+  const [graduadoModalDriveUrl, setGraduadoModalDriveUrl] = useState("");
+  const [graduadoModalNotas, setGraduadoModalNotas] = useState("");
+  const [isSavingGraduadoManual, setIsSavingGraduadoManual] = useState(false);
+
   // Copy feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
@@ -561,6 +578,34 @@ export default function ReconocimientosOS({
       playChime("tick");
     } catch (err) {
       console.warn("Error deleting record:", err);
+    }
+  };
+
+  // 3b. Eliminar completamente a un Graduado (elimina todos sus reconocimientos de graduado)
+  const handleDeleteGraduadoTotal = async (graduado: any) => {
+    const totalDiplomas = graduado.diplomas?.length || 1;
+    if (
+      !window.confirm(
+        `¿Confirmas que deseas eliminar a "${graduado.nombreFormateado || graduado.nombreOriginal}" de GRADUADOS?\n\nEsta acción borrará ${totalDiplomas} diploma(s) registrado(s) en la base de datos.`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      const idsToDelete = (graduado.diplomas || []).map((d: any) => d.id);
+      setRecords((prev) => prev.filter((r) => !idsToDelete.includes(r.id) && !idsToDelete.includes(r.solicitudId)));
+
+      const deletePromises: Promise<any>[] = [];
+      idsToDelete.forEach((id: string) => {
+        deletePromises.push(deleteDoc(doc(db, "reconocimientos", id)));
+        deletePromises.push(deleteDoc(doc(db, "solicitudes", id)));
+      });
+
+      await Promise.allSettled(deletePromises);
+      playChime("tick");
+    } catch (err) {
+      console.error("Error al eliminar graduado total:", err);
     }
   };
 
@@ -883,6 +928,76 @@ export default function ReconocimientosOS({
     setEditingRecordData(rec);
     setShowEditRecordModal(true);
     playChime("tick");
+  };
+
+  // 5.2 Abrir modal para agregar un graduado de forma manual directamente como Admin
+  const handleOpenAddGraduadoModal = () => {
+    setGraduadoModalNombre("");
+    setGraduadoModalRol("Líder");
+    setGraduadoModalOtroRol("");
+    setGraduadoModalGrupo("G-1");
+    setGraduadoModalZona("Jaguar");
+    setGraduadoModalOtraZona("");
+    setGraduadoModalEmail("");
+    setGraduadoModalTelefono("");
+    setGraduadoModalDiplomado("Diplomado de Liderazgo");
+    setGraduadoModalYear(graduadosYearFilter !== "todos" ? graduadosYearFilter : "2026");
+    setGraduadoModalTipo("Primera Impresión");
+    setGraduadoModalDriveUrl("");
+    setGraduadoModalNotas("");
+    setShowAddGraduadoModal(true);
+    playChime("tick");
+  };
+
+  // 5.3 Guardar nuevo graduado manual (con impreso: true automático para que pertenezca a GRADUADOS)
+  const handleCreateGraduadoManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!graduadoModalNombre.trim()) return;
+
+    setIsSavingGraduadoManual(true);
+    const costo = graduadoModalTipo === "Primera Impresión" ? 100 : 50;
+    const finalRol = graduadoModalRol === "Otro" ? (graduadoModalOtroRol.trim() || "Otro") : graduadoModalRol;
+    const finalZona = graduadoModalZona === "Otro" ? (graduadoModalOtraZona.trim() || "Otro") : graduadoModalZona;
+
+    try {
+      const payload: any = {
+        nombre: graduadoModalNombre.trim(),
+        rol: finalRol.trim() || "Líder",
+        grupo: graduadoModalGrupo.trim() || "G-1",
+        zona: finalZona.trim() || "Jaguar",
+        email: graduadoModalEmail.trim() || undefined,
+        telefono: graduadoModalTelefono.trim() || undefined,
+        diplomado: graduadoModalDiplomado.trim() || "Diplomado de Liderazgo",
+        year: graduadoModalYear,
+        tipoImpresion: graduadoModalTipo,
+        costo,
+        driveUrl: graduadoModalDriveUrl.trim() || undefined,
+        notas: graduadoModalNotas.trim() || undefined,
+        // Al crearse manualmente en GRADUADOS, impreso es true de inmediato
+        impreso: true,
+        digital: true,
+        elaboradoDigital: true,
+        pagado: true,
+        cuadernillos: true,
+        audio: true,
+        entregado: false,
+        createdAt: new Date().toISOString(),
+        timestamp: serverTimestamp(),
+      };
+
+      const docRef = await addDoc(collection(db, "solicitudes"), payload);
+      await setDoc(doc(db, "reconocimientos", docRef.id), {
+        ...payload,
+        solicitudId: docRef.id,
+      }).catch(() => null);
+
+      playChime("work_done");
+      setShowAddGraduadoModal(false);
+    } catch (err) {
+      console.error("Error creating graduado:", err);
+    } finally {
+      setIsSavingGraduadoManual(false);
+    }
   };
 
   // 6. Filtered records calculation
@@ -1579,8 +1694,11 @@ export default function ReconocimientosOS({
       driveCount: number;
     }>();
 
-    records.forEach((r) => {
-      const rawName = (r.nombre || "").trim();
+    // Regla de negocio: Solo los alumnos con reconocimiento ya impreso (r.impreso === true) se listan en GRADUADOS
+    records
+      .filter((r) => Boolean(r.impreso))
+      .forEach((r) => {
+        const rawName = (r.nombre || "").trim();
       if (!rawName) return;
       const normKey = rawName
         .toLowerCase()
@@ -3254,22 +3372,23 @@ export default function ReconocimientosOS({
 
                 <button
                   type="button"
+                  id="btn-agregar-graduado-manual"
+                  onClick={handleOpenAddGraduadoModal}
+                  className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-stone-950 font-black text-xs transition flex items-center gap-2 shadow-md active:scale-95 cursor-pointer ring-2 ring-emerald-400/40"
+                  title="Agregar graduado manualmente con reconocimiento oficial inmediato"
+                >
+                  <Plus size={15} className="text-stone-950 stroke-[3]" />
+                  <span>+ Agregar Graduado</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={() => setShowPublicDrivePreviewModal(true)}
                   className="px-4 py-2.5 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 text-stone-950 font-black text-xs transition flex items-center gap-2 shadow-md active:scale-95 cursor-pointer"
                   title="Ver modal público de graduados"
                 >
                   <Eye size={14} />
                   <span>Ver Portal Público</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(true)}
-                  className="px-3.5 py-2.5 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition flex items-center gap-1.5 active:scale-95 cursor-pointer border border-white/20"
-                  title="Registrar nuevo alumno o diploma"
-                >
-                  <Plus size={14} />
-                  <span>Nuevo</span>
                 </button>
               </div>
             </div>
@@ -3542,6 +3661,53 @@ export default function ReconocimientosOS({
                           <MessageCircle size={14} />
                         </button>
                       )}
+
+                      {/* Botón Editar Graduado (Admin) */}
+                      {g.diplomas && g.diplomas.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const firstDiploma = g.diplomas[0];
+                            const fullRecord = records.find((r) => r.id === firstDiploma.id) || {
+                              id: firstDiploma.id,
+                              nombre: g.nombreOriginal || g.nombreFormateado,
+                              rol: g.rol,
+                              grupo: g.grupo,
+                              zona: g.zona,
+                              email: g.email,
+                              telefono: g.telefono,
+                              diplomado: firstDiploma.diplomado,
+                              year: firstDiploma.year,
+                              tipoImpresion: firstDiploma.tipoImpresion,
+                              costo: firstDiploma.costo,
+                              driveUrl: firstDiploma.driveUrl,
+                              impreso: true,
+                              digital: true,
+                              elaboradoDigital: true,
+                              pagado: true,
+                              cuadernillos: true,
+                              audio: true,
+                              entregado: Boolean(firstDiploma.entregado),
+                            };
+                            handleOpenEditRecord(fullRecord as any);
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30 text-xs font-bold transition flex items-center gap-1 cursor-pointer"
+                          title="Editar datos del graduado (nombre, rol, grupo, zona, contacto)"
+                        >
+                          <Edit2 size={12} />
+                          <span className="hidden sm:inline">Editar</span>
+                        </button>
+                      )}
+
+                      {/* Botón Eliminar Graduado (Admin) */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteGraduadoTotal(g)}
+                        className="p-1.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 hover:bg-rose-100 transition border border-rose-200 dark:border-rose-800/60 cursor-pointer"
+                        title={`Eliminar completamente a ${g.nombreFormateado} de Graduados`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
                     </div>
                   </div>
 
@@ -3663,19 +3829,74 @@ export default function ReconocimientosOS({
                                   </span>
                                 )}
 
-                                {/* Botón para que Laura agregue o modifique el enlace del Drive */}
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setEditingGraduadoDriveRecordId(d.id);
-                                    setEditingGraduadoDriveUrl(d.driveUrl || "");
-                                  }}
-                                  className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
-                                  title="Laura agregará o modificará el link de Drive"
-                                >
-                                  <Edit2 size={11} />
-                                  <span>{hasDrive ? "Editar Link" : "+ Agregar Link Drive"}</span>
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  {/* Botón para editar el diploma / reconocimiento específico */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const fullRecord = records.find((r) => r.id === d.id) || {
+                                        id: d.id,
+                                        nombre: g.nombreOriginal || g.nombreFormateado,
+                                        rol: g.rol,
+                                        grupo: g.grupo,
+                                        zona: g.zona,
+                                        email: g.email,
+                                        telefono: g.telefono,
+                                        diplomado: d.diplomado,
+                                        year: d.year,
+                                        tipoImpresion: d.tipoImpresion,
+                                        costo: d.costo,
+                                        driveUrl: d.driveUrl,
+                                        impreso: true,
+                                        digital: true,
+                                        elaboradoDigital: true,
+                                        pagado: true,
+                                        cuadernillos: true,
+                                        audio: true,
+                                        entregado: Boolean(d.entregado),
+                                      };
+                                      handleOpenEditRecord(fullRecord as any);
+                                    }}
+                                    className="text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="Editar este diploma"
+                                  >
+                                    <Edit2 size={11} />
+                                    <span>Editar</span>
+                                  </button>
+
+                                  {/* Botón para que Laura agregue o modifique el enlace del Drive */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingGraduadoDriveRecordId(d.id);
+                                      setEditingGraduadoDriveUrl(d.driveUrl || "");
+                                    }}
+                                    className="text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1 cursor-pointer"
+                                    title="Laura agregará o modificará el link de Drive"
+                                  >
+                                    <ExternalLink size={11} />
+                                    <span>{hasDrive ? "Link Drive" : "+ Link Drive"}</span>
+                                  </button>
+
+                                  {/* Botón para eliminar este diploma específico */}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const targetRecord = records.find((r) => r.id === d.id) || {
+                                        id: d.id,
+                                        nombre: g.nombreFormateado,
+                                        year: d.year,
+                                        tipoImpresion: d.tipoImpresion,
+                                        solicitudId: d.id,
+                                      };
+                                      handleDeleteRecord(targetRecord as any);
+                                    }}
+                                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline flex items-center gap-1 cursor-pointer p-0.5"
+                                    title="Eliminar este diploma"
+                                  >
+                                    <Trash2 size={11} />
+                                  </button>
+                                </div>
                               </div>
                             )}
 
@@ -4937,6 +5158,249 @@ export default function ReconocimientosOS({
           );
         }}
       />
+
+      {/* MODAL PARA AGREGAR GRADUADO MANUALMENTE COMO ADMIN */}
+      {showAddGraduadoModal && (
+        <div
+          className="fixed inset-0 z-50 bg-stone-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 md:p-6 animate-in fade-in overflow-y-auto"
+          onClick={() => setShowAddGraduadoModal(false)}
+        >
+          <div
+            className="w-full max-w-lg bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-7 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4 animate-in zoom-in-95 my-auto max-h-[92vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-stone-100 dark:border-stone-800">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white text-base shadow-xs">
+                  🎓
+                </span>
+                <div>
+                  <h3 className="font-black text-stone-900 dark:text-stone-100 text-base">
+                    Agregar Graduado Manualmente
+                  </h3>
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400">
+                    Panel Admin • Se incorporará de inmediato al directorio oficial de GRADUADOS
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAddGraduadoModal(false)}
+                className="p-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateGraduadoManual} className="space-y-3.5 text-xs font-medium">
+              {/* Nombre Completo */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                  Nombre Completo del Graduado *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ej. Ana Victoria Martínez López"
+                  value={graduadoModalNombre}
+                  onChange={(e) => setGraduadoModalNombre(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Rol / Función */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1.5">
+                  Rol / Función *
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  {["Líder", "Sublíder", "Director centro", "OSG", "Otro"].map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setGraduadoModalRol(r)}
+                      className={`py-1.5 px-2 rounded-xl border text-center font-bold text-xs transition cursor-pointer ${
+                        graduadoModalRol === r
+                          ? "bg-indigo-50 dark:bg-indigo-950/60 border-indigo-600 text-indigo-900 dark:text-indigo-200 ring-2 ring-indigo-500/30"
+                          : "bg-white dark:bg-stone-800 border-stone-300 dark:border-stone-700 text-stone-700 dark:text-stone-300 hover:bg-stone-50"
+                      }`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+                {graduadoModalRol === "Otro" && (
+                  <div className="mt-1.5">
+                    <input
+                      type="text"
+                      placeholder="Especificar otro rol..."
+                      value={graduadoModalOtroRol}
+                      onChange={(e) => setGraduadoModalOtroRol(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-indigo-300 dark:border-indigo-600 text-stone-900 dark:text-stone-100 font-bold outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Grupo y Zona */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Grupo *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ej. G-1, Gladiadores, etc."
+                    value={graduadoModalGrupo}
+                    onChange={(e) => setGraduadoModalGrupo(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Zona *
+                  </label>
+                  <select
+                    value={graduadoModalZona}
+                    onChange={(e) => setGraduadoModalZona(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  >
+                    {ZONAS_LISTA.map((z) => (
+                      <option key={z} value={z}>
+                        {z}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Año de Generación y Programa */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Año / Generación *
+                  </label>
+                  <select
+                    value={graduadoModalYear}
+                    onChange={(e) => setGraduadoModalYear(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="2026">2026 (Generación Actual)</option>
+                    <option value="2025">2025</option>
+                    <option value="2022">2022</option>
+                    <option value="2024">2024</option>
+                    <option value="2023">2023</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Tipo de Impresión *
+                  </label>
+                  <select
+                    value={graduadoModalTipo}
+                    onChange={(e) => setGraduadoModalTipo(e.target.value as any)}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-bold focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="Primera Impresión">Primera Impresión ($100)</option>
+                    <option value="Re-impresión">Re-impresión ($50)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Diplomado */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                  Nombre del Diplomado / Reconocimiento
+                </label>
+                <input
+                  type="text"
+                  value={graduadoModalDiplomado}
+                  onChange={(e) => setGraduadoModalDiplomado(e.target.value)}
+                  placeholder="Ej. Diplomado de Liderazgo I"
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-medium focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Enlace Google Drive (Opcional) */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1 flex items-center gap-1">
+                  <FolderOpen size={12} className="text-indigo-500" />
+                  <span>Enlace a Google Drive del Diploma (Opcional)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://drive.google.com/file/d/..."
+                  value={graduadoModalDriveUrl}
+                  onChange={(e) => setGraduadoModalDriveUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-mono text-xs placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Teléfono y Correo */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Teléfono / WhatsApp (Opcional)
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="Ej. 999 901 1852"
+                    value={graduadoModalTelefono}
+                    onChange={(e) => setGraduadoModalTelefono(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-medium placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                    Correo Electrónico (Opcional)
+                  </label>
+                  <input
+                    type="email"
+                    placeholder="ejemplo@correo.com"
+                    value={graduadoModalEmail}
+                    onChange={(e) => setGraduadoModalEmail(e.target.value)}
+                    className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-medium placeholder:font-normal focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-stone-800 dark:text-stone-200 font-bold mb-1">
+                  Notas u Observaciones (Opcional)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Detalles sobre el diploma, entrega o notas..."
+                  value={graduadoModalNotas}
+                  onChange={(e) => setGraduadoModalNotas(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 font-medium resize-y focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Botones de acción */}
+              <div className="pt-2 flex items-center justify-end gap-2 border-t border-stone-100 dark:border-stone-800">
+                <button
+                  type="button"
+                  onClick={() => setShowAddGraduadoModal(false)}
+                  className="px-4 py-2.5 rounded-xl bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 font-bold hover:bg-stone-200 transition cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingGraduadoManual}
+                  className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold shadow-md transition disabled:opacity-50 cursor-pointer flex items-center gap-1.5"
+                >
+                  <Plus size={14} />
+                  <span>{isSavingGraduadoManual ? "Guardando..." : "Agregar a Graduados"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

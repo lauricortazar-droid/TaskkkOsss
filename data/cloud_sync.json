@@ -1,13 +1,933 @@
 {
   "laurcortazar@gmail.com": {
     "email": "laurcortazar@gmail.com",
-    "tasks": [],
-    "globalResources": [],
-    "urlLibrary": [],
-    "quickResponses": [],
-    "esencialTaskId": null,
-    "secundariasTaskIds": [],
-    "updatedAt": "2026-10-04T10:23:02.806Z",
+    "tasks": [
+      {
+        "id": 3,
+        "tarea": "Revisar el panel de administración de FGDLL e incluir opción de eliminar centros mañana",
+        "estado": "Completado",
+        "fechaIngreso": "2026-09-21",
+        "fechaLimite": "2026-09-25",
+        "dominio": "Tecnología",
+        "solicitante": "Pepe",
+        "etiquetas": [
+          "Pendiente",
+          "Tecnología"
+        ],
+        "resources": []
+      },
+      {
+        "id": 4,
+        "tarea": "Revisar lista de diplomas y reconocimientos de graduación",
+        "estado": "Completado",
+        "fechaIngreso": "2026-09-28",
+        "dominio": "Laura",
+        "solicitante": "Laura",
+        "contacto": {
+          "nombre": "Laura",
+          "telefono": "+52 55 1234 5678"
+        },
+        "etiquetas": [
+          "Urgente",
+          "Solicitud"
+        ],
+        "notas": "Por favor verificar los nombres de los 45 graduados antes de imprimir los reconocimientos oficiales.",
+        "resources": [
+          {
+            "url": "https://console.firebase.google.com/u/0/project/gen-lang-client-0098696571/authentication/settings",
+            "title": "console.firebase.google.com • u 0 project gen lang client 0098696571 authentication settings",
+            "addedAt": "2026-09-29T15:52:05.623Z"
+          },
+          {
+            "url": "https://github.com/settings/personal-access-tokens",
+            "title": "github.com • settings personal access tokens",
+            "addedAt": "2026-09-29T21:02:30.442Z"
+          },
+          {
+            "url": "https://aistudio.google.com/apps/a4a9487a-3539-450c-9248-34cb640db4e7?project=zinc-citron-442221-m9&showAssistant=true&showPreview=true",
+            "title": "aistudio.google.com • apps a4a9487a 3539 450c 9248 34cb640db4e7",
+            "addedAt": "2026-09-29T21:30:27.285Z"
+          },
+          {
+            "url": "https://aistudio.google.com/apps/90239d7f-e919-4b74-8cf9-4bd6da226df9?showPreview=true&showAssistant=true",
+            "title": "aistudio.google.com • apps 90239d7f e919 4b74 8cf9 4bd6da226df9",
+            "addedAt": "2026-09-29T21:31:28.481Z"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "tarea": "Aprobación de temario y programa del nuevo diplomado",
+        "estado": "Completado",
+        "fechaIngreso": "2026-09-29",
+        "dominio": "FGDLL",
+        "solicitante": "Coordinación Universidad FGDLL",
+        "contacto": {
+          "nombre": "Coordinación Universidad FGDLL",
+          "telefono": "+52 55 8765 4321"
+        },
+        "etiquetas": [
+          "Solicitud"
+        ],
+        "notas": "Requerimos visto bueno para publicar la convocatoria y abrir inscripciones esta semana.",
+        "resources": []
+      },
+      {
+        "id": 6,
+        "tarea": "quE te vayas a la ÑONGA",
+        "estado": "Completado",
+        "fechaIngreso": "2026-10-03",
+        "dominio": "Laura",
+        "solicitante": "Laura",
+        "contacto": {
+          "nombre": "Laura",
+          "telefono": "9993555542"
+        },
+        "etiquetas": [
+          "Urgente",
+          "Solicitud"
+        ],
+        "notas": "ASOPOSERO",
+        "resources": []
+      },
+      {
+        "id": 7,
+        "tarea": "Diseño y cotización urgente de lona 3x2m para evento del sábado",
+        "estado": "Completado",
+        "fechaIngreso": "2026-10-03",
+        "dominio": "FGDLL",
+        "solicitante": "Líder Zona Tiburón",
+        "contacto": {
+          "nombre": "Líder Zona Tiburón",
+          "telefono": "+52 55 9876 5432"
+        },
+        "etiquetas": [
+          "Urgente",
+          "Solicitud"
+        ],
+        "notas": "Necesitamos lona front brillante con ojillos perimetrales cada 50cm para el acceso principal.",
+        "resources": []
+      },
+      {
+        "id": 8,
+        "tarea": "mandar a hacer playeras",
+        "estado": "Completado",
+        "fechaIngreso": "2026-10-04",
+        "dominio": "Laura",
+        "solicitante": "Laura",
+        "contacto": {
+          "nombre": "Laura",
+          "telefono": "9993555542"
+        },
+        "etiquetas": [
+          "Solicitud"
+        ],
+        "notas": "playeras de marketing",
+        "resources": []
+      },
+      {
+        "id": 9,
+        "tarea": "Aprobación de temario y programa del nuevo diplomado",
+        "estado": "Completado",
+        "fechaIngreso": "2026-10-05",
+        "dominio": "FGDLL",
+        "solicitante": "Coordinación Universidad FGDLL",
+        "contacto": {
+          "nombre": "Coordinación Universidad FGDLL",
+          "telefono": "+52 55 8765 4321"
+        },
+        "etiquetas": [
+          "Solicitud"
+        ],
+        "notas": "Requerimos visto bueno para publicar la convocatoria y abrir inscripciones esta semana.",
+        "resources": []
+      },
+      {
+        "id": 10,
+        "tarea": "solicitud del reglamento de grupo",
+        "estado": "Pendiente",
+        "fechaIngreso": "2026-10-09",
+        "dominio": "General",
+        "solicitante": "marisol arana",
+        "etiquetas": [
+          "diseño"
+        ],
+        "resources": []
+      },
+      {
+        "id": 11,
+        "tarea": "lona de diversidad",
+        "estado": "Pendiente",
+        "fechaIngreso": "2026-10-09",
+        "dominio": "General",
+        "solicitante": "daniel octavio lópez",
+        "etiquetas": [],
+        "resources": []
+      },
+      {
+        "id": 12,
+        "tarea": "lona de diversidad",
+        "estado": "Pendiente",
+        "fechaIngreso": "2026-10-09",
+        "dominio": "General",
+        "solicitante": "Yo",
+        "etiquetas": [
+          "Diseño"
+        ],
+        "resources": []
+      }
+    ],
+    "globalResources": [
+      {
+        "id": "res-1791020324347-xzd4q",
+        "url": "https://forms.gle/5QQDzZCN5Jj9yDRu7",
+        "title": "forms.gle • 5QQDzZCN5Jj9yDRu7",
+        "keywords": [
+          "forms",
+          "5QQDzZCN5Jj9yDRu7",
+          "recurso",
+          "web"
+        ],
+        "savedAt": "2026-10-03T09:38:44.347Z"
+      },
+      {
+        "id": "res-1790940156328-7zx0v",
+        "url": "https://consejeroenadicciones.com/pages/diagnostico-de-cumplimiento-normativo?utm_source=facebook&utm_medium=paid&utm_campaign=diagnostico&utm_content=d-24-de-53&fbclid=IwY2xjawUq8MBleHRuA2FlbQIxMQBwZG9mAWJyaWQRMVRiTUEzYmt1VDBBTmk5bG5zcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeBw8kVUYbiRxoJofuE8W5pVqgiLiXAggvY7Y3mTuw8jQBYjDNKXdkY8xX7ho_aem_eclf6eVkubDw0SBmKAldVA",
+        "title": "consejeroenadicciones.com • pages diagnostico de cumplimiento normativo",
+        "keywords": [
+          "consejeroenadicciones",
+          "pages",
+          "diagnostico de cumplimiento normativo",
+          "recurso"
+        ],
+        "savedAt": "2026-10-02T11:22:36.328Z"
+      },
+      {
+        "id": "res-1790940136577-jrw88",
+        "url": "https://www.facebook.com/story.php?story_fbid=122121292113266402&id=61587992069222&rdid=IkLlM1uiKuqa3Dbl&_rdc=1&_rdr#",
+        "title": "facebook.com • story.php",
+        "keywords": [
+          "facebook",
+          "story.php",
+          "recurso",
+          "web"
+        ],
+        "savedAt": "2026-10-02T11:22:16.578Z"
+      },
+      {
+        "id": "res-1790940116573-sui7c",
+        "url": "https://fgdll.org/administracion/universidad/reconocimientos",
+        "title": "fgdll.org • administracion universidad reconocimientos",
+        "keywords": [
+          "fgdll",
+          "administracion",
+          "universidad",
+          "recurso"
+        ],
+        "savedAt": "2026-10-02T11:21:56.573Z"
+      },
+      {
+        "id": "res-1790939944494-n2ib5",
+        "url": "https://chatgpt.com/c/6abb0722-6edc-83e8-b5ec-e406a4781e9c",
+        "title": "ChatGPT • Asistente y Modelos de Lenguaje",
+        "keywords": [
+          "chatgpt",
+          "openai",
+          "ia",
+          "asistente",
+          "prompts"
+        ],
+        "savedAt": "2026-10-02T11:19:04.494Z"
+      },
+      {
+        "id": "res-1790939911161-34cuf",
+        "url": "https://fgdll.org/administracion/universidad",
+        "title": "fgdll.org • administracion universidad",
+        "keywords": [
+          "fgdll",
+          "administracion",
+          "universidad",
+          "recurso"
+        ],
+        "savedAt": "2026-10-02T11:18:31.161Z"
+      },
+      {
+        "id": "res-1790801519260-ld8na",
+        "url": "https://console.firebase.google.com/u/0/project/esparta-d60c1/overview",
+        "title": "console.firebase.google.com • u 0 project esparta d60c1 overview",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "savedAt": "2026-09-30T20:51:59.260Z"
+      },
+      {
+        "id": "res-1790717482547-zketv",
+        "url": "https://aistudio.google.com/apps/90239d7f-e919-4b74-8cf9-4bd6da226df9?showPreview=true&showAssistant=true",
+        "title": "Sign in - Google Accounts",
+        "keywords": [
+          "google",
+          "aistudio",
+          "sign",
+          "accounts",
+          "apps"
+        ],
+        "savedAt": "2026-09-29T21:31:22.547Z"
+      }
+    ],
+    "urlLibrary": [
+      {
+        "id": "url-1791102789327-gnkr6",
+        "url": "https://fgdll.org/administracion/universidad",
+        "title": "fgdll.org • administracion universidad",
+        "categoria": "Productividad & Trabajo",
+        "keywords": [
+          "fgdll",
+          "administracion",
+          "universidad",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=fgdll.org&sz=64",
+        "isFavorite": true,
+        "clicks": 7,
+        "lastOpenedAt": "2026-10-05T20:23:35.469Z",
+        "createdAt": "2026-10-04T08:33:09.327Z",
+        "updatedAt": "2026-10-05T00:49:09.817Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1790697109186-zukp9",
+        "url": "https://aistudio.google.com/api-keys",
+        "title": "aistudio.google.com • api keys",
+        "categoria": "Inteligencia Artificial",
+        "keywords": [
+          "aistudio",
+          "api keys",
+          "recurso",
+          "web"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=aistudio.google.com&sz=64",
+        "isFavorite": true,
+        "clicks": 4,
+        "lastOpenedAt": "2026-10-07T09:21:23.103Z",
+        "createdAt": "2026-09-29T15:51:49.186Z",
+        "updatedAt": "2026-09-29T15:51:49.186Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791190688378-9nu97",
+        "url": "https://youtu.be/IhT6AP5yH4c",
+        "title": "Explicación de Audios",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "duplomado",
+          "youtube"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=youtu.be&sz=64",
+        "isFavorite": true,
+        "clicks": 3,
+        "lastOpenedAt": "2026-10-05T19:21:58.714Z",
+        "createdAt": "2026-10-05T08:58:08.378Z",
+        "updatedAt": "2026-10-05T08:58:08.378Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1790801906773-d6w6m",
+        "url": "https://console.firebase.google.com/u/0/project/esparta-d60c1/authentication/users",
+        "title": "console.firebase.google.com • u 0 project esparta d60c1 authentication users",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=console.firebase.google.com&sz=64",
+        "isFavorite": true,
+        "clicks": 2,
+        "lastOpenedAt": "2026-10-02T10:05:59.940Z",
+        "createdAt": "2026-09-30T20:58:26.773Z",
+        "updatedAt": "2026-09-30T20:58:26.773Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1790697134481-6cnyz",
+        "url": "https://console.firebase.google.com/u/0/project/gen-lang-client-0098696571/authentication/settings",
+        "title": "console.firebase.google.com • u 0 project gen lang client 0098696571 authentication settings",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=console.firebase.google.com&sz=64",
+        "isFavorite": true,
+        "clicks": 1,
+        "createdAt": "2026-09-29T15:52:14.481Z",
+        "updatedAt": "2026-09-29T15:52:14.481Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1790697667858-nfcuw",
+        "url": "https://chatgpt.com/c/6abb0f8c-fbd4-83e8-85f4-7380227e4225?temporary-chat=true",
+        "title": "ChatGPT • Asistente y Modelos de Lenguaje",
+        "categoria": "Inteligencia Artificial",
+        "descripcion": "Modelos de lenguaje y razonamiento de OpenAI para redacción, análisis y consultas.",
+        "keywords": [
+          "chatgpt",
+          "openai",
+          "ia",
+          "asistente",
+          "prompts"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 1,
+        "lastOpenedAt": "2026-10-05T01:07:10.741Z",
+        "createdAt": "2026-09-29T16:01:07.858Z",
+        "updatedAt": "2026-09-29T16:01:07.858Z"
+      },
+      {
+        "id": "url-1790715955208-fm82l",
+        "url": "https://chatgpt.com/g/g-p-69ffe6c1c91c8191814bee6a669c0c12-guia-vobo/c/6a5e70ee-4d50-83e8-b56e-ecb95c72462e",
+        "title": "ChatGPT • Asistente y Modelos de Lenguaje",
+        "categoria": "Inteligencia Artificial",
+        "descripcion": "Modelos de lenguaje y razonamiento de OpenAI para redacción, análisis y consultas.",
+        "keywords": [
+          "chatgpt",
+          "openai",
+          "ia",
+          "asistente",
+          "prompts"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": true,
+        "clicks": 1,
+        "createdAt": "2026-09-29T21:05:55.208Z",
+        "updatedAt": "2026-09-29T21:05:55.208Z"
+      },
+      {
+        "id": "url-1791102069728-f1vzx",
+        "url": "https://console.firebase.google.com/u/0/project/gen-lang-client-0098696571/authentication/settings",
+        "title": "console.firebase.google.com • u 0 project gen lang client 0098696571 authentication settings",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "console",
+          "u",
+          "0",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=console.firebase.google.com&sz=64",
+        "isFavorite": false,
+        "clicks": 1,
+        "lastOpenedAt": "2026-10-04T10:38:16.277Z",
+        "createdAt": "2026-10-04T08:21:09.728Z",
+        "updatedAt": "2026-10-04T08:21:09.728Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791148531055-270g8",
+        "url": "https://chatgpt.com/c/6ac08311-5a78-83e8-88c1-989dc471ef15",
+        "title": "STICKERS TIBURÓN ChatGPT • Asistente y Modelos de Lenguaje",
+        "categoria": "Inteligencia Artificial",
+        "descripcion": "Modelos de lenguaje y razonamiento de OpenAI para redacción, análisis y consultas.",
+        "keywords": [
+          "chatgpt",
+          "openai",
+          "ia",
+          "asistente",
+          "prompts"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 1,
+        "lastOpenedAt": "2026-10-05T01:07:12.971Z",
+        "createdAt": "2026-10-04T21:15:31.055Z",
+        "updatedAt": "2026-10-05T03:07:07.379Z"
+      },
+      {
+        "id": "url-1791151450397-yheqh",
+        "url": "https://fgdll.org/directorio/gestion",
+        "title": "solicitudes del diplomado en portal",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=fgdll.org&sz=64",
+        "isFavorite": true,
+        "clicks": 1,
+        "lastOpenedAt": "2026-10-05T00:49:58.072Z",
+        "createdAt": "2026-10-04T22:04:10.397Z",
+        "updatedAt": "2026-10-04T22:04:10.397Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791362288603-cb8up",
+        "url": "https://aistudio.google.com/apps/aab1eb33-8654-4560-8509-2c04d1bfb9dc?showAssistant=true&showCode=true",
+        "title": "AI STUDIO DE GENERADOR DE DOCUMENTOS",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=aistudio.google.com&sz=64",
+        "isFavorite": false,
+        "clicks": 1,
+        "lastOpenedAt": "2026-10-08T00:06:42.353Z",
+        "createdAt": "2026-10-07T08:38:08.603Z",
+        "updatedAt": "2026-10-07T08:38:08.603Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1790590385521-sazhl",
+        "url": "https://github.com/settings/apps",
+        "title": "DEVELOPER GIT",
+        "categoria": "Herramientas & Web",
+        "descripcion": "GitHub is where people build software. More than 150 million people use GitHub to discover, fork, and contribute to over 420 million projects.",
+        "keywords": [
+          "github",
+          "build",
+          "software",
+          "people",
+          "million"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=github.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-09-28T10:13:05.521Z",
+        "updatedAt": "2026-09-28T10:13:05.521Z"
+      },
+      {
+        "id": "url-1790702550424-uq4i5",
+        "url": "https://github",
+        "title": "token",
+        "categoria": "Herramientas & Web",
+        "descripcion": "[TOKEN_REDACTED]",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=github&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-09-29T17:22:30.424Z",
+        "updatedAt": "2026-09-29T17:22:30.424Z"
+      },
+      {
+        "id": "url-1790959558270-41ria",
+        "url": "https://www.canva.com/design/DAGoZLfot3o/mzF_WVnpbhQxLns_dktzWw/edit",
+        "title": "Canva • Diseño Gráfico y Plantillas",
+        "categoria": "Diseño & Creatividad",
+        "descripcion": "reconocimientos zona águila",
+        "keywords": [
+          "canva",
+          "diseño",
+          "plantillas",
+          "posters",
+          "volantes",
+          "lonas"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=canva.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-02T16:45:58.270Z",
+        "updatedAt": "2026-10-02T16:45:58.270Z"
+      },
+      {
+        "id": "url-1790959599543-14wmq",
+        "url": "https://www.canva.com/projects/recents",
+        "title": "Canva • Diseño Gráfico y Plantillas - GDLL.AGENDA",
+        "categoria": "Diseño & Creatividad",
+        "descripcion": "Canva",
+        "keywords": [
+          "canva",
+          "diseño",
+          "plantillas",
+          "posters",
+          "volantes",
+          "lonas"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=canva.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-02T16:46:39.543Z",
+        "updatedAt": "2026-10-02T16:46:39.543Z"
+      },
+      {
+        "id": "url-1791020361739-c6tzc",
+        "url": "https://forms.gle/5QQDzZCN5Jj9yDRu7",
+        "title": "forms.gle • 5QQDzZCN5Jj9yDRu7",
+        "categoria": "Diseño & Creatividad",
+        "descripcion": "ctm",
+        "keywords": [
+          "forms",
+          "5qqdzzcn5jj9ydru7",
+          "recurso",
+          "web"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=forms.gle&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-03T09:39:21.739Z",
+        "updatedAt": "2026-10-03T09:39:21.739Z"
+      },
+      {
+        "id": "url-1791178586668-mofar",
+        "url": "https://chatgpt.com/c/6abf754e-2494-83e8-9370-a9431f082e13",
+        "title": "BOUTIQUE FGDLL",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-05T05:36:26.668Z",
+        "updatedAt": "2026-10-05T05:36:26.668Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791259215030-vdv5g",
+        "url": "https://l.fgdll.org/reconocimientos.html",
+        "title": "Task-OS • Sistema Operativo Ejecutivo (l.fgdll.org)",
+        "categoria": "Productividad & Trabajo",
+        "descripcion": "Portal institucional y sistema operativo de tareas desplegado en l.fgdll.org",
+        "keywords": [
+          "task-os",
+          "l.fgdll.org",
+          "panel",
+          "ejecutivo",
+          "tareas",
+          "fgdll"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=l.fgdll.org&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-06T04:00:15.030Z",
+        "updatedAt": "2026-10-06T04:00:15.030Z"
+      },
+      {
+        "id": "url-1791271034863-jb4gb",
+        "url": "https://docs.google.com/spreadsheets/d/1jFXmj5hYQJ2V7ujZ7SQPE9tFAQv8vX_cx5VtsEpT-z0/edit?gid=2016914047#gid=2016914047",
+        "title": "Datos de líderes",
+        "categoria": "Productividad & Trabajo",
+        "keywords": [
+          "docs",
+          "spreadsheets",
+          "d",
+          "recurso"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=docs.google.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-06T07:17:14.863Z",
+        "updatedAt": "2026-10-06T07:17:14.863Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791344964510-nnxbn",
+        "url": "https://chatgpt.com/c/6ac57146-f754-83e8-bf88-5d890c2aa61c",
+        "title": "banderas publicitarias",
+        "categoria": "Diseño & Creatividad",
+        "descripcion": "BANDERILLAS",
+        "keywords": [
+          "chatgpt",
+          "openai",
+          "ia",
+          "asistente",
+          "prompts"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-07T03:49:24.510Z",
+        "updatedAt": "2026-10-07T03:49:24.510Z"
+      },
+      {
+        "id": "url-1791347819383-tk4qc",
+        "url": "https://chatgpt.com/c/6ac5cad2-ed68-83e8-b824-d06341c3e11c",
+        "title": "LA BRÚJULA DEL GUERRERO",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-07T04:36:59.383Z",
+        "updatedAt": "2026-10-07T04:36:59.383Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791360565080-nts2u",
+        "url": "https://chatgpt.com/c/6ac2d14e-2270-83e8-b267-88f6d2399460",
+        "title": "EDICIÓN DE MENSAJES RÁPIDOS DE WHATSAPP DEL DIPLOMKADO",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-07T08:09:25.080Z",
+        "updatedAt": "2026-10-07T08:09:25.080Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791362527378-5so0x",
+        "url": "https://chatgpt.com/c/6ac5cad2-ed68-83e8-b824-d06341c3e11c",
+        "title": "brújula del guerrero - chatgpt",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=chatgpt.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-07T08:42:07.378Z",
+        "updatedAt": "2026-10-07T08:42:07.378Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791368024041-ndgzn",
+        "url": "https://aistudio.google.com/apps/bfed109d-9eb3-43ca-aa83-470e60e5290f?showPreview=true&showAssistant=true",
+        "title": "BOUTIQUE AI STUDIO",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=aistudio.google.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-07T10:13:44.041Z",
+        "updatedAt": "2026-10-07T10:13:44.041Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791470509797-145w0",
+        "url": "https://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",
+        "title": "CLAVE API CLAUDE - ADMIN@FGDLL.ORG",
+        "categoria": "Herramientas & Web",
+        "keywords": [
+          "sk-ant-usr-1bmktr01rfsjvikocfkvc0inkv89_ejuzzddjuy",
+          "recurso",
+          "web"
+        ],
+        "icon": "https://www.google.com/s2/favicons?domain=sk-ant-usr-1bmktr01rfsjvikocfkvc0inkv89_ejuzzddjuylkaak_lnjibv_ozpedphlapvf5uc1ue8ydraupxfckngibvg4lbw4aaa&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-08T14:41:49.797Z",
+        "updatedAt": "2026-10-08T14:41:49.797Z",
+        "descripcion": ""
+      },
+      {
+        "id": "url-1791487079959-okzrx",
+        "url": "https://www.youtube.com/watch?v=azFQcAGE6II",
+        "title": "APADRINAMIENTO EN EL LIDERAZGO YOUTUBE",
+        "categoria": "Herramientas & Web",
+        "keywords": [],
+        "icon": "https://www.google.com/s2/favicons?domain=www.youtube.com&sz=64",
+        "isFavorite": false,
+        "clicks": 0,
+        "createdAt": "2026-10-08T19:17:59.959Z",
+        "updatedAt": "2026-10-08T19:17:59.959Z",
+        "descripcion": ""
+      }
+    ],
+    "quickResponses": [
+      {
+        "id": "qr-solicitud-recibida",
+        "titulo": "Confirmación de Recepción de Solicitud / Folio",
+        "categoria": "Atención a Clientes",
+        "mensaje": "¡Hola! 👋 Confirmamos la recepción de tu solicitud. Ya fue registrada con éxito en nuestro sistema y comenzaremos a revisarla de inmediato. Te mantendremos informado por aquí del avance.",
+        "etiquetas": [
+          "#whatsapp",
+          "#clientes",
+          "#recepcion",
+          "#solicitud"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 14
+      },
+      {
+        "id": "qr-cotizacion-anticipo",
+        "titulo": "Cotización & Datos Bancarios para Anticipo",
+        "categoria": "Finanzas & Bancos",
+        "mensaje": "¡Hola! Te compartimos el resumen de tu pedido. Para arrancar la producción de lonas/playeras requerimos el 50% de anticipo. Datos bancarios:\n🏦 BBVA Bancomer\nCuenta: 0123456789\nCLABE: 012180001234567891\nBeneficiario: Grupo Cortazar\nPor favor envíanos tu comprobante en cuanto quede listo. ¡Muchas gracias!",
+        "etiquetas": [
+          "#cotizacion",
+          "#anticipo",
+          "#bancos",
+          "#lonas",
+          "#playeras"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 22
+      },
+      {
+        "id": "qr-visto-bueno-diseno",
+        "titulo": "Visto Bueno de Diseño en Google Drive",
+        "categoria": "Diseño & Creatividad",
+        "mensaje": "¡Hola! Tu diseño ya está listo en alta resolución para revisión. Por favor revísalo con calma (ortografía, teléfonos, medidas y acabados) para darnos tu visto bueno final y proceder a imprimirlo:\n📁 Enlace a Google Drive: {link}",
+        "etiquetas": [
+          "#diseno",
+          "#drive",
+          "#visto-bueno",
+          "#revision"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 19
+      },
+      {
+        "id": "qr-pedido-listo",
+        "titulo": "Pedido Concluido y Listo para Entrega",
+        "categoria": "Producción & Entrega",
+        "mensaje": "¡Excelentes noticias! 🌟 Tu trabajo ya está impreso, terminado con ojillos/refuerzos y con control de calidad listo. Puedes pasar a recogerlo en nuestro taller o confirmarnos si prefieres entrega programada. ¡Quedó impecable!",
+        "etiquetas": [
+          "#entrega",
+          "#listo",
+          "#produccion",
+          "#lonas"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 16
+      },
+      {
+        "id": "qr-diplomado-fgdll",
+        "titulo": "Bienvenida & Materiales Diplomado de Liderazgo FGDLL",
+        "categoria": "Diplomado FGDLL",
+        "mensaje": "Estimado/a participante: Te damos la más cordial bienvenida al Diplomado de Liderazgo de la Fundación Grupo de los Diez Líderes. Las sesiones se llevan a cabo los días sábados. Puedes consultar el calendario, temarios y lecturas en https://fgdll.org/diplomado. ¡Un honor caminar juntos!",
+        "etiquetas": [
+          "#diplomado",
+          "#liderazgo",
+          "#fgdll",
+          "#bienvenida"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 11
+      },
+      {
+        "id": "qr-soporte-fgdll",
+        "titulo": "Soporte Técnico y Cuentas de Acceso FGDLL",
+        "categoria": "Tecnología & Soporte",
+        "mensaje": "Hola. Para el restablecimiento de contraseñas, accesos a la plataforma o sincronización de cuentas institucionales FGDLL, por favor compártenos tu nombre completo y correo registrado. Validaremos tus credenciales de inmediato.",
+        "etiquetas": [
+          "#soporte",
+          "#tecnologia",
+          "#cuentas",
+          "#fgdll"
+        ],
+        "fecha": "2026-10-04",
+        "copiasCount": 8
+      }
+    ],
+    "contacts": [
+      {
+        "id": "c-1",
+        "nombre": "Laura",
+        "telefono": "+52 55 1234 5678",
+        "rol": "Coordinación y Proyectos",
+        "dominio": "Laura"
+      },
+      {
+        "id": "c-2",
+        "nombre": "Líder Zona Tiburón",
+        "telefono": "+52 55 9876 5432",
+        "rol": "Líder de Zona FGDLL",
+        "dominio": "FGDLL"
+      },
+      {
+        "id": "c-3",
+        "nombre": "Director Gladiadores",
+        "telefono": "+52 55 4567 8901",
+        "rol": "Director de Zona",
+        "dominio": "FGDLL"
+      },
+      {
+        "id": "c-4",
+        "nombre": "Proveedor de Lonas",
+        "telefono": "+52 55 2345 6789",
+        "rol": "Taller Impresión y Montaje",
+        "dominio": "Diseño"
+      },
+      {
+        "id": "c-5",
+        "nombre": "Coordinación Universidad FGDLL",
+        "telefono": "+52 55 8765 4321",
+        "rol": "Diplomados y Reconocimientos",
+        "dominio": "Universidad"
+      }
+    ],
+    "tags": [
+      {
+        "id": "tag-1",
+        "nombre": "Urgente",
+        "categoria": "prioridad",
+        "color": "rose"
+      },
+      {
+        "id": "tag-2",
+        "nombre": "Importante",
+        "categoria": "prioridad",
+        "color": "amber"
+      },
+      {
+        "id": "tag-3",
+        "nombre": "Pendiente",
+        "categoria": "prioridad",
+        "color": "blue"
+      },
+      {
+        "id": "tag-4",
+        "nombre": "Delegado",
+        "categoria": "prioridad",
+        "color": "purple"
+      },
+      {
+        "id": "tag-5",
+        "nombre": "Zona Tiburón",
+        "categoria": "zona",
+        "color": "cyan"
+      },
+      {
+        "id": "tag-6",
+        "nombre": "Zona Gladiadores",
+        "categoria": "zona",
+        "color": "orange"
+      },
+      {
+        "id": "tag-7",
+        "nombre": "Zona Águilas",
+        "categoria": "zona",
+        "color": "emerald"
+      },
+      {
+        "id": "tag-8",
+        "nombre": "Zona Centro",
+        "categoria": "zona",
+        "color": "indigo"
+      },
+      {
+        "id": "tag-9",
+        "nombre": "Diseño",
+        "categoria": "area",
+        "color": "pink"
+      },
+      {
+        "id": "tag-10",
+        "nombre": "Tecnología",
+        "categoria": "area",
+        "color": "violet"
+      },
+      {
+        "id": "tag-11",
+        "nombre": "Universidad",
+        "categoria": "area",
+        "color": "teal"
+      },
+      {
+        "id": "tag-12",
+        "nombre": "Reconocimientos",
+        "categoria": "area",
+        "color": "amber"
+      },
+      {
+        "id": "tag-13",
+        "nombre": "Logística",
+        "categoria": "area",
+        "color": "stone"
+      }
+    ],
+    "esencialTaskId": 10,
+    "secundariasTaskIds": [
+      2
+    ],
+    "updatedAt": "2026-10-09T17:56:45.505Z",
     "deviceName": "Navegador Web"
   }
 }

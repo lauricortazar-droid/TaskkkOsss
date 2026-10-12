@@ -36,6 +36,9 @@ import {
   Zap,
   CheckCheck,
   Activity,
+  Eye,
+  EyeOff,
+  Lock,
 } from "lucide-react";
 import { SyncStatus, WorkspaceTab } from "../types";
 import { playChime, ChimeType } from "../utils/audio";
@@ -129,6 +132,8 @@ export default function ConnectionSyncMenuModal({
   const [copiedMcp, setCopiedMcp] = useState(false);
   const [testNotifSent, setTestNotifSent] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<string>("default");
+  const [showAdminSecretPin, setShowAdminSecretPin] = useState(false);
+  const [copiedAdminSecretPin, setCopiedAdminSecretPin] = useState(false);
 
   // Health check and connection testing state
   const [isTestingConnection, setIsTestingConnection] = useState(false);
@@ -886,6 +891,75 @@ export default function ConnectionSyncMenuModal({
                       </p>
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* SECTION: BÓVEDA SECRETA DE CONTRASEÑA ADMIN (PORTAL PRIVADO TASK-OS) */}
+              <div className="p-4 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold">
+                      <Lock size={16} />
+                    </span>
+                    <div>
+                      <h4 className="font-bold text-stone-900 dark:text-stone-100 text-sm flex items-center gap-2">
+                        <span>Bóveda de Contraseña de Admin (Avión de Admin)</span>
+                        <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 font-bold">
+                          Privado Task-OS
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-stone-500">
+                        Clave secreta para entrar a Avión de Admin. Está oculta del portal público para máxima seguridad.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-stone-50 dark:bg-stone-800/50 border border-stone-200 dark:border-stone-700/70 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-stone-600 dark:text-stone-300 font-medium">Contraseña Secreta:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-base font-black tracking-widest px-3 py-1 rounded-lg bg-stone-200 dark:bg-stone-900 text-stone-900 dark:text-stone-100">
+                        {showAdminSecretPin ? "110809" : "••••••"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAdminSecretPin(!showAdminSecretPin)}
+                        className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition"
+                        title={showAdminSecretPin ? "Ocultar contraseña" : "Ver contraseña secreta"}
+                      >
+                        {showAdminSecretPin ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText("110809");
+                          setCopiedAdminSecretPin(true);
+                          playChime("tick");
+                          setTimeout(() => setCopiedAdminSecretPin(false), 2500);
+                        }}
+                        className="p-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition flex items-center gap-1 text-xs font-semibold"
+                        title="Copiar contraseña al portapapeles"
+                      >
+                        {copiedAdminSecretPin ? <Check size={15} className="text-emerald-500" /> : <Copy size={15} />}
+                        <span>{copiedAdminSecretPin ? "Copiada" : "Copiar"}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-stone-200/80 dark:border-stone-700/60">
+                    <span className="text-[11px] text-stone-500">
+                      ¿Necesitas recibirla o solicitarla por correo?
+                    </span>
+                    <a
+                      href="mailto:laurcortazar@gmail.com?subject=Clave%20Secreta%20Avión%20de%20Admin&body=Hola%20Laura,%20tu%20clave%20secreta%20de%20acceso%20a%20Avión%20de%20Admin%20es:%20110809"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-xs transition active:scale-95 shadow-2xs self-start sm:self-auto"
+                      title="Enviar clave a laurcortazar@gmail.com"
+                    >
+                      <Mail size={13} />
+                      <span>Enviar a mi correo (laurcortazar@gmail.com)</span>
+                    </a>
+                  </div>
                 </div>
               </div>
 
