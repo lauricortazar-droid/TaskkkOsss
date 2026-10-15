@@ -147,20 +147,20 @@ export default function TaskItemRow({
   return (
     <tr
       id={`task-row-${task.id}`}
-      className={`group hover:bg-stone-50/70 dark:hover:bg-stone-800/40 transition-colors ${
+      className={`group hover:bg-[var(--ledger-surface-hover)] transition-colors border-b border-[var(--ledger-border-subtle)] ${
         isEsencial
-          ? "bg-amber-50/40 dark:bg-amber-950/15"
+          ? "bg-amber-500/10"
           : isDone
-          ? "opacity-60 bg-stone-50/30 dark:bg-stone-900/40"
+          ? "opacity-60 bg-[var(--ledger-surface-muted)]"
           : ""
       }`}
     >
       {/* Column 1: ID */}
-      <td className="py-3.5 px-3 sm:px-4 font-mono font-bold text-stone-500 dark:text-stone-400 text-center align-top pt-4">
+      <td className="py-3.5 px-3 sm:px-4 font-mono font-bold ledger-text-muted text-center align-top pt-4">
         <div>#{task.id}</div>
         {task.numeroFolio && (
           <span
-            className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60"
+            className="inline-block mt-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-400/30"
             title={`Folio / N° de referencia: ${task.numeroFolio}`}
           >
             N° {task.numeroFolio}
@@ -172,14 +172,14 @@ export default function TaskItemRow({
       <td className="py-3.5 px-3 sm:px-4 align-top pt-4">
         <div className="flex flex-col">
           <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-stone-800 dark:text-stone-200">
+            <span className="font-semibold ledger-text-primary">
               {task.solicitante}
             </span>
             {task.contacto?.telefono && (
               <button
                 type="button"
                 onClick={() => onOpenWhatsApp(task)}
-                className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/60 transition-colors"
+                className="p-1 rounded text-emerald-600 hover:bg-emerald-500/15 transition-colors"
                 title={`Enviar WhatsApp a ${task.solicitante} (${task.contacto.telefono})`}
               >
                 <Phone size={11} />
@@ -187,7 +187,7 @@ export default function TaskItemRow({
             )}
           </div>
           {task.dominio && (
-            <span className="text-[10px] uppercase tracking-wider text-stone-400 font-medium">
+            <span className="text-[10px] uppercase tracking-wider ledger-text-muted font-medium">
               {task.dominio}
             </span>
           )}
@@ -199,7 +199,7 @@ export default function TaskItemRow({
         <div className="flex items-start gap-2">
           {isEsencial && (
             <span
-              className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-200 dark:bg-amber-900 text-amber-900 dark:text-amber-200 shrink-0"
+              className="mt-0.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400 text-stone-950 shrink-0"
               title="Tarea Esencial (Ley 8: Ley del Foco)"
             >
               <Star size={10} className="fill-current" />
@@ -207,7 +207,7 @@ export default function TaskItemRow({
             </span>
           )}
           {isSecundaria && !isEsencial && (
-            <span className="mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-stone-200 dark:bg-stone-800 text-stone-700 dark:text-stone-300 shrink-0">
+            <span className="mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ledger-badge shrink-0">
               Secundaria
             </span>
           )}
@@ -230,7 +230,7 @@ export default function TaskItemRow({
               onClick={() =>
                 onViewImage(task.imagenReferencia!, `Referencia: ${task.tarea}`)
               }
-              className="relative w-7 h-7 rounded-md overflow-hidden border border-stone-300 dark:border-stone-700 bg-stone-100 hover:ring-2 hover:ring-amber-500 transition-all shrink-0 mt-0.5 group"
+              className="relative w-7 h-7 rounded-md overflow-hidden border border-[var(--ledger-border)] bg-[var(--ledger-surface)] hover:ring-2 hover:ring-amber-500 transition-all shrink-0 mt-0.5 group"
               title="Ver imagen de referencia adjunta"
             >
               <img
@@ -247,8 +247,8 @@ export default function TaskItemRow({
           <div className="flex-1 min-w-0 space-y-2">
             {/* Main Task Description */}
             <span
-              className={`font-medium text-stone-900 dark:text-stone-100 leading-snug block ${
-                isDone ? "line-through text-stone-400 dark:text-stone-500" : ""
+              className={`font-medium ledger-text-primary leading-snug block ${
+                isDone ? "line-through opacity-60" : ""
               }`}
             >
               {task.tarea}
@@ -258,23 +258,23 @@ export default function TaskItemRow({
             {task.notas && !isNotesOpen && (
               <div
                 onClick={() => setIsNotesOpen(true)}
-                className="group/note cursor-pointer rounded-lg bg-stone-50/90 dark:bg-stone-900/60 border border-stone-200/80 dark:border-stone-800 p-2 text-xs flex items-start gap-2 hover:border-amber-400/70 dark:hover:border-amber-700/60 transition-colors"
+                className="group/note cursor-pointer rounded-lg bg-[var(--ledger-surface-muted)] border border-[var(--ledger-border-subtle)] p-2 text-xs flex items-start gap-2 hover:border-amber-400/70 transition-colors"
                 title="Haz clic para ver o editar las observaciones completas"
               >
                 <FileText
                   size={13}
-                  className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5"
+                  className="text-amber-500 shrink-0 mt-0.5"
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-900/80 dark:text-amber-300/80">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                       Observaciones:
                     </span>
-                    <span className="text-[10px] text-stone-400 opacity-0 group-hover/note:opacity-100 transition-opacity flex items-center gap-0.5">
+                    <span className="text-[10px] ledger-text-muted opacity-0 group-hover/note:opacity-100 transition-opacity flex items-center gap-0.5">
                       <Edit3 size={10} /> Editar
                     </span>
                   </div>
-                  <p className="text-stone-700 dark:text-stone-300 whitespace-pre-wrap line-clamp-2 leading-relaxed text-[11px] sm:text-xs">
+                  <p className="ledger-text-secondary whitespace-pre-wrap line-clamp-2 leading-relaxed text-[11px] sm:text-xs">
                     {task.notas}
                   </p>
                 </div>
@@ -302,21 +302,21 @@ export default function TaskItemRow({
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <FileText size={12} className="text-amber-600 dark:text-amber-400" />
-                    <span className="text-xs font-semibold text-stone-800 dark:text-stone-200">
+                    <FileText size={12} className="text-amber-500" />
+                    <span className="text-xs font-semibold ledger-text-primary">
                       Sub-notas u observaciones
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
                     {savedFeedback && (
-                      <span className="text-[10px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5">
+                      <span className="text-[10px] font-medium text-emerald-500 flex items-center gap-0.5">
                         <Check size={11} /> Guardado
                       </span>
                     )}
                     <button
                       type="button"
                       onClick={() => setIsNotesOpen(false)}
-                      className="text-stone-400 hover:text-stone-700 dark:hover:text-stone-200 p-0.5 rounded"
+                      className="ledger-text-muted hover:ledger-text-primary p-0.5 rounded"
                       title="Cerrar panel de notas"
                     >
                       <X size={13} />
@@ -334,11 +334,11 @@ export default function TaskItemRow({
                   onBlur={handleSaveNotes}
                   rows={3}
                   placeholder="Añade observaciones, especificaciones, acuerdos o sub-notas aquí sin alterar la tarea principal..."
-                  className="w-full text-xs font-normal text-stone-900 dark:text-stone-100 bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:text-stone-400 leading-relaxed resize-y"
+                  className="w-full text-xs font-normal ledger-text-primary bg-[var(--ledger-input-bg)] border border-[var(--ledger-input-border)] rounded-lg p-2.5 focus:outline-none focus:ring-1 focus:ring-amber-500 placeholder:ledger-text-muted leading-relaxed resize-y"
                 />
 
                 <div className="flex items-center justify-between text-xs pt-0.5">
-                  <span className="text-[10px] text-stone-400 italic">
+                  <span className="text-[10px] ledger-text-muted italic">
                     Persistente • Se guarda al desenfocar o pulsar Guardar
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -432,14 +432,14 @@ export default function TaskItemRow({
                   {isTagPopoverOpen && (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="absolute left-0 top-full mt-1 w-52 p-2 bg-white dark:bg-stone-900 rounded-xl shadow-xl border border-stone-200 dark:border-stone-700 z-50 animate-in fade-in zoom-in-95 duration-100"
+                      className="absolute left-0 top-full mt-1 w-52 p-2 bg-[var(--ledger-surface)] rounded-xl shadow-xl border border-[var(--ledger-border)] z-50 animate-in fade-in zoom-in-95 duration-100"
                     >
-                      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-stone-100 dark:border-stone-800 text-[11px] font-semibold text-stone-700 dark:text-stone-200">
+                      <div className="flex items-center justify-between pb-1.5 mb-1.5 border-b border-[var(--ledger-border-subtle)] text-[11px] font-semibold ledger-text-primary">
                         <span>Etiquetas de la tarea</span>
                         <button
                           type="button"
                           onClick={() => setIsTagPopoverOpen(false)}
-                          className="text-stone-400 hover:text-stone-700 dark:hover:text-stone-200"
+                          className="ledger-text-muted hover:ledger-text-primary"
                         >
                           <X size={12} />
                         </button>
@@ -454,8 +454,8 @@ export default function TaskItemRow({
                               onClick={() => onToggleTaskTag(task.id, tag.nombre)}
                               className={`w-full flex items-center justify-between px-2 py-1 rounded text-left text-xs transition-colors ${
                                 isChecked
-                                  ? "bg-stone-100 dark:bg-stone-800 font-medium"
-                                  : "hover:bg-stone-50 dark:hover:bg-stone-800/50 text-stone-600 dark:text-stone-400"
+                                  ? "bg-amber-500/15 border border-amber-400/30 ledger-text-primary font-bold"
+                                  : "hover:bg-[var(--ledger-surface-hover)] ledger-text-secondary"
                               }`}
                             >
                               <span className="flex items-center gap-1.5">
@@ -533,10 +533,10 @@ export default function TaskItemRow({
       </td>
 
       {/* Column 5: Fecha de Ingreso y Fecha Límite */}
-      <td className="py-3.5 px-3 sm:px-4 font-mono text-xs text-stone-500 dark:text-stone-400 text-center whitespace-nowrap align-top pt-4">
+      <td className="py-3.5 px-3 sm:px-4 font-mono text-xs ledger-text-secondary text-center whitespace-nowrap align-top pt-4">
         <div>{task.fechaIngreso}</div>
         {task.fechaLimite && (
-          <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+          <div className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-400/30">
             <span>📅 {task.fechaLimite}</span>
           </div>
         )}

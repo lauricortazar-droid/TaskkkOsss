@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --color-stone-850: #1c1917;
+}
+
 :root {
   --azul: #042f66;
   --azul-2: #073d83;
@@ -22,7 +28,125 @@
   --shadow-soft: 0 10px 28px rgba(29, 29, 27, 0.08);
   --max: 1180px;
   --ease: 180ms ease;
+
+  /* Variables del Sistema de Contraste Automático para Ledger */
+  --ledger-bg: #ffffff;
+  --ledger-surface: #ffffff;
+  --ledger-surface-muted: #f8fafc;
+  --ledger-surface-hover: rgba(15, 23, 42, 0.04);
+  --ledger-card-bg: #ffffff;
+  --ledger-card-border: rgba(15, 23, 42, 0.12);
+  --ledger-card-hover: rgba(15, 23, 42, 0.02);
+  --ledger-border: #e2e8f0;
+  --ledger-border-subtle: rgba(15, 23, 42, 0.07);
+  --ledger-text-primary: #09090b;
+  --ledger-text-secondary: #1e293b;
+  --ledger-text-muted: #475569;
+  --ledger-accent-text: #b45309;
+  --ledger-badge-bg: rgba(15, 23, 42, 0.06);
+  --ledger-badge-text: #09090b;
+  --ledger-badge-border: rgba(15, 23, 42, 0.16);
+  --ledger-header-bg: #fafafa;
+  --ledger-input-bg: #ffffff;
+  --ledger-input-border: #e2e8f0;
+  --ledger-input-text: #09090b;
 }
+
+/* ========================================================
+   CLASES DE CONTRASTE AUTOMÁTICO PARA LEDGER Y UI
+   ======================================================== */
+.ledger-container {
+  background-color: var(--ledger-bg);
+  color: var(--ledger-text-primary);
+  border-color: var(--ledger-border);
+  transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease;
+}
+
+.ledger-surface {
+  background-color: var(--ledger-surface) !important;
+  color: var(--ledger-text-primary) !important;
+  border-color: var(--ledger-border) !important;
+}
+
+.ledger-surface-muted {
+  background-color: var(--ledger-surface-muted) !important;
+  color: var(--ledger-text-secondary) !important;
+  border-color: var(--ledger-border-subtle) !important;
+}
+
+.ledger-card {
+  background-color: var(--ledger-card-bg) !important;
+  border-color: var(--ledger-card-border) !important;
+  color: var(--ledger-text-primary) !important;
+  transition: all 0.2s ease;
+}
+
+.ledger-card:hover {
+  background-color: var(--ledger-card-hover) !important;
+}
+
+.ledger-text-primary {
+  color: var(--ledger-text-primary) !important;
+}
+
+.ledger-text-secondary {
+  color: var(--ledger-text-secondary) !important;
+}
+
+.ledger-text-muted {
+  color: var(--ledger-text-muted) !important;
+}
+
+.ledger-text-accent {
+  color: var(--ledger-accent-text) !important;
+}
+
+.ledger-border {
+  border-color: var(--ledger-border) !important;
+}
+
+.ledger-border-subtle {
+  border-color: var(--ledger-border-subtle) !important;
+}
+
+.ledger-hover:hover {
+  background-color: var(--ledger-surface-hover) !important;
+}
+
+.ledger-header {
+  background-color: var(--ledger-header-bg) !important;
+  border-color: var(--ledger-border) !important;
+  color: var(--ledger-text-primary) !important;
+}
+
+.ledger-input {
+  background-color: var(--ledger-input-bg) !important;
+  color: var(--ledger-input-text, var(--ledger-text-primary)) !important;
+  border-color: var(--ledger-input-border) !important;
+}
+
+.ledger-input::placeholder {
+  color: var(--ledger-text-muted) !important;
+  opacity: 0.85;
+}
+
+.ledger-badge {
+  background-color: var(--ledger-badge-bg) !important;
+  color: var(--ledger-badge-text) !important;
+  border: 1px solid var(--ledger-badge-border) !important;
+}
+
+.ledger-button-ghost {
+  background-color: var(--ledger-surface) !important;
+  color: var(--ledger-text-primary) !important;
+  border: 1px solid var(--ledger-border) !important;
+  transition: all 0.15s ease;
+}
+
+.ledger-button-ghost:hover {
+  background-color: var(--ledger-surface-hover) !important;
+}
+
 
 body {
   color: var(--negro);

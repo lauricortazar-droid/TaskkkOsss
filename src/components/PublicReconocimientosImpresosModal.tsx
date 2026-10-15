@@ -534,7 +534,12 @@ export default function PublicReconocimientosImpresosModal({
                           {initials}
                         </div>
                         <div>
-                          <h4 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 leading-tight tracking-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                          <h4
+                            className={`text-base sm:text-lg font-black leading-tight tracking-tight ${
+                              themeConfig.nameColorHex ? "" : (activeTheme.nameTextColor || "text-stone-950")
+                            }`}
+                            style={themeConfig.nameColorHex ? { color: themeConfig.nameColorHex } : undefined}
+                          >
                             {item.nombreFormateado}
                           </h4>
                           <div className="flex flex-wrap items-center gap-1.5 mt-1.5">

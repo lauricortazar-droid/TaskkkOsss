@@ -254,27 +254,27 @@ export default function TaskCalendarView({
   return (
     <div className="space-y-4" id="task-calendar-monthly-view">
       {/* Calendar Header Navigation */}
-      <div className="p-4 bg-stone-50/70 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="p-4 bg-[var(--ledger-surface-muted)] border-b border-[var(--ledger-border)] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
+          <div className="p-2 rounded-xl bg-amber-500/15 text-amber-500">
             <CalendarIcon size={20} />
           </div>
           <div>
-            <h4 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100 capitalize">
+            <h4 className="text-base sm:text-lg font-bold ledger-text-primary capitalize">
               {MONTH_NAMES[currentMonth]} {currentYear}
             </h4>
-            <div className="flex items-center gap-2 text-xs text-stone-500 dark:text-stone-400">
+            <div className="flex items-center gap-2 text-xs ledger-text-muted">
               <span>
                 {tasksInCurrentMonth.length} tarea{tasksInCurrentMonth.length === 1 ? "" : "s"} programada{tasksInCurrentMonth.length === 1 ? "" : "s"}
               </span>
               <span>•</span>
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
+              <span className="text-amber-500 font-semibold">
                 {pendingInMonth} por entregar
               </span>
               {completedInMonth > 0 && (
                 <>
                   <span>•</span>
-                  <span className="text-emerald-600 dark:text-emerald-400">
+                  <span className="text-emerald-500 font-semibold">
                     {completedInMonth} listas
                   </span>
                 </>
@@ -287,25 +287,25 @@ export default function TaskCalendarView({
           <button
             type="button"
             onClick={handleGoToday}
-            className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs font-semibold text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors shadow-2xs"
+            className="px-3 py-1.5 rounded-lg border border-[var(--ledger-border)] bg-[var(--ledger-surface)] text-xs font-semibold ledger-text-primary hover:bg-[var(--ledger-surface-hover)] transition-colors shadow-2xs"
           >
             Hoy
           </button>
-          <div className="flex items-center border border-stone-200 dark:border-stone-700 rounded-lg overflow-hidden bg-white dark:bg-stone-800">
+          <div className="flex items-center border border-[var(--ledger-border)] rounded-lg overflow-hidden bg-[var(--ledger-surface)]">
             <button
               type="button"
               onClick={handlePrevMonth}
               aria-label="Mes anterior"
-              className="p-1.5 px-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
+              className="p-1.5 px-2 ledger-text-secondary hover:bg-[var(--ledger-surface-hover)] transition-colors"
             >
               <ChevronLeft size={16} />
             </button>
-            <div className="w-[1px] h-4 bg-stone-200 dark:bg-stone-700" />
+            <div className="w-[1px] h-4 bg-[var(--ledger-border-subtle)]" />
             <button
               type="button"
               onClick={handleNextMonth}
               aria-label="Mes siguiente"
-              className="p-1.5 px-2 text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors"
+              className="p-1.5 px-2 ledger-text-secondary hover:bg-[var(--ledger-surface-hover)] transition-colors"
             >
               <ChevronRight size={16} />
             </button>
@@ -315,8 +315,8 @@ export default function TaskCalendarView({
             onClick={() => setShowUnscheduledPanel(!showUnscheduledPanel)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${
               showUnscheduledPanel
-                ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 border-transparent shadow-2xs"
-                : "border-stone-200 dark:border-stone-700 text-stone-600 dark:text-stone-400 hover:bg-stone-100 dark:hover:bg-stone-800"
+                ? "bg-amber-500 text-stone-950 border-amber-600 shadow-2xs font-bold"
+                : "border-[var(--ledger-border)] bg-[var(--ledger-surface)] ledger-text-secondary hover:bg-[var(--ledger-surface-hover)]"
             }`}
           >
             Sin Fecha ({unscheduledTasks.length})
@@ -326,12 +326,12 @@ export default function TaskCalendarView({
 
       {/* Unscheduled / Bandeja de tareas sin fecha límite */}
       {showUnscheduledPanel && unscheduledTasks.length > 0 && (
-        <div className="mx-4 p-3.5 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/60 dark:bg-amber-950/20 animate-in fade-in duration-200">
+        <div className="mx-4 p-3.5 rounded-xl border border-amber-400/40 bg-amber-500/10 animate-in fade-in duration-200">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2 text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wider">
               <span>📌 Bandeja: Tareas sin fecha límite ({unscheduledTasks.length})</span>
             </div>
-            <span className="text-[11px] text-amber-700 dark:text-amber-400">
+            <span className="text-[11px] text-amber-700 dark:text-amber-300">
               Arrastra una tarjeta a cualquier día del calendario para asignarle fecha
             </span>
           </div>
@@ -344,18 +344,18 @@ export default function TaskCalendarView({
                 onDragStart={(e) => handleDragStart(e, task)}
                 onDragEnd={handleDragEnd}
                 onClick={() => setSelectedTask(task)}
-                className={`shrink-0 w-64 p-2.5 rounded-lg border bg-white dark:bg-stone-900 text-xs shadow-2xs cursor-grab active:cursor-grabbing hover:border-amber-400 transition-all ${
+                className={`shrink-0 w-64 p-2.5 rounded-lg border bg-[var(--ledger-surface)] text-xs shadow-2xs cursor-grab active:cursor-grabbing hover:border-amber-400 transition-all ${
                   draggedTaskId === task.id ? "opacity-40 scale-95" : ""
                 } ${
                   task.id === esencialTaskId
                     ? "border-amber-400 ring-1 ring-amber-400/40"
-                    : "border-stone-200 dark:border-stone-800"
+                    : "border-[var(--ledger-card-border)]"
                 }`}
               >
                 <div className="flex items-center justify-between gap-1 mb-1">
                   <div className="flex items-center gap-1">
-                    <GripVertical size={13} className="text-stone-400 shrink-0" />
-                    <span className="font-mono font-bold text-stone-900 dark:text-stone-100">
+                    <GripVertical size={13} className="ledger-text-muted shrink-0" />
+                    <span className="font-mono font-bold ledger-text-primary">
                       #{task.id}
                     </span>
                     {task.id === esencialTaskId && (
@@ -365,19 +365,19 @@ export default function TaskCalendarView({
                   <span
                     className={`text-[10px] px-1.5 py-0.2 rounded font-semibold ${
                       task.estado === "Completado"
-                        ? "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300"
+                        ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-400/30"
                         : task.estado === "En Proceso"
-                        ? "bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300"
-                        : "bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300"
+                        ? "bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/30"
+                        : "ledger-badge"
                     }`}
                   >
                     {task.estado}
                   </span>
                 </div>
-                <p className="font-medium text-stone-800 dark:text-stone-200 line-clamp-2 leading-snug">
+                <p className="font-medium ledger-text-primary line-clamp-2 leading-snug">
                   {task.tarea}
                 </p>
-                <div className="mt-1.5 flex items-center justify-between text-[10px] text-stone-400">
+                <div className="mt-1.5 flex items-center justify-between text-[10px] ledger-text-muted">
                   <span className="truncate">{task.solicitante}</span>
                   <span className="text-amber-600 dark:text-amber-400 font-medium">
                     Sin asignar
@@ -396,10 +396,10 @@ export default function TaskCalendarView({
           {DAYS_OF_WEEK.map((dayName, idx) => (
             <div
               key={dayName}
-              className={`py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg ${
+              className={`py-2 text-[11px] sm:text-xs font-bold uppercase tracking-wider rounded-lg bg-[var(--ledger-surface-muted)] border border-[var(--ledger-border-subtle)] ${
                 idx >= 5
-                  ? "text-stone-400 dark:text-stone-500 bg-stone-100/40 dark:bg-stone-900/30"
-                  : "text-stone-600 dark:text-stone-300 bg-stone-100/70 dark:bg-stone-900/60"
+                  ? "ledger-text-muted opacity-80"
+                  : "ledger-text-secondary"
               }`}
             >
               {dayName}
@@ -421,11 +421,11 @@ export default function TaskCalendarView({
                 onDrop={(e) => handleDrop(e, cell.dateStr)}
                 className={`min-h-[110px] sm:min-h-[135px] p-1 sm:p-2 rounded-xl border flex flex-col justify-between transition-all relative ${
                   isDragTarget
-                    ? "border-amber-500 bg-amber-500/10 dark:bg-amber-950/40 ring-2 ring-amber-400/50 scale-[1.01] z-10"
+                    ? "border-amber-500 bg-amber-500/15 ring-2 ring-amber-400/50 scale-[1.01] z-10"
                     : cell.isCurrentMonth
-                    ? "border-stone-200/80 dark:border-stone-800 bg-white dark:bg-stone-900/90"
-                    : "border-stone-200/40 dark:border-stone-800/40 bg-stone-50/50 dark:bg-stone-950/40 opacity-70"
-                } ${cell.isToday ? "ring-2 ring-stone-900/20 dark:ring-stone-100/20" : ""}`}
+                    ? "border-[var(--ledger-card-border)] bg-[var(--ledger-card-bg)]"
+                    : "border-[var(--ledger-border-subtle)] bg-[var(--ledger-surface-muted)] opacity-60"
+                } ${cell.isToday ? "ring-2 ring-amber-500/50" : ""}`}
               >
                 {/* Day number & indicators */}
                 <div className="flex items-center justify-between mb-1">
@@ -434,15 +434,15 @@ export default function TaskCalendarView({
                       cell.isToday
                         ? "bg-amber-500 text-stone-950 font-black shadow-xs"
                         : cell.isCurrentMonth
-                        ? "text-stone-800 dark:text-stone-200"
-                        : "text-stone-400 dark:text-stone-600"
+                        ? "ledger-text-primary font-bold"
+                        : "ledger-text-muted"
                     }`}
                   >
                     {cell.dayNum}
                   </span>
 
                   {dayTasks.length > 0 && (
-                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+                    <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-full ledger-badge">
                       {dayTasks.length}
                     </span>
                   )}
@@ -469,10 +469,10 @@ export default function TaskCalendarView({
                           isDragging ? "opacity-30 scale-95" : "hover:shadow-xs"
                         } ${
                           isCompleted
-                            ? "bg-stone-50 dark:bg-stone-800/40 border-stone-200 dark:border-stone-800 text-stone-400 line-through"
+                            ? "bg-[var(--ledger-surface-muted)] border-[var(--ledger-border-subtle)] ledger-text-muted line-through"
                             : isEssential
-                            ? "bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-800 text-stone-900 dark:text-stone-100 font-semibold"
-                            : "bg-white dark:bg-stone-800 border-stone-200 dark:border-stone-700 text-stone-800 dark:text-stone-200"
+                            ? "bg-amber-500/15 border-amber-400/50 ledger-text-primary font-semibold"
+                            : "bg-[var(--ledger-surface)] border-[var(--ledger-card-border)] ledger-text-primary hover:border-amber-400"
                         }`}
                         title={`#${task.id}: ${task.tarea} (${task.solicitante}) - Arrastra a otro día para cambiar fecha límite`}
                       >
@@ -480,15 +480,15 @@ export default function TaskCalendarView({
                           <div className="flex items-center gap-1 min-w-0">
                             <GripVertical
                               size={11}
-                              className="text-stone-300 dark:text-stone-600 group-hover:text-amber-500 shrink-0 transition-colors"
+                              className="ledger-text-muted group-hover:text-amber-500 shrink-0 transition-colors"
                             />
-                            <span className="font-mono font-black text-[10px] text-stone-500 shrink-0">
+                            <span className="font-mono font-black text-[10px] ledger-text-muted shrink-0">
                               #{task.id}
                             </span>
                             {isEssential && (
                               <Flame size={11} className="text-amber-500 fill-amber-500 shrink-0" />
                             )}
-                            <span className="truncate font-medium">{task.tarea}</span>
+                            <span className="truncate font-medium ledger-text-primary">{task.tarea}</span>
                           </div>
 
                           <button

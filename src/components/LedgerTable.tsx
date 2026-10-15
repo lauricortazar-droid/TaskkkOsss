@@ -23,15 +23,24 @@ import {
   Flame,
   ChevronsDown,
   ChevronsUp,
+  Palette,
 } from "lucide-react";
 import { TaskItem, StatusFilter, DomainType, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { buildWhatsAppUrl } from "../utils/whatsapp";
 import { playChime } from "../utils/audio";
 import { calculateUrgencyScore } from "../utils/urgencyScore";
+import {
+  getLedgerContrastStyles,
+  getSavedLedgerTheme,
+  saveLedgerTheme,
+  subscribeToLedgerTheme,
+  LedgerThemeConfig,
+} from "../utils/contrastColor";
 import TaskItemRow from "./TaskItemRow";
 import TaskCardMobile from "./TaskCardMobile";
 import TaskCalendarView from "./TaskCalendarView";
+import LedgerAppearanceModal from "./LedgerAppearanceModal";
 
 interface LedgerTableProps {
   tasks: TaskItem[];
@@ -85,6 +94,27 @@ export default function LedgerTable({
   });
 
   const [forceExpandedAll, setForceExpandedAll] = useState<boolean | null>(null);
+
+  // Estado del tema de apariencia del Ledger con contraste automático
+  const [ledgerTheme, setLedgerTheme] = useState<LedgerThemeConfig>(getSavedLedgerTheme());
+  const [showLedgerAppearanceModal, setShowLedgerAppearanceModal] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeToLedgerTheme((theme) => {
+      setLedgerTheme(theme);
+    });
+    return () => unsub();
+  }, []);
+
+  const contrastStyles = useMemo(
+    () => getLedgerContrastStyles(ledgerTheme.bg),
+    [ledgerTheme.bg]
+  );
+
+  const handleSaveLedgerTheme = async (newCfg: Partial<LedgerThemeConfig>) => {
+    const saved = await saveLedgerTheme(newCfg);
+    setLedgerTheme(saved);
+  };
 
   useEffect(() => {
     const handleResize = () => {
@@ -188,25 +218,26 @@ export default function LedgerTable({
   return (
     <div
       id="ledger-maestro-section"
-      className="rounded-2xl border border-stone-200 dark:border-stone-800 bg-white dark:bg-stone-900 shadow-sm overflow-hidden"
+      className="ledger-container rounded-2xl border border-[var(--ledger-border)] shadow-sm overflow-hidden transition-all duration-300"
+      style={contrastStyles}
     >
       {/* Header bar */}
-      <div className="p-4 sm:p-5 border-b border-stone-200 dark:border-stone-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="p-4 sm:p-5 border-b border-[var(--ledger-border)] flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-base sm:text-lg font-bold text-stone-900 dark:text-stone-100 tracking-tight">
+            <h3 className="text-base sm:text-lg font-bold ledger-text-primary tracking-tight">
               📋 Ledger Maestro de Tareas
             </h3>
-            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300">
+            <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold ledger-badge">
               {tasks.length} total
             </span>
             {activeCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-300 border border-blue-400/30">
                 {activeCount} abiertas
               </span>
             )}
           </div>
-          <p className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+          <p className="text-xs ledger-text-muted mt-0.5">
             Ley 1: Registro único y consecutivo • Ley 8: Ley del Foco
           </p>
         </div>
@@ -216,7 +247,7 @@ export default function LedgerTable({
           <div className="relative flex-1 sm:w-56 min-w-[150px]">
             <Search
               size={14}
-              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400"
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--ledger-text-muted)]"
             />
             <input
               id="ledger-search-input"
@@ -224,24 +255,24 @@ export default function LedgerTable({
               placeholder="Buscar tarea o solicitante..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-1 focus:ring-stone-400"
+              className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-[var(--ledger-border)] bg-[var(--ledger-input-bg)] text-xs ledger-text-primary placeholder:text-[var(--ledger-text-muted)] focus:outline-none focus:ring-1 focus:ring-amber-500"
             />
           </div>
 
           {/* View Mode Toggle: Tarjetas vs Tabla vs Calendario */}
-          <div className="flex items-center p-0.5 rounded-lg bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 shrink-0">
+          <div className="flex items-center p-0.5 rounded-lg bg-[var(--ledger-surface-muted)] border border-[var(--ledger-border)] shrink-0">
             <button
               type="button"
               id="ledger-view-cards-btn"
               onClick={() => setViewMode("cards")}
               className={`p-1.5 px-2 rounded-md text-xs font-semibold flex items-center gap-1 transition-all min-h-[36px] ${
                 viewMode === "cards"
-                  ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-2xs font-bold"
-                  : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+                  ? "bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] shadow-2xs font-bold ring-1 ring-[var(--ledger-border)]"
+                  : "text-[var(--ledger-text-muted)] hover:text-[var(--ledger-text-primary)]"
               }`}
               title="Vista Tarjetas (Mobile-First)"
             >
-              <LayoutGrid size={14} />
+              <LayoutGrid size={14} className={viewMode === "cards" ? "text-amber-500" : ""} />
               <span className="text-[11px]">Tarjetas</span>
             </button>
             <button
@@ -250,12 +281,12 @@ export default function LedgerTable({
               onClick={() => setViewMode("table")}
               className={`p-1.5 px-2 rounded-md text-xs font-semibold flex items-center gap-1 transition-all min-h-[36px] ${
                 viewMode === "table"
-                  ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-2xs font-bold"
-                  : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+                  ? "bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] shadow-2xs font-bold ring-1 ring-[var(--ledger-border)]"
+                  : "text-[var(--ledger-text-muted)] hover:text-[var(--ledger-text-primary)]"
               }`}
               title="Vista Tabla Ejecutiva"
             >
-              <TableIcon size={14} />
+              <TableIcon size={14} className={viewMode === "table" ? "text-amber-500" : ""} />
               <span className="text-[11px]">Tabla</span>
             </button>
             <button
@@ -264,8 +295,8 @@ export default function LedgerTable({
               onClick={() => setViewMode("calendar")}
               className={`p-1.5 px-2 rounded-md text-xs font-semibold flex items-center gap-1 transition-all min-h-[36px] ${
                 viewMode === "calendar"
-                  ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 shadow-2xs font-bold text-amber-600 dark:text-amber-400"
-                  : "text-stone-500 hover:text-stone-800 dark:hover:text-stone-200"
+                  ? "bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] shadow-2xs font-bold ring-1 ring-[var(--ledger-border)] text-amber-500"
+                  : "text-[var(--ledger-text-muted)] hover:text-[var(--ledger-text-primary)]"
               }`}
               title="Vista Calendario Mensual (Arrastrar para mover fecha límite)"
             >
@@ -285,7 +316,7 @@ export default function LedgerTable({
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs transition-all shrink-0 min-h-[36px] ${
               sortByUrgency
                 ? "bg-amber-500 text-stone-950 border-amber-600 shadow-xs ring-2 ring-amber-500/30 font-bold"
-                : "bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-amber-400 dark:hover:border-amber-600 hover:text-amber-600 font-medium"
+                : "bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] border-[var(--ledger-border)] hover:border-amber-400 font-medium"
             }`}
             title={
               sortByUrgency
@@ -307,7 +338,7 @@ export default function LedgerTable({
               className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                 sortByUrgency
                   ? "bg-stone-950 text-amber-400"
-                  : "bg-stone-100 dark:bg-stone-700 text-stone-500 dark:text-stone-400"
+                  : "ledger-badge"
               }`}
             >
               {sortByUrgency ? "ON" : "OFF"}
@@ -317,11 +348,30 @@ export default function LedgerTable({
           <button
             id="copy-markdown-ledger-btn"
             onClick={handleCopyMarkdown}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-stone-200 dark:border-stone-700 text-xs font-medium text-stone-600 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-800 transition-colors shrink-0 min-h-[36px]"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[var(--ledger-border)] bg-[var(--ledger-surface)] text-xs font-semibold ledger-text-primary hover:bg-[var(--ledger-surface-hover)] transition-colors shrink-0 min-h-[36px]"
             title="Copiar Ledger en formato Markdown exacto"
           >
             {copiedMd ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
             <span className="hidden sm:inline">Copiar</span> Markdown
+          </button>
+
+          {/* Botón de Apariencia del Ledger con Contraste Automático */}
+          <button
+            type="button"
+            id="btn-apariencia-ledger"
+            onClick={() => {
+              setShowLedgerAppearanceModal(true);
+              playChime("tick");
+            }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[var(--ledger-border)] bg-[var(--ledger-surface)] hover:bg-[var(--ledger-surface-hover)] text-xs font-semibold ledger-text-primary transition-all shrink-0 min-h-[36px] shadow-2xs cursor-pointer"
+            title="Elegir color de fondo del Ledger (con contraste automático de texto)"
+          >
+            <Palette size={14} className="text-amber-500" />
+            <span className="hidden sm:inline">Color / Tema</span>
+            <span
+              className="w-2.5 h-2.5 rounded-full border border-stone-400/80 shadow-2xs"
+              style={{ backgroundColor: ledgerTheme.bg }}
+            />
           </button>
 
           {onOpenWorkspaceModal && (
@@ -339,9 +389,9 @@ export default function LedgerTable({
       </div>
 
       {/* Filter Tabs */}
-      <div className="px-4 py-2 bg-stone-50/70 dark:bg-stone-900/50 border-b border-stone-200 dark:border-stone-800 flex flex-wrap items-center justify-between gap-2 text-xs">
+      <div className="px-4 py-2 bg-[var(--ledger-surface-muted)] border-b border-[var(--ledger-border)] flex flex-wrap items-center justify-between gap-2 text-xs">
         <div className="flex items-center gap-1 overflow-x-auto py-1">
-          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mr-1">
+          <span className="text-[11px] font-semibold ledger-text-muted uppercase tracking-wider mr-1">
             Estado:
           </span>
           {(["Activas", "Todos", "Pendiente", "En Proceso", "Completado"] as StatusFilter[]).map(
@@ -351,8 +401,8 @@ export default function LedgerTable({
                 onClick={() => setStatusFilter(status)}
                 className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
                   statusFilter === status
-                    ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 shadow-xs"
-                    : "text-stone-500 hover:text-stone-900 dark:text-stone-400 dark:hover:text-stone-200"
+                    ? "bg-amber-500 text-stone-950 font-bold shadow-xs ring-1 ring-amber-600/40"
+                    : "ledger-text-secondary hover:bg-[var(--ledger-surface-hover)]"
                 }`}
               >
                 {status}
@@ -365,7 +415,7 @@ export default function LedgerTable({
 
         {/* Domain quick filter */}
         <div className="flex items-center gap-1 overflow-x-auto py-1">
-          <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider mr-1">
+          <span className="text-[11px] font-semibold ledger-text-muted uppercase tracking-wider mr-1">
             Dominio:
           </span>
           {(
@@ -384,8 +434,8 @@ export default function LedgerTable({
               onClick={() => setDomainFilter(domain)}
               className={`px-2 py-0.5 rounded-md text-[11px] font-medium transition-all ${
                 domainFilter === domain
-                  ? "bg-stone-200 text-stone-900 dark:bg-stone-700 dark:text-stone-100"
-                  : "text-stone-400 hover:text-stone-700 dark:hover:text-stone-300"
+                  ? "bg-amber-500 text-stone-950 font-bold shadow-2xs"
+                  : "ledger-text-secondary hover:ledger-text-primary hover:bg-[var(--ledger-surface-hover)]"
               }`}
             >
               {domain}
@@ -396,9 +446,9 @@ export default function LedgerTable({
 
       {/* Tag Filter Row */}
       {availableTags.length > 0 && (
-        <div className="px-4 py-2 bg-stone-100/60 dark:bg-stone-900/40 border-b border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2 text-xs overflow-x-auto">
+        <div className="px-4 py-2 bg-[var(--ledger-surface-muted)] border-b border-[var(--ledger-border)] flex items-center justify-between gap-2 text-xs overflow-x-auto">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider flex items-center gap-1 shrink-0">
+            <span className="text-[11px] font-semibold ledger-text-muted uppercase tracking-wider flex items-center gap-1 shrink-0">
               <TagIcon size={12} />
               Etiquetas:
             </span>
@@ -406,8 +456,8 @@ export default function LedgerTable({
               onClick={() => setTagFilter("Todas")}
               className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
                 tagFilter === "Todas"
-                  ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 font-semibold shadow-xs"
-                  : "text-stone-600 dark:text-stone-300 hover:bg-stone-200/60 dark:hover:bg-stone-800"
+                  ? "bg-amber-500 text-stone-950 font-bold shadow-xs"
+                  : "ledger-text-secondary hover:ledger-text-primary hover:bg-[var(--ledger-surface-hover)]"
               }`}
             >
               Todas
@@ -421,13 +471,13 @@ export default function LedgerTable({
                   onClick={() => setTagFilter(isSelected ? "Todas" : tag.nombre)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                     isSelected
-                      ? `${getTagColorClass(tag.color)} ring-2 ring-stone-900/20 dark:ring-stone-100/30 shadow-xs font-semibold`
-                      : "border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:border-stone-400"
+                      ? `${getTagColorClass(tag.color)} ring-2 ring-amber-500/50 shadow-xs font-bold`
+                      : "border-[var(--ledger-border)] bg-[var(--ledger-surface)] ledger-text-secondary hover:border-amber-400"
                   }`}
                 >
                   <span>{tag.nombre}</span>
                   {count > 0 && (
-                    <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-stone-200 dark:bg-stone-700 font-bold">
+                    <span className="text-[10px] px-1.5 py-0.2 rounded-full ledger-badge font-bold">
                       {count}
                     </span>
                   )}
@@ -439,7 +489,7 @@ export default function LedgerTable({
           {onOpenManageTags && (
             <button
               onClick={onOpenManageTags}
-              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 dark:text-amber-400 hover:underline shrink-0 px-2 py-1 rounded-md hover:bg-amber-100/50 dark:hover:bg-amber-950/40"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-amber-600 hover:underline shrink-0 px-2 py-1 rounded-md hover:bg-amber-500/15"
               title="Añadir, editar o eliminar etiquetas personalizadas"
             >
               <Settings2 size={13} />
@@ -498,19 +548,19 @@ export default function LedgerTable({
           />
         </div>
       ) : (viewMode === "cards" || isMobileScreen) ? (
-        <div className="p-3 sm:p-4 bg-stone-50/40 dark:bg-stone-950/20">
+        <div className="p-3 sm:p-4 bg-transparent">
           {/* Mobile Collapsible Header Bar: Expand/Collapse All and Tasks count */}
-          <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-stone-200/60 dark:border-stone-800/60 flex-wrap">
+          <div className="flex items-center justify-between gap-2 pb-3 mb-2 border-b border-[var(--ledger-border)] flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-stone-900 dark:text-stone-100 flex items-center gap-1.5">
+              <span className="text-xs font-bold ledger-text-primary flex items-center gap-1.5">
                 <LayoutGrid size={14} className="text-amber-500" />
                 <span>Tarjetas Colapsables</span>
               </span>
-              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-stone-200/80 dark:bg-stone-800 text-stone-700 dark:text-stone-300">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full ledger-badge">
                 {displayedTasks.length} {displayedTasks.length === 1 ? "tarea" : "tareas"}
               </span>
               {isMobileScreen && viewMode === "table" && (
-                <span className="text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-100/70 dark:bg-amber-950/40 px-2 py-0.5 rounded-md hidden xs:inline">
+                <span className="text-[10px] font-medium text-amber-700 bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 rounded-md hidden xs:inline">
                   Vista móvil adaptada (&lt; 768px)
                 </span>
               )}
@@ -523,7 +573,7 @@ export default function LedgerTable({
                   setForceExpandedAll(true);
                   playChime("tick");
                 }}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-[var(--ledger-border)] bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] hover:bg-[var(--ledger-surface-hover)] transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
                 title="Expandir todas las tarjetas para ver todos los detalles"
               >
                 <ChevronsDown size={13} />
@@ -536,7 +586,7 @@ export default function LedgerTable({
                   setForceExpandedAll(false);
                   playChime("tick");
                 }}
-                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:bg-stone-100 dark:hover:bg-stone-700 transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-[var(--ledger-border)] bg-[var(--ledger-surface)] text-[var(--ledger-text-primary)] hover:bg-[var(--ledger-surface-hover)] transition-colors flex items-center gap-1 min-h-[36px] shadow-2xs active:scale-95"
                 title="Colapsar todas las tarjetas para vista ultra compacta"
               >
                 <ChevronsUp size={13} />
@@ -546,7 +596,7 @@ export default function LedgerTable({
           </div>
 
           {displayedTasks.length === 0 ? (
-            <div className="py-12 text-center text-stone-400 text-xs">
+            <div className="py-12 text-center ledger-text-muted text-xs">
               No hay tareas registradas que coincidan con el filtro.
             </div>
           ) : (
@@ -578,13 +628,13 @@ export default function LedgerTable({
         /* Main Table — Exact columns: ID | Solicitante | Tarea | Estado | Fecha de Ingreso */
         <div className="overflow-x-auto">
           <table id="ledger-maestro-table" className="w-full text-left text-xs sm:text-sm">
-            <thead className="bg-stone-100/80 dark:bg-stone-800/60 text-stone-600 dark:text-stone-300 font-semibold border-b border-stone-200 dark:border-stone-800 select-none">
+            <thead className="ledger-header font-semibold border-b border-[var(--ledger-border)] select-none">
               <tr>
-                <th className="py-3 px-3 sm:px-4 w-14 text-center">ID</th>
-                <th className="py-3 px-3 sm:px-4 w-32 sm:w-44">Solicitante</th>
-                <th className="py-3 px-3 sm:px-4">Tarea</th>
-                <th className="py-3 px-3 sm:px-4 w-36 text-center">Estado</th>
-                <th className="py-3 px-3 sm:px-4 w-32 text-center">
+                <th className="py-3 px-3 sm:px-4 w-14 text-center ledger-text-secondary">ID</th>
+                <th className="py-3 px-3 sm:px-4 w-32 sm:w-44 ledger-text-secondary">Solicitante</th>
+                <th className="py-3 px-3 sm:px-4 ledger-text-secondary">Tarea</th>
+                <th className="py-3 px-3 sm:px-4 w-36 text-center ledger-text-secondary">Estado</th>
+                <th className="py-3 px-3 sm:px-4 w-32 text-center ledger-text-secondary">
                   <button
                     type="button"
                     onClick={() => {
@@ -593,8 +643,8 @@ export default function LedgerTable({
                     }}
                     className={`inline-flex items-center gap-1 mx-auto transition-colors font-semibold ${
                       sortByUrgency
-                        ? "text-amber-600 dark:text-amber-400 font-bold"
-                        : "hover:text-amber-600 dark:hover:text-amber-400"
+                        ? "text-amber-500 font-bold"
+                        : "hover:text-amber-500"
                     }`}
                     title={
                       sortByUrgency
@@ -613,13 +663,13 @@ export default function LedgerTable({
                     />
                   </button>
                 </th>
-                <th className="py-3 px-3 sm:px-4 w-24 text-right">Acción</th>
+                <th className="py-3 px-3 sm:px-4 w-24 text-right ledger-text-secondary">Acción</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-stone-100 dark:divide-stone-800">
+            <tbody className="divide-y divide-[var(--ledger-border-subtle)]">
               {displayedTasks.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-stone-400">
+                  <td colSpan={6} className="py-8 text-center ledger-text-muted">
                     No hay tareas registradas que coincidan con el filtro.
                   </td>
                 </tr>
@@ -650,7 +700,7 @@ export default function LedgerTable({
       )}
 
       {/* Footer advice from Laura-OS / Pepe principles */}
-      <div className="px-4 py-2.5 bg-stone-50 dark:bg-stone-900/60 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between text-[11px] text-stone-500 dark:text-stone-400">
+      <div className="px-4 py-2.5 bg-[var(--ledger-surface-muted)] border-t border-[var(--ledger-border)] flex items-center justify-between text-[11px] ledger-text-muted">
         <span>
           💡 <em>"Una sola prioridad principal. Menos tareas activas, más tareas terminadas."</em>
         </span>
@@ -688,6 +738,14 @@ export default function LedgerTable({
           </div>
         </div>
       )}
+
+      {/* Modal de Configuración de Apariencia del Ledger */}
+      <LedgerAppearanceModal
+        isOpen={showLedgerAppearanceModal}
+        onClose={() => setShowLedgerAppearanceModal(false)}
+        currentConfig={ledgerTheme}
+        onSaveConfig={handleSaveLedgerTheme}
+      />
     </div>
   );
 }

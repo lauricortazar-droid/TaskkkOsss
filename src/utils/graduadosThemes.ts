@@ -33,6 +33,7 @@ export interface GraduadosTheme {
   badgeText: string;
   cardHeaderGradient: string;
   cardHeaderBorder: string;
+  nameTextColor: string;
   avatarGradient: string;
   avatarText: string;
   driveButtonGradient: string;
@@ -43,10 +44,72 @@ export interface GraduadosTheme {
   ringColor: string;
 }
 
+export interface NameColorPreset {
+  id: string;
+  name: string;
+  hex: string;
+  twClass: string;
+  description: string;
+}
+
+export const GRADUADOS_NAME_COLOR_PRESETS: NameColorPreset[] = [
+  {
+    id: "carbon_black",
+    name: "Negro Carbón Élite",
+    hex: "#0c0a09",
+    twClass: "text-stone-950",
+    description: "Máxima legibilidad, nitidez y contraste oficial (Recomendado)",
+  },
+  {
+    id: "navy_blue",
+    name: "Azul Marino Oficial",
+    hex: "#0f224a",
+    twClass: "text-blue-950",
+    description: "Tono institucional solemne y elegante",
+  },
+  {
+    id: "royal_indigo",
+    name: "Índigo Profundo",
+    hex: "#1e1b4b",
+    twClass: "text-indigo-950",
+    description: "Armoniza con los diplomados y la identidad académica",
+  },
+  {
+    id: "forest_emerald",
+    name: "Verde Bosque Distinción",
+    hex: "#022c22",
+    twClass: "text-emerald-950",
+    description: "Tono de prestigio y distinción ceremonial",
+  },
+  {
+    id: "imperial_purple",
+    name: "Púrpura Imperial",
+    hex: "#3b0764",
+    twClass: "text-purple-950",
+    description: "Distinción académica superior",
+  },
+  {
+    id: "ruby_garnet",
+    name: "Rubí Ceremonial",
+    hex: "#4c0519",
+    twClass: "text-rose-950",
+    description: "Tono borgoña de excelencia protocolaria",
+  },
+  {
+    id: "graphite_slate",
+    name: "Grafito Pizarra",
+    hex: "#0f172a",
+    twClass: "text-slate-900",
+    description: "Contraste moderno con sobriedad ejecutiva",
+  },
+];
+
 export interface GraduadosThemeConfig {
   themeId: GraduadosThemeId;
   applyToPublicPortal: boolean;
   customHex?: string;
+  nameColorHex?: string;
+  nameColorPreset?: string;
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -70,8 +133,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-amber-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-stone-850 dark:via-stone-800 dark:to-stone-850",
+      "bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-stone-900 dark:via-stone-800 dark:to-stone-900",
     cardHeaderBorder: "border-indigo-100 dark:border-stone-700",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -100,8 +164,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-emerald-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 dark:from-stone-850 dark:via-emerald-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 dark:from-stone-900 dark:via-emerald-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-emerald-200 dark:border-emerald-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-emerald-600 via-teal-600 to-green-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -130,8 +195,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-amber-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-rose-50/90 via-amber-50/60 to-rose-50/90 dark:from-stone-850 dark:via-rose-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-rose-50/90 via-amber-50/60 to-rose-50/90 dark:from-stone-900 dark:via-rose-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-rose-200 dark:border-rose-900/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-rose-600 via-red-600 to-amber-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -160,8 +226,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-yellow-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-orange-50/80 dark:from-stone-850 dark:via-amber-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-amber-50/90 via-yellow-50/70 to-orange-50/80 dark:from-stone-900 dark:via-amber-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-amber-200 dark:border-amber-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-amber-600 via-yellow-500 to-orange-600",
     avatarText: "text-stone-950 font-black",
     driveButtonGradient:
@@ -190,8 +257,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-cyan-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-cyan-50/90 via-sky-50/70 to-blue-50/90 dark:from-stone-850 dark:via-cyan-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-cyan-50/90 via-sky-50/70 to-blue-50/90 dark:from-stone-900 dark:via-cyan-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-cyan-200 dark:border-cyan-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-cyan-600 via-sky-600 to-blue-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -220,8 +288,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-purple-300",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-purple-50/90 via-violet-50/70 to-fuchsia-50/90 dark:from-stone-850 dark:via-purple-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-purple-50/90 via-violet-50/70 to-fuchsia-50/90 dark:from-stone-900 dark:via-purple-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-purple-200 dark:border-purple-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-purple-600 via-violet-600 to-fuchsia-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -252,10 +321,11 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     cardHeaderGradient:
       "bg-gradient-to-r from-stone-100 via-amber-50/40 to-stone-100 dark:from-stone-900 dark:via-amber-950/20 dark:to-stone-900",
     cardHeaderBorder: "border-amber-300/50 dark:border-amber-600/40",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-stone-900 via-amber-700 to-stone-800",
     avatarText: "text-amber-300",
     driveButtonGradient:
-      "bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 hover:from-stone-850 hover:to-stone-750 text-amber-300 border border-amber-400/40",
+      "bg-gradient-to-r from-stone-900 via-stone-800 to-stone-900 hover:from-stone-800 hover:to-stone-700 text-amber-300 border border-amber-400/40",
     statDriveBg: "bg-amber-50/70 dark:bg-amber-950/40 border-amber-200/50 dark:border-amber-800/40",
     statDriveText: "text-amber-800 dark:text-amber-300",
     activeYearFilterBg: "bg-stone-900 dark:bg-amber-500 text-white dark:text-stone-950 shadow-md",
@@ -280,8 +350,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-orange-400",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-orange-50/90 via-rose-50/70 to-amber-50/90 dark:from-stone-850 dark:via-orange-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-orange-50/90 via-rose-50/70 to-amber-50/90 dark:from-stone-900 dark:via-orange-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-orange-200 dark:border-orange-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-orange-600 via-rose-600 to-amber-500",
     avatarText: "text-white",
     driveButtonGradient:
@@ -310,8 +381,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-teal-300",
     badgeText: "text-slate-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-teal-50/90 via-slate-50/80 to-cyan-50/90 dark:from-stone-850 dark:via-teal-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-teal-50/90 via-slate-50/80 to-cyan-50/90 dark:from-stone-900 dark:via-teal-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-teal-200 dark:border-teal-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-teal-500 via-cyan-600 to-emerald-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -340,8 +412,9 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     badgeBg: "bg-pink-300",
     badgeText: "text-stone-950",
     cardHeaderGradient:
-      "bg-gradient-to-r from-pink-50/90 via-rose-50/70 to-pink-50/90 dark:from-stone-850 dark:via-pink-950/30 dark:to-stone-850",
+      "bg-gradient-to-r from-pink-50/90 via-rose-50/70 to-pink-50/90 dark:from-stone-900 dark:via-pink-950/30 dark:to-stone-900",
     cardHeaderBorder: "border-pink-200 dark:border-pink-800/60",
+    nameTextColor: "text-stone-950",
     avatarGradient: "bg-gradient-to-tr from-pink-600 via-rose-600 to-purple-600",
     avatarText: "text-white",
     driveButtonGradient:
@@ -372,6 +445,7 @@ export const GRADUADOS_THEMES: GraduadosTheme[] = [
     cardHeaderGradient:
       "bg-gradient-to-r from-slate-100 via-stone-50 to-slate-100 dark:from-slate-900 dark:via-stone-900 dark:to-slate-900",
     cardHeaderBorder: "border-slate-300 dark:border-slate-700",
+    nameTextColor: "text-slate-950",
     avatarGradient: "bg-gradient-to-tr from-slate-700 via-slate-800 to-zinc-900",
     avatarText: "text-white",
     driveButtonGradient:
@@ -406,6 +480,8 @@ export function getSavedThemeConfig(): GraduadosThemeConfig {
           themeId: parsed.themeId,
           applyToPublicPortal: Boolean(parsed.applyToPublicPortal),
           customHex: parsed.customHex,
+          nameColorHex: parsed.nameColorHex,
+          nameColorPreset: parsed.nameColorPreset,
           updatedAt: parsed.updatedAt,
         };
       }
@@ -434,6 +510,10 @@ export async function saveThemeConfig(
         ? config.applyToPublicPortal
         : current.applyToPublicPortal,
     customHex: config.customHex !== undefined ? config.customHex : current.customHex,
+    nameColorHex:
+      config.nameColorHex !== undefined ? config.nameColorHex : current.nameColorHex,
+    nameColorPreset:
+      config.nameColorPreset !== undefined ? config.nameColorPreset : current.nameColorPreset,
     updatedAt: new Date().toISOString(),
     updatedBy: userEmail || "Laura (Admin)",
   };

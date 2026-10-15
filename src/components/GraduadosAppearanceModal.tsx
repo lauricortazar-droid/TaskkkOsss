@@ -17,6 +17,8 @@ import {
   GRADUADOS_THEMES,
   GraduadosThemeConfig,
   getGraduadosTheme,
+  GRADUADOS_NAME_COLOR_PRESETS,
+  NameColorPreset,
 } from "../utils/graduadosThemes";
 import { playChime } from "../utils/audio";
 
@@ -36,6 +38,12 @@ export default function GraduadosAppearanceModal({
   const [selectedThemeId, setSelectedThemeId] = useState<GraduadosThemeId>(
     currentConfig.themeId || "indigo_royal"
   );
+  const [nameColorPreset, setNameColorPreset] = useState<string>(
+    currentConfig.nameColorPreset || "carbon_black"
+  );
+  const [nameColorHex, setNameColorHex] = useState<string>(
+    currentConfig.nameColorHex || "#0c0a09"
+  );
   const [applyToPublicPortal, setApplyToPublicPortal] = useState<boolean>(
     currentConfig.applyToPublicPortal !== false
   );
@@ -51,12 +59,20 @@ export default function GraduadosAppearanceModal({
     playChime("tick");
   };
 
+  const handleSelectNameColor = (preset: NameColorPreset) => {
+    setNameColorPreset(preset.id);
+    setNameColorHex(preset.hex);
+    playChime("tick");
+  };
+
   const handleApply = async () => {
     setIsSaving(true);
     try {
       await onSaveConfig({
         themeId: selectedThemeId,
         applyToPublicPortal,
+        nameColorHex: nameColorHex || "#0c0a09",
+        nameColorPreset,
       });
       playChime("success");
       setSavedSuccess(true);
@@ -73,6 +89,8 @@ export default function GraduadosAppearanceModal({
 
   const handleResetDefault = () => {
     setSelectedThemeId("indigo_royal");
+    setNameColorPreset("carbon_black");
+    setNameColorHex("#0c0a09");
     setApplyToPublicPortal(true);
     playChime("tick");
   };
@@ -170,7 +188,10 @@ export default function GraduadosAppearanceModal({
                       CM
                     </div>
                     <div>
-                      <div className="text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100">
+                      <div
+                        className="text-xs sm:text-sm font-black transition-colors"
+                        style={{ color: nameColorHex || "#0c0a09" }}
+                      >
                         Carlos Mendoza Ramos
                       </div>
                       <div className="flex items-center gap-1 text-[10px] text-stone-500 dark:text-stone-400">
@@ -298,6 +319,107 @@ export default function GraduadosAppearanceModal({
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* COLOR DEL TEXTO DE LOS NOMBRES DE GRADUADOS */}
+          <div className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 space-y-3.5 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span className="text-xs font-black uppercase tracking-wider text-stone-700 dark:text-stone-300 flex items-center gap-1.5">
+                  <Palette size={14} className="text-amber-500" />
+                  <span>Color del Texto de los Nombres de Graduados:</span>
+                </span>
+                <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                  Selecciona un color de alto contraste para que los nombres de los graduados sean 100% nítidos y legibles en cualquier pantalla.
+                </p>
+              </div>
+
+              {/* Indicador del color seleccionado actualmente */}
+              <div className="flex items-center gap-2 self-start sm:self-auto px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 text-xs">
+                <span
+                  className="w-4 h-4 rounded-full border border-white dark:border-stone-900 shadow-xs shrink-0"
+                  style={{ backgroundColor: nameColorHex || "#0c0a09" }}
+                />
+                <span className="font-mono font-bold text-[11px] text-stone-700 dark:text-stone-300">
+                  {nameColorHex || "#0c0a09"}
+                </span>
+              </div>
+            </div>
+
+            {/* Presets de Color de Nombre */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+              {GRADUADOS_NAME_COLOR_PRESETS.map((preset) => {
+                const isSelected =
+                  nameColorPreset === preset.id || nameColorHex.toLowerCase() === preset.hex.toLowerCase();
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleSelectNameColor(preset)}
+                    className={`p-3 rounded-xl border text-left flex items-start gap-3 transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-amber-50/60 dark:bg-amber-950/30 border-amber-500/60 ring-2 ring-amber-400/30 shadow-xs"
+                        : "bg-stone-50 dark:bg-stone-850 border-stone-200 dark:border-stone-800 hover:border-stone-300 dark:hover:border-stone-700"
+                    }`}
+                  >
+                    <span
+                      className="w-5 h-5 rounded-full border-2 border-white dark:border-stone-850 shadow-xs shrink-0 mt-0.5 flex items-center justify-center text-white"
+                      style={{ backgroundColor: preset.hex }}
+                    >
+                      {isSelected && <Check size={11} className="stroke-[3]" />}
+                    </span>
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className="text-xs font-black truncate"
+                          style={{ color: preset.hex }}
+                        >
+                          {preset.name}
+                        </span>
+                        {preset.id === "carbon_black" && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-amber-400/90 text-stone-950 shrink-0">
+                            Recomendado
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] text-stone-500 dark:text-stone-400 block line-clamp-1 mt-0.5">
+                        {preset.description}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Selector de Color Hex Personalizado */}
+            <div className="pt-2 border-t border-stone-100 dark:border-stone-800 flex flex-wrap items-center gap-3">
+              <span className="text-[11px] font-bold text-stone-500 dark:text-stone-400">
+                O ingresa un color personalizado:
+              </span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={nameColorHex.startsWith("#") ? nameColorHex : "#0c0a09"}
+                  onChange={(e) => {
+                    setNameColorHex(e.target.value);
+                    setNameColorPreset("custom");
+                  }}
+                  className="w-8 h-8 rounded-lg border border-stone-300 dark:border-stone-700 cursor-pointer p-0.5 bg-white dark:bg-stone-800"
+                  title="Elegir color personalizado con selector"
+                />
+                <input
+                  type="text"
+                  value={nameColorHex || "#0c0a09"}
+                  onChange={(e) => {
+                    setNameColorHex(e.target.value);
+                    setNameColorPreset("custom");
+                  }}
+                  placeholder="#0c0a09"
+                  className="w-28 px-2.5 py-1 text-xs font-mono rounded-lg border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-100"
+                />
+              </div>
             </div>
           </div>
 

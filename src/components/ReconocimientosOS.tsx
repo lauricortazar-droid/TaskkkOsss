@@ -3657,7 +3657,12 @@ export default function ReconocimientosOS({
                       </div>
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-base sm:text-lg font-black text-stone-900 dark:text-stone-100 leading-tight tracking-tight">
+                          <h4
+                            className={`text-base sm:text-lg font-black leading-tight tracking-tight ${
+                              themeConfig.nameColorHex ? "" : (activeGraduadosTheme.nameTextColor || "text-stone-950")
+                            }`}
+                            style={themeConfig.nameColorHex ? { color: themeConfig.nameColorHex } : undefined}
+                          >
                             {g.nombreFormateado}
                           </h4>
                         </div>
