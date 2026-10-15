@@ -28,7 +28,7 @@ service cloud.firestore {
 
     function isValidTask(data) {
       return data.keys().hasAll(['userId', 'tarea', 'estado', 'fechaIngreso']) &&
-             data.keys().hasOnly(['userId', 'tarea', 'estado', 'fechaIngreso', 'fechaLimite', 'dominio', 'etiquetas', 'notas', 'solicitante', 'telefono', 'contacto', 'id', 'resources', 'googleTaskId', 'googleCalendarEventId', 'googleCalendarHtmlLink', 'googleSyncStatus', 'lastGoogleSync', 'imagenReferencia', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['userId', 'tarea', 'estado', 'fechaIngreso', 'fechaLimite', 'dominio', 'etiquetas', 'notas', 'solicitante', 'telefono', 'contacto', 'id', 'resources', 'googleTaskId', 'googleCalendarEventId', 'googleCalendarHtmlLink', 'googleSyncStatus', 'lastGoogleSync', 'imagenReferencia', 'changeLog', 'createdAt', 'updatedAt']) &&
              data.userId is string && data.userId == request.auth.uid &&
              data.tarea is string && data.tarea.size() > 0 && data.tarea.size() <= 1000 &&
              data.estado is string && data.estado in ['Pendiente', 'En Proceso', 'Completada', 'Completado'] &&
@@ -45,7 +45,8 @@ service cloud.firestore {
              (!('lastGoogleSync' in data) || (data.lastGoogleSync is string && data.lastGoogleSync.size() <= 50)) &&
              (!('imagenReferencia' in data) || (data.imagenReferencia is string && data.imagenReferencia.size() <= 50000)) &&
              (!('resources' in data) || (data.resources is list && data.resources.size() <= 50)) &&
-             (!('etiquetas' in data) || (data.etiquetas is list && data.etiquetas.size() <= 20));
+             (!('etiquetas' in data) || (data.etiquetas is list && data.etiquetas.size() <= 20)) &&
+             (!('changeLog' in data) || (data.changeLog is list && data.changeLog.size() <= 100));
     }
 
     function isValidGlobalResource(data) {
@@ -145,6 +146,11 @@ service cloud.firestore {
 
     // Solicitudes de Impresión de Reconocimientos (Mini Web App y Task-OS)
     match /reconocimientos/{recId} {
+      allow create, read, update, delete: if true;
+    }
+
+    // Configuración general y apariencia personalizada (Admin)
+    match /app_settings/{settingId} {
       allow create, read, update, delete: if true;
     }
 

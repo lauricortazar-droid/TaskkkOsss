@@ -23,6 +23,12 @@ import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { playChime } from "../utils/audio";
 import { buildWhatsAppUrl } from "../utils/whatsapp";
+import {
+  getGraduadosTheme,
+  subscribeToThemeConfig,
+  getSavedThemeConfig,
+  GraduadosThemeConfig,
+} from "../utils/graduadosThemes";
 
 interface PublicReconocimientosImpresosModalProps {
   isOpen: boolean;
@@ -116,6 +122,22 @@ export default function PublicReconocimientosImpresosModal({
   const [selectedYear, setSelectedYear] = useState<string>("todos");
   const [onlyWithDrive, setOnlyWithDrive] = useState(true); // Default to true as user requested only those linked to drive
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Tema de color sincronizado con el Admin
+  const [themeConfig, setThemeConfig] = useState<GraduadosThemeConfig>(getSavedThemeConfig());
+  useEffect(() => {
+    const unsub = subscribeToThemeConfig((cfg) => {
+      setThemeConfig(cfg);
+    });
+    return () => unsub();
+  }, []);
+
+  const activeTheme = useMemo(() => {
+    if (themeConfig.applyToPublicPortal) {
+      return getGraduadosTheme(themeConfig.themeId);
+    }
+    return getGraduadosTheme("indigo_royal");
+  }, [themeConfig]);
 
   // Firestore real-time listener para reconocimientos
   useEffect(() => {
@@ -305,8 +327,9 @@ export default function PublicReconocimientosImpresosModal({
       <div className="bg-stone-50 dark:bg-stone-900 border border-stone-200 dark:border-stone-800 rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
         
         {/* Header Modal - Destacado GRADUADOS */}
-        <div className="p-5 sm:p-6 bg-gradient-to-r from-blue-700 via-indigo-700 to-purple-900 text-white flex items-center justify-between shrink-0 shadow-md">
-          <div className="flex items-center gap-3.5">
+        <div className={`p-5 sm:p-6 ${activeTheme.bannerGradient} text-white flex items-center justify-between shrink-0 shadow-md relative overflow-hidden transition-all duration-300`}>
+          <div className={`absolute right-0 top-0 w-64 h-64 ${activeTheme.bannerGlow} rounded-full blur-2xl pointer-events-none`} />
+          <div className="relative z-10 flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner shrink-0">
               🎓
             </div>
@@ -315,11 +338,11 @@ export default function PublicReconocimientosImpresosModal({
                 <h2 className="text-xl sm:text-2xl font-black tracking-tight flex items-center gap-2">
                   <span>GRADUADOS</span>
                 </h2>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[10px] font-black uppercase tracking-wider shadow-xs">
+                <span className={`px-2.5 py-0.5 rounded-full ${activeTheme.badgeBg} ${activeTheme.badgeText} text-[10px] font-black uppercase tracking-wider shadow-xs`}>
                   Reconocimientos Impresos & Drive
                 </span>
               </div>
-              <p className="text-xs sm:text-sm text-indigo-100 max-w-xl font-medium mt-0.5">
+              <p className={`text-xs sm:text-sm ${activeTheme.bannerSubtitle} max-w-xl font-medium mt-0.5`}>
                 Consulta los reconocimientos oficiales ya impresos con enlace público a Google Drive. Haz clic en tu diploma para abrirlo y guardarlo.
               </p>
             </div>
@@ -507,7 +530,7 @@ export default function PublicReconocimientosImpresosModal({
                     {/* Encabezado Principal del Graduado */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-stone-100 dark:border-stone-800">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider">
+                        <div className={`w-10 h-10 rounded-2xl ${activeTheme.avatarGradient} ${activeTheme.avatarText} flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider`}>
                           {initials}
                         </div>
                         <div>
@@ -597,7 +620,7 @@ export default function PublicReconocimientosImpresosModal({
                                 href={dip.driveUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                                className={`px-3 py-1.5 rounded-xl ${activeTheme.driveButtonGradient} font-bold text-xs transition shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95`}
                                 title="Abrir reconocimiento en Google Drive"
                               >
                                 <span>Ver Reconocimiento Digital</span>

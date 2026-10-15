@@ -17,12 +17,14 @@ import {
   Link2,
   ExternalLink,
   Flame,
+  History,
 } from "lucide-react";
 import { TaskItem, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { playChime } from "../utils/audio";
 import { getTaskUrgencyDetails } from "../utils/urgencyScore";
 import TaskResourceCard from "./TaskResourceCard";
+import TaskChangeLogPanel from "./TaskChangeLogPanel";
 
 interface TaskItemRowProps {
   task: TaskItem;
@@ -67,6 +69,9 @@ export default function TaskItemRow({
 
   // Popover state for assigning tags
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+
+  // State for change log dropdown panel
+  const [isChangeLogOpen, setIsChangeLogOpen] = useState(false);
 
   // Sync draftNotes if task.notas changes externally
   useEffect(() => {
@@ -478,7 +483,46 @@ export default function TaskItemRow({
                   )}
                 </div>
               )}
+
+              {/* Registro de Cambios (Log) Toggle Button */}
+              <button
+                type="button"
+                id={`task-changelog-toggle-${task.id}`}
+                onClick={() => setIsChangeLogOpen(!isChangeLogOpen)}
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border transition-colors ${
+                  task.changeLog && task.changeLog.length > 0
+                    ? isChangeLogOpen
+                      ? "bg-stone-900 text-white dark:bg-stone-100 dark:text-stone-900 border-stone-900 dark:border-stone-100 shadow-2xs"
+                      : "bg-stone-100 text-stone-700 dark:bg-stone-800 dark:text-stone-300 border-stone-200 dark:border-stone-700 hover:border-amber-400"
+                    : "border-stone-200 dark:border-stone-700 text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                }`}
+                title={
+                  task.changeLog && task.changeLog.length > 0
+                    ? `Ver historial de cambios (${task.changeLog.length} eventos)`
+                    : "Ver registro de cambios de esta tarea"
+                }
+              >
+                <History size={10} className="text-amber-500" />
+                <span>
+                  {task.changeLog && task.changeLog.length > 0
+                    ? `Log (${task.changeLog.length})`
+                    : "Log"}
+                </span>
+                {isChangeLogOpen ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+              </button>
             </div>
+
+            {/* Droppable Change Log Panel */}
+            {isChangeLogOpen && (
+              <div className="pt-2 animate-in fade-in duration-200">
+                <TaskChangeLogPanel
+                  taskId={task.id}
+                  taskTitle={task.tarea}
+                  changeLog={task.changeLog}
+                  onClose={() => setIsChangeLogOpen(false)}
+                />
+              </div>
+            )}
           </div>
         </div>
       </td>

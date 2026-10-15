@@ -56,6 +56,20 @@ function sanitizeTaskForFirestore(task: TaskItem, userId: string) {
     }));
   }
 
+  if (Array.isArray(task.changeLog) && task.changeLog.length > 0) {
+    payload.changeLog = task.changeLog.slice(0, 100).map((log) => {
+      const item: Record<string, any> = {
+        id: String(log.id || `log-${Date.now()}`).slice(0, 50),
+        fecha: String(log.fecha || new Date().toISOString()).slice(0, 50),
+        tipo: String(log.tipo || "cambio_estado").slice(0, 50),
+        descripcion: String(log.descripcion || "").slice(0, 300),
+      };
+      if (log.valorAnterior) item.valorAnterior = String(log.valorAnterior).slice(0, 200);
+      if (log.valorNuevo) item.valorNuevo = String(log.valorNuevo).slice(0, 200);
+      return item;
+    });
+  }
+
   return payload;
 }
 
@@ -185,6 +199,16 @@ export function subscribeToFirestoreTasks(
                   url: r.url || "",
                   title: r.title || r.url || "",
                   addedAt: r.addedAt || new Date().toISOString(),
+                }))
+              : [],
+            changeLog: Array.isArray(data.changeLog)
+              ? data.changeLog.map((l: any) => ({
+                  id: l.id || `log-${Math.random()}`,
+                  fecha: l.fecha || new Date().toISOString(),
+                  tipo: l.tipo || "cambio_estado",
+                  descripcion: l.descripcion || "",
+                  valorAnterior: l.valorAnterior || undefined,
+                  valorNuevo: l.valorNuevo || undefined,
                 }))
               : [],
           });

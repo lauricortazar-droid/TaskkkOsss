@@ -16,12 +16,14 @@ import {
   Calendar as CalendarIcon,
   Plus,
   Zap,
+  History,
 } from "lucide-react";
 import { TaskItem, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { playChime } from "../utils/audio";
 import { getTaskUrgencyDetails } from "../utils/urgencyScore";
 import TaskResourceCard from "./TaskResourceCard";
+import TaskChangeLogPanel from "./TaskChangeLogPanel";
 
 export interface TaskCardMobileProps {
   task: TaskItem;
@@ -72,6 +74,9 @@ export default function TaskCardMobile({
 
   // Tag popover state
   const [isTagPopoverOpen, setIsTagPopoverOpen] = useState(false);
+
+  // Change Log panel state
+  const [isChangeLogOpen, setIsChangeLogOpen] = useState(false);
 
   // Urgency details inline toggle
   const [showUrgencyBreakdown, setShowUrgencyBreakdown] = useState(false);
@@ -534,6 +539,36 @@ export default function TaskCardMobile({
                     )}
                   </button>
                 </div>
+              </div>
+            )}
+          </div>
+
+          {/* Registro de Cambios (Log) Accordion & Panel */}
+          <div className="pt-0.5">
+            <button
+              type="button"
+              onClick={() => setIsChangeLogOpen(!isChangeLogOpen)}
+              className="flex items-center justify-between w-full py-2 px-2.5 rounded-lg bg-stone-100/60 dark:bg-stone-850 text-xs text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-stone-100 transition-colors min-h-[40px]"
+            >
+              <span className="flex items-center gap-1.5 font-semibold">
+                <History size={13} className="text-amber-600 dark:text-amber-400" />
+                <span>
+                  {task.changeLog && task.changeLog.length > 0
+                    ? `Registro de cambios (${task.changeLog.length})`
+                    : "Registro de cambios (Log)"}
+                </span>
+              </span>
+              {isChangeLogOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+            </button>
+
+            {isChangeLogOpen && (
+              <div className="mt-2">
+                <TaskChangeLogPanel
+                  taskId={task.id}
+                  taskTitle={task.tarea}
+                  changeLog={task.changeLog}
+                  onClose={() => setIsChangeLogOpen(false)}
+                />
               </div>
             )}
           </div>

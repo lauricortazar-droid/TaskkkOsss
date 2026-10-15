@@ -56,6 +56,7 @@ import {
   LonasOrder,
   SolicitudItem,
 } from "./types";
+import { appendTaskChangeLog, createChangeLogEntry } from "./utils/taskChangeLog";
 import { routeExecutiveInput } from "./lib/executiveRouter";
 import {
   saveTaskToFirestore,
@@ -1326,6 +1327,14 @@ export default function App() {
       },
       notas: `${solicitud.descripcion}${solicitud.folio ? `\n[Ticket: ${solicitud.folio}]` : ""}`,
       etiquetas: Array.from(new Set(customTags)),
+      changeLog: [
+        createChangeLogEntry(
+          "creacion",
+          `Tarea creada a partir de solicitud de ${solicitud.solicitante}`,
+          undefined,
+          "Pendiente"
+        ),
+      ],
     };
 
     const updatedTasks = [newTask, ...tasks];
@@ -1618,6 +1627,13 @@ export default function App() {
             ...(t.resources || []),
             { url, title, addedAt: new Date().toISOString() },
           ],
+          changeLog: appendTaskChangeLog(
+            t,
+            "recurso_anadido",
+            `Recurso adjuntado: ${title}`,
+            undefined,
+            url
+          ),
         };
       }
       return t;
@@ -1954,6 +1970,22 @@ export default function App() {
           }
         }
 
+        // Ensure changeLog is initialized on new tasks
+        if (newTasks.length > 0) {
+          newTasks.forEach((target) => {
+            if (!target.changeLog || target.changeLog.length === 0) {
+              target.changeLog = [
+                createChangeLogEntry(
+                  "creacion",
+                  `Tarea registrada en Ledger por ${target.solicitante}`,
+                  undefined,
+                  target.estado
+                ),
+              ];
+            }
+          });
+        }
+
         setTasks(data.tasks);
 
         // Sync new tasks to Firestore if user logged in
@@ -2068,6 +2100,14 @@ export default function App() {
         taskData.resources && taskData.resources.length > 0
           ? taskData.resources
           : undefined,
+      changeLog: [
+        createChangeLogEntry(
+          "creacion",
+          `Pendiente registrado manualmente en el Ledger`,
+          undefined,
+          "Pendiente"
+        ),
+      ],
     };
 
     const updatedTasks = [newTask, ...tasks];
@@ -2104,6 +2144,7 @@ export default function App() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === id) {
+          const oldStatus = t.estado;
           const updated = {
             ...t,
             estado: newStatus,
@@ -2111,6 +2152,13 @@ export default function App() {
               newStatus === "Completado"
                 ? t.fechaCompletado || new Date().toISOString()
                 : undefined,
+            changeLog: appendTaskChangeLog(
+              t,
+              "cambio_estado",
+              `Estado cambiado de "${oldStatus}" a "${newStatus}"`,
+              oldStatus,
+              newStatus
+            ),
           };
           if (auth.currentUser) {
             saveTaskToFirestore(auth.currentUser.uid, updated);
@@ -2207,7 +2255,20 @@ export default function App() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === id) {
-          const updated = { ...t, fechaLimite: fechaLimite || undefined };
+          const oldFecha = t.fechaLimite;
+          const updated = {
+            ...t,
+            fechaLimite: fechaLimite || undefined,
+            changeLog: appendTaskChangeLog(
+              t,
+              "fecha_limite",
+              fechaLimite
+                ? `Fecha límite establecida al ${fechaLimite}`
+                : `Fecha límite eliminada`,
+              oldFecha,
+              fechaLimite || undefined
+            ),
+          };
           if (auth.currentUser) {
             saveTaskToFirestore(auth.currentUser.uid, updated);
           }
@@ -2352,7 +2413,19 @@ export default function App() {
           const next = exists
             ? current.filter((e) => e !== tagName)
             : [...current, tagName];
-          const updated = { ...t, etiquetas: next };
+          const updated = {
+            ...t,
+            etiquetas: next,
+            changeLog: appendTaskChangeLog(
+              t,
+              "etiqueta_modificada",
+              exists
+                ? `Etiqueta "${tagName}" removida`
+                : `Etiqueta "${tagName}" asignada`,
+              current.join(", ") || "(ninguna)",
+              next.join(", ") || "(ninguna)"
+            ),
+          };
           if (auth.currentUser) {
             saveTaskToFirestore(auth.currentUser.uid, updated);
           }
@@ -2367,7 +2440,29 @@ export default function App() {
     setTasks((prev) =>
       prev.map((t) => {
         if (t.id === taskId) {
-          const updated = { ...t, notas: notes };
+          const oldNotes = t.notas || "";
+          const trimmed = (notes || "").trim();
+          let logType: "nota_anadida" | "nota_editada" | "nota_eliminada" = "nota_editada";
+          let desc = "Nota actualizada";
+          if (!oldNotes && trimmed) {
+            logType = "nota_anadida";
+            desc = "Nota añadida";
+          } else if (oldNotes && !trimmed) {
+            logType = "nota_eliminada";
+            desc = "Nota eliminada";
+          }
+
+          const updated = {
+            ...t,
+            notas: trimmed || undefined,
+            changeLog: appendTaskChangeLog(
+              t,
+              logType,
+              desc,
+              oldNotes || undefined,
+              trimmed || undefined
+            ),
+          };
           if (auth.currentUser) {
             saveTaskToFirestore(auth.currentUser.uid, updated);
           }

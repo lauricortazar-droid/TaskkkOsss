@@ -53,12 +53,21 @@ import {
   X,
   FileBadge,
   Award,
+  Palette,
 } from "lucide-react";
 import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
 import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
 import WhatsAppComposerModal from "./WhatsAppComposerModal";
 import ReconocimientoFormModal from "./ReconocimientoFormModal";
 import PublicReconocimientosImpresosModal, { formatNombrePrimerApellido } from "./PublicReconocimientosImpresosModal";
+import GraduadosAppearanceModal from "./GraduadosAppearanceModal";
+import {
+  GraduadosThemeConfig,
+  getGraduadosTheme,
+  subscribeToThemeConfig,
+  saveThemeConfig,
+  getSavedThemeConfig,
+} from "../utils/graduadosThemes";
 import { ImportTarget } from "../utils/driveImportParser";
 import {
   ResponsiveContainer,
@@ -304,6 +313,26 @@ export default function ReconocimientosOS({
   const [showDriveImportModal, setShowDriveImportModal] = useState(false);
   const [driveImportTarget, setDriveImportTarget] = useState<ImportTarget>("solicitudes");
   const [alumnosList, setAlumnosList] = useState<AlumnoPendiente[]>([]);
+
+  // Menú y Configuración de Temas de Apariencia para el Tablero de Graduados (Admin)
+  const [showThemeModal, setShowThemeModal] = useState(false);
+  const [themeConfig, setThemeConfig] = useState<GraduadosThemeConfig>(getSavedThemeConfig());
+  const activeGraduadosTheme = useMemo(
+    () => getGraduadosTheme(themeConfig.themeId),
+    [themeConfig.themeId]
+  );
+
+  useEffect(() => {
+    const unsub = subscribeToThemeConfig((cfg) => {
+      setThemeConfig(cfg);
+    });
+    return () => unsub();
+  }, []);
+
+  const handleSaveThemeConfig = async (newCfg: Partial<GraduadosThemeConfig>) => {
+    const saved = await saveThemeConfig(newCfg, userEmail || "Laura (Admin)");
+    setThemeConfig(saved);
+  };
 
   // Sincronización de alumnos pendientes para verificación de duplicados
   useEffect(() => {
@@ -2257,7 +2286,7 @@ export default function ReconocimientosOS({
             }}
             className={`px-4 py-2 rounded-xl text-xs font-black transition flex items-center gap-2 cursor-pointer ${
               activeView === "graduados"
-                ? "bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-sm ring-2 ring-indigo-500/20"
+                ? `${activeGraduadosTheme.avatarGradient} text-white shadow-sm ring-2 ${activeGraduadosTheme.ringColor}`
                 : "text-stone-600 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-100"
             }`}
           >
@@ -3323,26 +3352,38 @@ export default function ReconocimientosOS({
       {activeView === "graduados" && (
         <div id="tablero-graduados-view" className="space-y-6 animate-in fade-in duration-200">
           
-          {/* Header Banner de Graduados */}
-          <div className="p-6 sm:p-7 rounded-3xl bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950 text-white shadow-xl relative overflow-hidden border border-indigo-500/40">
-            <div className="absolute right-0 top-0 w-96 h-96 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
+          {/* Header Banner de Graduados con Tema Dinámico */}
+          <div className={`p-6 sm:p-7 rounded-3xl ${activeGraduadosTheme.bannerGradient} ${activeGraduadosTheme.bannerBorder} text-white shadow-xl relative overflow-hidden border transition-all duration-300`}>
+            <div className={`absolute right-0 top-0 w-96 h-96 ${activeGraduadosTheme.bannerGlow} rounded-full blur-3xl pointer-events-none`} />
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-5">
               <div className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="p-2 rounded-2xl bg-white/10 backdrop-blur-md text-white text-xl flex items-center justify-center">
                     🎓
                   </span>
-                  <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full bg-amber-400 text-stone-950 font-mono shadow-xs">
+                  <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full ${activeGraduadosTheme.badgeBg} ${activeGraduadosTheme.badgeText} font-mono shadow-xs`}>
                     OFICIAL • GRADUADOS
                   </span>
-                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/10 text-indigo-200 border border-white/20">
+                  <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/10 text-white/90 border border-white/20">
                     Diplomas: 2022 - 2025 - 2026
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowThemeModal(true)}
+                    className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-white/15 hover:bg-white/25 text-white border border-white/30 flex items-center gap-1.5 transition cursor-pointer"
+                    title="Clic para cambiar el tema de apariencia"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full border border-white/60"
+                      style={{ backgroundColor: activeGraduadosTheme.colors.accent }}
+                    />
+                    <span>Tema: {activeGraduadosTheme.name}</span>
+                  </button>
                 </div>
                 <h3 className="text-2xl sm:text-3xl font-black tracking-tight text-white">
                   Tablero Visual de Graduados
                 </h3>
-                <p className="text-xs sm:text-sm text-indigo-100 max-w-2xl leading-relaxed">
+                <p className={`text-xs sm:text-sm ${activeGraduadosTheme.bannerSubtitle} max-w-2xl leading-relaxed`}>
                   Directorio de graduados con reconocimientos impresos vinculados a Google Drive.
                   Laura agrega o actualiza el enlace público de Drive en cualquier momento sin que el alumno deba configurar nada.
                 </p>
@@ -3350,6 +3391,25 @@ export default function ReconocimientosOS({
 
               {/* Botones de acción rápida en cabecera */}
               <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
+                {/* Botón Menú de Temas de Apariencia (Admin) */}
+                <button
+                  type="button"
+                  id="btn-tema-apariencia-graduados"
+                  onClick={() => {
+                    setShowThemeModal(true);
+                    playChime("tick");
+                  }}
+                  className="px-4 py-2.5 rounded-2xl bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/40 text-white font-black text-xs transition flex items-center gap-2 shadow-xs active:scale-95 cursor-pointer ring-1 ring-white/30"
+                  title="Elegir tema de apariencia y color para el tablero de graduados"
+                >
+                  <Palette size={15} className="stroke-[2.5]" />
+                  <span>Tema de Color</span>
+                  <span
+                    className="w-2.5 h-2.5 rounded-full border border-white shadow-xs"
+                    style={{ backgroundColor: activeGraduadosTheme.colors.accent }}
+                  />
+                </button>
+
                 <button
                   type="button"
                   id="btn-copiar-lista-graduados"
@@ -3530,9 +3590,9 @@ export default function ReconocimientosOS({
                   {filteredGraduadosList.length}
                 </span>
               </div>
-              <div className="p-2.5 rounded-2xl bg-indigo-50/60 dark:bg-indigo-950/30">
-                <span className="text-[10px] font-bold text-indigo-500 block uppercase">Con Enlace Drive</span>
-                <span className="font-mono font-black text-sm text-indigo-700 dark:text-indigo-300">
+              <div className={`p-2.5 rounded-2xl ${activeGraduadosTheme.statDriveBg}`}>
+                <span className={`text-[10px] font-bold block uppercase ${activeGraduadosTheme.statDriveText}`}>Con Enlace Drive</span>
+                <span className={`font-mono font-black text-sm ${activeGraduadosTheme.statDriveText}`}>
                   {filteredGraduadosList.filter((g) => g.hasAnyDrive).length}
                 </span>
               </div>
@@ -3584,9 +3644,9 @@ export default function ReconocimientosOS({
                   className="p-5 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs hover:shadow-md transition-all space-y-4"
                 >
                   {/* Encabezado Principal estilizado: Nombre y Primer Apellido */}
-                  <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-50/90 via-indigo-50/70 to-purple-50/90 dark:from-stone-850 dark:via-stone-800 dark:to-stone-850 border border-indigo-100 dark:border-stone-700 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className={`p-4 rounded-2xl ${activeGraduadosTheme.cardHeaderGradient} ${activeGraduadosTheme.cardHeaderBorder} border shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all`}>
                     <div className="flex items-start gap-3">
-                      <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 text-white flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider">
+                      <div className={`w-11 h-11 rounded-2xl ${activeGraduadosTheme.avatarGradient} ${activeGraduadosTheme.avatarText} flex items-center justify-center text-xs font-black shadow-xs shrink-0 tracking-wider`}>
                         {(g.nombreFormateado || "E")
                           .split(" ")
                           .filter(Boolean)
@@ -3803,7 +3863,7 @@ export default function ReconocimientosOS({
                                       href={d.driveUrl}
                                       target="_blank"
                                       rel="noreferrer"
-                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black text-xs shadow-xs transition transform active:scale-95 cursor-pointer"
+                                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${activeGraduadosTheme.driveButtonGradient} font-black text-xs shadow-xs transition transform active:scale-95 cursor-pointer`}
                                       title="Abrir reconocimiento digital en Google Drive"
                                     >
                                       <ExternalLink size={13} />
@@ -5401,6 +5461,20 @@ export default function ReconocimientosOS({
           </div>
         </div>
       )}
+
+      {/* MODAL DEL MENÚ DE TEMAS DE APARIENCIA (ADMIN) */}
+      <GraduadosAppearanceModal
+        isOpen={showThemeModal}
+        onClose={() => setShowThemeModal(false)}
+        currentConfig={themeConfig}
+        onSaveConfig={handleSaveThemeConfig}
+      />
+
+      {/* MODAL DE PREVISUALIZACIÓN PÚBLICA DE GRADUADOS */}
+      <PublicReconocimientosImpresosModal
+        isOpen={showPublicDrivePreviewModal}
+        onClose={() => setShowPublicDrivePreviewModal(false)}
+      />
 
     </div>
   );

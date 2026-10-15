@@ -18,6 +18,7 @@ import {
 import { TaskItem, TagItem } from "../types";
 import { getTagColorClass } from "../utils/tagColors";
 import { playChime } from "../utils/audio";
+import TaskChangeLogPanel from "./TaskChangeLogPanel";
 
 interface TaskCalendarViewProps {
   tasks: TaskItem[];
@@ -644,6 +645,13 @@ export default function TaskCalendarView({
                 )}
               </div>
             </div>
+
+            {/* Task Change Log in Modal */}
+            <TaskChangeLogPanel
+              taskId={selectedTask.id}
+              taskTitle={selectedTask.tarea}
+              changeLog={selectedTask.changeLog}
+            />
 
             {/* Actions: Status change, Focus, WhatsApp */}
             <div className="pt-2 border-t border-stone-200 dark:border-stone-800 flex items-center justify-between gap-2">

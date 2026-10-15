@@ -34,6 +34,25 @@ export interface TaskResource {
   addedAt: string;
 }
 
+export type TaskChangeType =
+  | "creacion"
+  | "cambio_estado"
+  | "nota_anadida"
+  | "nota_editada"
+  | "nota_eliminada"
+  | "fecha_limite"
+  | "etiqueta_modificada"
+  | "recurso_anadido";
+
+export interface TaskChangeLogEntry {
+  id: string;
+  fecha: string; // ISO string
+  tipo: TaskChangeType;
+  descripcion: string;
+  valorAnterior?: string;
+  valorNuevo?: string;
+}
+
 export interface TaskItem {
   id: number;
   solicitante: string;
@@ -57,6 +76,7 @@ export interface TaskItem {
   googleSyncStatus?: "synced" | "pending" | "conflict";
   lastGoogleSync?: string; // Marca de tiempo ISO del último sincronizado
   fechaCompletado?: string; // ISO timestamp when status changed to Completado
+  changeLog?: TaskChangeLogEntry[]; // Historial de registro de cambios
 }
 
 export interface GlobalResource {
