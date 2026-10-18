@@ -36,11 +36,18 @@ import { db, auth, ensureAnonymousAuth } from "../lib/firebase";
 import { playChime } from "../utils/audio";
 import { downloadTicketImage } from "../utils/ticketGenerator";
 
+import {
+  PaymentAccountConfig,
+  getSavedPaymentConfig,
+  subscribeToPaymentConfig,
+} from "../utils/paymentConfig";
+
 interface ReconocimientoFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess?: (folio: string) => void;
   initialData?: any | null;
+  initialDiplomas?: any[] | null;
   onUpdated?: (updated: any) => void;
 }
 
@@ -66,9 +73,20 @@ export default function ReconocimientoFormModal({
   onClose,
   onSuccess,
   initialData,
+  initialDiplomas,
   onUpdated,
 }: ReconocimientoFormModalProps) {
   const isEditMode = Boolean(initialData);
+
+  // Dynamic payment config from Firestore / localStorage
+  const [paymentConfig, setPaymentConfig] = useState<PaymentAccountConfig>(getSavedPaymentConfig());
+
+  useEffect(() => {
+    const unsub = subscribeToPaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+    return () => unsub();
+  }, []);
 
   // Form fields
   const [nombre, setNombre] = useState("");
@@ -82,13 +100,25 @@ export default function ReconocimientoFormModal({
   const [telefono, setTelefono] = useState("");
   const [notas, setNotas] = useState("");
 
+  // Manual payment fields for administration / editing
+  const [editPagado, setEditPagado] = useState<boolean>(false);
+  const [editMetodoPago, setEditMetodoPago] = useState<string>("SPIN by OXXO");
+  const [editReferenciaPago, setEditReferenciaPago] = useState<string>("");
+  const [editFechaPago, setEditFechaPago] = useState<string>("");
+
   // Lista de diplomas solicitados (permite agregar más diplomas con un botón)
   const [diplomas, setDiplomas] = useState<Array<{
     id: string;
+    recordId?: string;
     diplomado: string;
     year: string;
     tipoImpresion: "Primera Impresión" | "Re-impresión";
+    costoManual?: number;
     driveUrl?: string;
+    impreso?: boolean;
+    pagado?: boolean;
+    metodoPago?: string;
+    referenciaPago?: string;
   }>>([
     {
       id: "diploma-1",
@@ -132,15 +162,45 @@ export default function ReconocimientoFormModal({
       setTelefono(initialData.telefono || "");
       setNotas(initialData.notas || "");
 
-      setDiplomas([
-        {
-          id: "diploma-edit-1",
-          diplomado: initialData.diplomado || "Liderazgo I",
-          year: String(initialData.year || "2026"),
-          tipoImpresion: (initialData.tipoImpresion as any) || "Primera Impresión",
-          driveUrl: initialData.driveUrl || "",
-        },
-      ]);
+      setEditPagado(Boolean(initialData.pagado));
+      setEditMetodoPago(initialData.metodoPago || "SPIN by OXXO");
+      setEditReferenciaPago(initialData.referenciaPago || "");
+      setEditFechaPago(initialData.fechaPago || "");
+
+      // If initialDiplomas provided and has items, use all of them!
+      if (initialDiplomas && Array.isArray(initialDiplomas) && initialDiplomas.length > 0) {
+        setDiplomas(
+          initialDiplomas.map((d: any, idx: number) => ({
+            id: `diploma-edit-${d.id || idx}`,
+            recordId: d.id,
+            diplomado: d.diplomado || "Liderazgo I",
+            year: String(d.year || "2026"),
+            tipoImpresion: (d.tipoImpresion as any) || "Primera Impresión",
+            costoManual: Number(d.costo) || (d.tipoImpresion === "Primera Impresión" ? 100 : 50),
+            driveUrl: d.driveUrl || "",
+            impreso: Boolean(d.impreso),
+            pagado: Boolean(d.pagado),
+            metodoPago: d.metodoPago || "",
+            referenciaPago: d.referenciaPago || "",
+          }))
+        );
+      } else {
+        setDiplomas([
+          {
+            id: `diploma-edit-${initialData.id}`,
+            recordId: initialData.id,
+            diplomado: initialData.diplomado || "Liderazgo I",
+            year: String(initialData.year || "2026"),
+            tipoImpresion: (initialData.tipoImpresion as any) || "Primera Impresión",
+            costoManual: Number(initialData.costo) || (initialData.tipoImpresion === "Primera Impresión" ? 100 : 50),
+            driveUrl: initialData.driveUrl || "",
+            impreso: Boolean(initialData.impreso),
+            pagado: Boolean(initialData.pagado),
+            metodoPago: initialData.metodoPago || "",
+            referenciaPago: initialData.referenciaPago || "",
+          },
+        ]);
+      }
     } else if (!initialData && isOpen) {
       // New record mode
       setNombre("");
@@ -152,6 +212,10 @@ export default function ReconocimientoFormModal({
       setEmail("");
       setTelefono("");
       setNotas("");
+      setEditPagado(false);
+      setEditMetodoPago("SPIN by OXXO");
+      setEditReferenciaPago("");
+      setEditFechaPago("");
       setDiplomas([
         {
           id: "diploma-1",
@@ -164,7 +228,7 @@ export default function ReconocimientoFormModal({
       setIsSuccess(false);
       setSubmittedData(null);
     }
-  }, [initialData, isOpen]);
+  }, [initialData, initialDiplomas, isOpen]);
 
   // States
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -241,6 +305,11 @@ export default function ReconocimientoFormModal({
       year: string;
       tipoImpresion: "Primera Impresión" | "Re-impresión";
       driveUrl: string;
+      costoManual: number;
+      impreso: boolean;
+      pagado: boolean;
+      metodoPago: string;
+      referenciaPago: string;
     }>
   ) => {
     setDiplomas((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
@@ -328,48 +397,74 @@ export default function ReconocimientoFormModal({
 
       // MODO EDICIÓN: Si estamos modificando un registro existente
       if (initialData) {
-        const primaryDiploma = diplomas[0] || {
-          diplomado: "Liderazgo I",
-          year: "2026",
-          tipoImpresion: "Primera Impresión",
-          driveUrl: "",
-        };
-        const itemCosto = primaryDiploma.tipoImpresion === "Primera Impresión" ? 100 : 50;
+        let firstUpdated: any = null;
 
-        const updatePayload: Record<string, any> = {
-          nombre: nombre.trim(),
-          rol: finalRol,
-          grupo: grupo.trim(),
-          zona: finalZona,
-          email: email.trim() || null,
-          telefono: telefono.trim() || null,
-          diplomado: primaryDiploma.diplomado || "Liderazgo I",
-          year: String(primaryDiploma.year || "2026"),
-          tipoImpresion: primaryDiploma.tipoImpresion,
-          costo: itemCosto,
-          driveUrl: primaryDiploma.driveUrl?.trim() || null,
-          notas: notas.trim() || null,
-          updatedAt: new Date().toISOString(),
-        };
+        for (let i = 0; i < diplomas.length; i++) {
+          const d = diplomas[i];
+          const itemCosto =
+            d.costoManual !== undefined
+              ? Number(d.costoManual)
+              : d.tipoImpresion === "Primera Impresión"
+              ? 100
+              : 50;
 
-        const targetId = initialData.id;
-        await Promise.allSettled([
-          updateDoc(doc(db, "reconocimientos", targetId), updatePayload),
-          updateDoc(doc(db, "solicitudes", targetId), updatePayload),
-          initialData.solicitudId
-            ? updateDoc(doc(db, "solicitudes", initialData.solicitudId), updatePayload)
-            : Promise.resolve(),
-          initialData.solicitudId
-            ? updateDoc(doc(db, "reconocimientos", initialData.solicitudId), updatePayload)
-            : Promise.resolve(),
-        ]);
+          const diplomaPayload: Record<string, any> = {
+            nombre: nombre.trim(),
+            rol: finalRol,
+            grupo: grupo.trim(),
+            zona: finalZona,
+            email: email.trim() || null,
+            telefono: telefono.trim() || null,
+            diplomado: d.diplomado || "Liderazgo I",
+            year: String(d.year || "2026"),
+            tipoImpresion: d.tipoImpresion,
+            costo: itemCosto,
+            driveUrl: d.driveUrl?.trim() || null,
+            pagado: editPagado,
+            metodoPago: editMetodoPago || null,
+            referenciaPago: editReferenciaPago.trim() || null,
+            fechaPago: editFechaPago || null,
+            notas: notas.trim() || null,
+            updatedAt: new Date().toISOString(),
+          };
+
+          if (d.recordId) {
+            // Actualizar documento existente
+            await Promise.allSettled([
+              updateDoc(doc(db, "reconocimientos", d.recordId), diplomaPayload),
+              updateDoc(doc(db, "solicitudes", d.recordId), diplomaPayload),
+            ]);
+            if (i === 0) {
+              firstUpdated = { ...initialData, ...diplomaPayload, id: d.recordId };
+            }
+          } else {
+            // ¡NUEVO RECONOCIMIENTO agregado a una persona que ya tiene uno o más!
+            const newDocPayload = {
+              ...diplomaPayload,
+              impreso: d.impreso !== undefined ? d.impreso : Boolean(initialData.impreso),
+              elaboradoDigital: Boolean(initialData.elaboradoDigital),
+              cuadernillos: Boolean(initialData.cuadernillos),
+              audio: Boolean(initialData.audio),
+              digital: Boolean(initialData.digital),
+              entregado: false,
+              createdAt: new Date().toISOString(),
+              timestamp: serverTimestamp(),
+            };
+
+            const newDocRef = await addDoc(collection(db, "solicitudes"), newDocPayload);
+            await setDoc(doc(db, "reconocimientos", newDocRef.id), {
+              ...newDocPayload,
+              solicitudId: newDocRef.id,
+            }).catch(() => null);
+
+            if (i === 0) {
+              firstUpdated = { ...newDocPayload, id: newDocRef.id };
+            }
+          }
+        }
 
         playChime("success");
-        onUpdated?.({
-          ...initialData,
-          ...updatePayload,
-          id: targetId,
-        });
+        onUpdated?.(firstUpdated || { ...initialData, nombre: nombre.trim() });
         setIsSubmitting(false);
         onClose();
         return;
@@ -799,25 +894,25 @@ export default function ReconocimientoFormModal({
                           💳 Datos de Transferencia o Depósito
                         </span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                          SPIN by OXXO
+                          {paymentConfig.banco}
                         </span>
                       </div>
 
                       <div className="space-y-2 text-xs text-gray-800">
                         <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/60">
                           <span className="text-gray-500 font-medium">Titular / Beneficiaria:</span>
-                          <strong className="font-extrabold text-gray-900">LAURA CORTAZAR</strong>
+                          <strong className="font-extrabold text-gray-900">{paymentConfig.titular}</strong>
                         </div>
 
-                        {/* CLABE SPIN */}
+                        {/* CLABE */}
                         <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/60">
                           <div>
-                            <span className="text-gray-500 block text-[10px] uppercase font-bold">CLABE SPIN</span>
-                            <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">728969000008838228</span>
+                            <span className="text-gray-500 block text-[10px] uppercase font-bold">CLABE</span>
+                            <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">{paymentConfig.clabe}</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopyText("728969000008838228", "clabe")}
+                            onClick={() => handleCopyText(paymentConfig.clabe, "clabe")}
                             className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition"
                           >
                             {copiedField === "clabe" ? (
@@ -834,15 +929,15 @@ export default function ReconocimientoFormModal({
                           </button>
                         </div>
 
-                        {/* TARJETA SPIN */}
+                        {/* TARJETA */}
                         <div className="flex items-center justify-between pb-1.5 border-b border-amber-200/60">
                           <div>
-                            <span className="text-gray-500 block text-[10px] uppercase font-bold">Tarjeta SPIN</span>
-                            <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">4217 4701 0045 4061</span>
+                            <span className="text-gray-500 block text-[10px] uppercase font-bold">Tarjeta / Cuenta</span>
+                            <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">{paymentConfig.tarjeta}</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopyText("4217470100454061", "tarjeta")}
+                            onClick={() => handleCopyText(paymentConfig.tarjeta, "tarjeta")}
                             className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition"
                           >
                             {copiedField === "tarjeta" ? (
@@ -859,30 +954,32 @@ export default function ReconocimientoFormModal({
                           </button>
                         </div>
 
-                        {/* CÓDIGO DE DEPÓSITO SPIN (OXXO) */}
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <span className="text-gray-500 block text-[10px] uppercase font-bold">Código Depósito SPIN (OXXO)</span>
-                            <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">2242-1787-4421-1658</span>
+                        {/* CÓDIGO DE DEPÓSITO OXXO */}
+                        {paymentConfig.codigoOxxo && (
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <span className="text-gray-500 block text-[10px] uppercase font-bold">Código Depósito OXXO</span>
+                              <span className="font-mono font-bold text-gray-900 text-xs sm:text-sm">{paymentConfig.codigoOxxo}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyText(paymentConfig.codigoOxxo, "oxxo")}
+                              className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition"
+                            >
+                              {copiedField === "oxxo" ? (
+                                <>
+                                  <Check size={12} className="text-emerald-600" />
+                                  <span className="text-emerald-700">¡Copiado!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy size={12} />
+                                  <span>Copiar</span>
+                                </>
+                              )}
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleCopyText("2242178744211658", "oxxo")}
-                            className="px-2.5 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 text-amber-900 font-bold text-[11px] flex items-center gap-1 transition"
-                          >
-                            {copiedField === "oxxo" ? (
-                              <>
-                                <Check size={12} className="text-emerald-600" />
-                                <span className="text-emerald-700">¡Copiado!</span>
-                              </>
-                            ) : (
-                              <>
-                                <Copy size={12} />
-                                <span>Copiar</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
+                        )}
                       </div>
                     </div>
 
@@ -1246,6 +1343,45 @@ export default function ReconocimientoFormModal({
                               </div>
                             </div>
 
+                            {/* Costo editable individualmente en Modo Edición */}
+                            {isEditMode && (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-gray-200">
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                    Costo Acordado para este Diploma ($ MXN)
+                                  </label>
+                                  <div className="relative">
+                                    <span className="absolute left-3 top-2 text-gray-400 font-bold text-xs">$</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={dip.costoManual !== undefined ? dip.costoManual : (dip.tipoImpresion === "Primera Impresión" ? 100 : 50)}
+                                      onChange={(e) => handleUpdateDiploma(dip.id, { costoManual: Number(e.target.value) || 0 })}
+                                      className="w-full pl-7 pr-3 py-1.5 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-bold focus:ring-2 focus:ring-indigo-600 focus:outline-hidden"
+                                    />
+                                  </div>
+                                </div>
+                                <div>
+                                  <label className="block text-[11px] font-semibold text-gray-700 mb-1">
+                                    ¿Ya impreso físicamente?
+                                  </label>
+                                  <div className="flex items-center gap-2 pt-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateDiploma(dip.id, { impreso: !dip.impreso })}
+                                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition border cursor-pointer ${
+                                        dip.impreso
+                                          ? "bg-purple-100 text-purple-900 border-purple-300"
+                                          : "bg-white text-gray-600 border-gray-300"
+                                      }`}
+                                    >
+                                      {dip.impreso ? "🖨️ Impreso (Listo)" : "⏳ Por imprimir"}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
                             {/* Enlace Google Drive (Solo en modo edición interna de administración) */}
                             {isEditMode && (
                               <div>
@@ -1279,25 +1415,123 @@ export default function ReconocimientoFormModal({
 
                     <hr className="border-gray-200" />
 
-                    {/* DATOS DE PAGO Y DEPÓSITO */}
+                    {/* SECCIÓN EXCLUSIVA: EDICIÓN MANUAL DE DATOS DE PAGO DEL ALUMNO (Admin) */}
+                    {isEditMode && (
+                      <div className="p-4 rounded-2xl bg-amber-50/80 border-2 border-amber-300 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="p-1 rounded-lg bg-amber-500 text-stone-950 font-black text-xs">
+                              💳
+                            </span>
+                            <h4 className="text-xs font-black text-amber-950 uppercase tracking-wider">
+                              Edición Manual de Datos de Pago
+                            </h4>
+                          </div>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-200 text-amber-900">
+                            Control Operativo
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                          {/* Toggle Estado de Pago */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                              Estado de Pago *
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setEditPagado(true)}
+                                className={`py-2 px-3 rounded-xl border font-black text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  editPagado
+                                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
+                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                                }`}
+                              >
+                                <span>✅ Pagado</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditPagado(false)}
+                                className={`py-2 px-3 rounded-xl border font-bold text-xs transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                                  !editPagado
+                                    ? "bg-amber-500 text-stone-950 border-amber-600 shadow-sm"
+                                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                                }`}
+                              >
+                                <span>⏳ Pendiente</span>
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Método de Pago */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-800 mb-1.5">
+                              Método de Pago
+                            </label>
+                            <select
+                              value={editMetodoPago}
+                              onChange={(e) => setEditMetodoPago(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 font-bold text-xs outline-none focus:ring-2 focus:ring-amber-500"
+                            >
+                              <option value="SPIN by OXXO">SPIN by OXXO</option>
+                              <option value="Transferencia SPEI / CLABE">Transferencia SPEI / CLABE</option>
+                              <option value="Depósito en Tienda OXXO">Depósito en Tienda OXXO</option>
+                              <option value="Efectivo">Efectivo</option>
+                              <option value="Beca / Exento">Beca / Exento ($0)</option>
+                              <option value="Otro">Otro</option>
+                            </select>
+                          </div>
+
+                          {/* Referencia o Folio de Pago */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-800 mb-1">
+                              Referencia / Folio Bancario
+                            </label>
+                            <input
+                              type="text"
+                              value={editReferenciaPago}
+                              onChange={(e) => setEditReferenciaPago(e.target.value)}
+                              placeholder="Ej. SPEI-849204, Ticket OXXO #492"
+                              className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-mono font-bold outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                          </div>
+
+                          {/* Fecha de Pago */}
+                          <div>
+                            <label className="block text-xs font-bold text-gray-800 mb-1">
+                              Fecha de Pago
+                            </label>
+                            <input
+                              type="date"
+                              value={editFechaPago}
+                              onChange={(e) => setEditFechaPago(e.target.value)}
+                              className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-gray-900 text-xs font-medium outline-none focus:ring-2 focus:ring-amber-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* DATOS DE PAGO Y DEPÓSITO OFICIALES */}
                     <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2.5">
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
-                          💳 Datos de Pago (Transferencia / Depósito SPIN OXXO)
+                          💳 Datos de Pago ({paymentConfig.banco})
                         </span>
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-900">
-                          Laura Cortazar
+                          {paymentConfig.titular}
                         </span>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
                         <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
                           <div>
-                            <span className="text-gray-400 block text-[9px] uppercase font-bold">CLABE SPIN</span>
-                            <span className="font-mono font-bold text-gray-900">728969000008838228</span>
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">CLABE</span>
+                            <span className="font-mono font-bold text-gray-900">{paymentConfig.clabe}</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopyText("728969000008838228", "clabe_form")}
+                            onClick={() => handleCopyText(paymentConfig.clabe, "clabe_form")}
                             className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
                             title="Copiar CLABE"
                           >
@@ -1307,12 +1541,12 @@ export default function ReconocimientoFormModal({
 
                         <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
                           <div>
-                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta SPIN</span>
-                            <span className="font-mono font-bold text-gray-900">4217 4701 0045 4061</span>
+                            <span className="text-gray-400 block text-[9px] uppercase font-bold">Tarjeta</span>
+                            <span className="font-mono font-bold text-gray-900">{paymentConfig.tarjeta}</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopyText("4217470100454061", "tarjeta_form")}
+                            onClick={() => handleCopyText(paymentConfig.tarjeta, "tarjeta_form")}
                             className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
                             title="Copiar Tarjeta"
                           >
@@ -1323,11 +1557,11 @@ export default function ReconocimientoFormModal({
                         <div className="p-2 rounded-xl bg-white/80 border border-amber-200/60 flex items-center justify-between">
                           <div>
                             <span className="text-gray-400 block text-[9px] uppercase font-bold">Depósito OXXO</span>
-                            <span className="font-mono font-bold text-gray-900">2242-1787-4421-1658</span>
+                            <span className="font-mono font-bold text-gray-900">{paymentConfig.codigoOxxo || "N/A"}</span>
                           </div>
                           <button
                             type="button"
-                            onClick={() => handleCopyText("2242178744211658", "oxxo_form")}
+                            onClick={() => handleCopyText(paymentConfig.codigoOxxo, "oxxo_form")}
                             className="p-1 rounded bg-amber-100 hover:bg-amber-200 text-amber-800"
                             title="Copiar Código OXXO"
                           >

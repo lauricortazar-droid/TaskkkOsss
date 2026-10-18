@@ -54,6 +54,8 @@ import {
   FileBadge,
   Award,
   Palette,
+  Settings,
+  Sparkles,
 } from "lucide-react";
 import AlumnosPendientesSection, { AlumnoPendiente } from "./AlumnosPendientesSection";
 import DriveDatabaseImportModal from "./DriveDatabaseImportModal";
@@ -61,6 +63,15 @@ import WhatsAppComposerModal from "./WhatsAppComposerModal";
 import ReconocimientoFormModal from "./ReconocimientoFormModal";
 import PublicReconocimientosImpresosModal, { formatNombrePrimerApellido } from "./PublicReconocimientosImpresosModal";
 import GraduadosAppearanceModal from "./GraduadosAppearanceModal";
+import PaymentConfigModal from "./PaymentConfigModal";
+import ExportListModal from "./ExportListModal";
+import DuplicateResolverModal from "./DuplicateResolverModal";
+import {
+  PaymentAccountConfig,
+  getSavedPaymentConfig,
+  subscribeToPaymentConfig,
+  buildPaymentShareText,
+} from "../utils/paymentConfig";
 import {
   GraduadosThemeConfig,
   getGraduadosTheme,
@@ -105,6 +116,9 @@ export interface ReconocimientoRecord {
   createdAt?: string;
   updatedAt?: string;
   entregadoAt?: string;
+  metodoPago?: string;
+  referenciaPago?: string;
+  fechaPago?: string;
 
   // Seguimiento operativo para Laura:
   elaboradoDigital: boolean;
@@ -283,11 +297,30 @@ export default function ReconocimientosOS({
 
   // Modal para agregar para la misma persona registrada la impresión de otros reconocimientos de otras generaciones
   const [personForExtra, setPersonForExtra] = useState<ReconocimientoRecord | null>(null);
+  const [extraDiplomado, setExtraDiplomado] = useState<string>("Liderazgo I");
   const [extraYear, setExtraYear] = useState<string>("2022");
   const [extraTipo, setExtraTipo] = useState<"Primera Impresión" | "Re-impresión">("Re-impresión");
+  const [extraCostoManual, setExtraCostoManual] = useState<number>(50);
+  const [extraImpreso, setExtraImpreso] = useState<boolean>(true);
+  const [extraPagado, setExtraPagado] = useState<boolean>(false);
   const [extraDriveUrl, setExtraDriveUrl] = useState("");
   const [extraNotas, setExtraNotas] = useState("");
   const [isSavingExtra, setIsSavingExtra] = useState(false);
+
+  // Estados para Modal de Configuración Manual de Datos de Pago
+  const [paymentConfig, setPaymentConfig] = useState<PaymentAccountConfig>(getSavedPaymentConfig());
+  const [showPaymentConfigModal, setShowPaymentConfigModal] = useState(false);
+
+  // Modal para Descargar Lista de Alumnos por Filtros / Estados / Impreso
+  const [showExportListModal, setShowExportListModal] = useState(false);
+
+  // Detector y Resolución de Alumnos / Registros Duplicados en Reconocimientos
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+  const [duplicateResolverTarget, setDuplicateResolverTarget] = useState<{
+    groupReason: "nombre" | "telefono" | "email";
+    matchValue?: string;
+    items: ReconocimientoRecord[];
+  } | null>(null);
 
   // Estados específicos para gestión manual de GRADUADOS como Administradora (Agregar, Editar, Eliminar)
   const [showAddGraduadoModal, setShowAddGraduadoModal] = useState(false);
@@ -326,7 +359,13 @@ export default function ReconocimientosOS({
     const unsub = subscribeToThemeConfig((cfg) => {
       setThemeConfig(cfg);
     });
-    return () => unsub();
+    const unsubPayment = subscribeToPaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+    return () => {
+      unsub();
+      unsubPayment();
+    };
   }, []);
 
   const handleSaveThemeConfig = async (newCfg: Partial<GraduadosThemeConfig>) => {
@@ -408,16 +447,8 @@ export default function ReconocimientosOS({
 
         const existingIdx = uniqueList.findIndex((existing) => {
           if (existing.id === item.id) return true;
-          if (item.solicitudId && (existing.id === item.solicitudId || existing.solicitudId === item.solicitudId)) return true;
+          if (item.solicitudId && existing.id === item.solicitudId) return true;
           if (existing.solicitudId && existing.solicitudId === item.id) return true;
-
-          const sameName = (existing.nombre || "").trim().toLowerCase() === normName;
-          const sameYear = String(existing.year || "").trim() === normYear;
-          const sameTipo = String(existing.tipoImpresion || "").trim() === normTipo;
-
-          if (sameName && sameYear && sameTipo) {
-            return true;
-          }
           return false;
         });
 
@@ -635,6 +666,36 @@ export default function ReconocimientosOS({
       playChime("tick");
     } catch (err) {
       console.error("Error al eliminar graduado total:", err);
+    }
+  };
+
+  // 3c. Resolver alumnos duplicados fusionando y eliminando el sobrante
+  const handleResolveDuplicatePair = async (
+    keepId: string,
+    deleteId: string,
+    mergedData?: Partial<any>
+  ) => {
+    try {
+      if (mergedData && Object.keys(mergedData).length > 0) {
+        await Promise.allSettled([
+          updateDoc(doc(db, "solicitudes", keepId), mergedData),
+          updateDoc(doc(db, "reconocimientos", keepId), mergedData),
+        ]);
+      }
+      await Promise.allSettled([
+        deleteDoc(doc(db, "solicitudes", deleteId)),
+        deleteDoc(doc(db, "reconocimientos", deleteId)),
+      ]);
+
+      setRecords((prev) =>
+        prev
+          .filter((r) => r.id !== deleteId && r.solicitudId !== deleteId)
+          .map((r) => (r.id === keepId ? { ...r, ...mergedData } : r))
+      );
+      setDuplicateResolverTarget(null);
+      playChime("work_done");
+    } catch (err) {
+      console.error("Error al resolver duplicados:", err);
     }
   };
 
@@ -883,7 +944,7 @@ export default function ReconocimientosOS({
     if (!personForExtra) return;
 
     setIsSavingExtra(true);
-    const costo = extraTipo === "Primera Impresión" ? 100 : 50;
+    const costo = Number(extraCostoManual) || (extraTipo === "Primera Impresión" ? 100 : 50);
     try {
       const payload = {
         nombre: personForExtra.nombre,
@@ -891,28 +952,34 @@ export default function ReconocimientosOS({
         grupo: personForExtra.grupo,
         zona: personForExtra.zona,
         email: personForExtra.email || undefined,
-        diplomado: "Liderazgo I",
+        diplomado: extraDiplomado || personForExtra.diplomado || "Liderazgo I",
         year: extraYear,
         tipoImpresion: extraTipo,
         costo,
         driveUrl: extraDriveUrl.trim() || undefined,
         telefono: personForExtra.telefono || undefined,
         notas: extraNotas.trim() || undefined,
-        pagado: false,
+        pagado: extraPagado,
         cuadernillos: false,
         audio: false,
         digital: false,
-        impreso: false,
+        impreso: extraImpreso,
         entregado: false,
         createdAt: new Date().toISOString(),
         timestamp: serverTimestamp(),
       };
 
       const docRef = await addDoc(collection(db, "solicitudes"), payload);
-      await setDoc(doc(db, "reconocimientos", docRef.id), {
+      const newRec: ReconocimientoRecord = {
         ...payload,
+        id: docRef.id,
         solicitudId: docRef.id,
-      }).catch(() => null);
+        elaboradoDigital: false,
+      };
+
+      await setDoc(doc(db, "reconocimientos", docRef.id), newRec).catch(() => null);
+
+      setRecords((prev) => [newRec, ...prev]);
 
       playChime("work_done");
       setPersonForExtra(null);
@@ -1029,9 +1096,82 @@ export default function ReconocimientosOS({
     }
   };
 
+  // Análisis de alumnos / registros duplicados en Reconocimientos
+  const duplicateAnalysis = useMemo(() => {
+    const groups: Array<{
+      key: string;
+      reason: "nombre" | "telefono" | "email";
+      matchValue: string;
+      items: ReconocimientoRecord[];
+    }> = [];
+
+    const mapByName = new Map<string, ReconocimientoRecord[]>();
+    const mapByPhone = new Map<string, ReconocimientoRecord[]>();
+
+    records.forEach((r) => {
+      const normName = (r.nombre || "")
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
+      const dipKey = (r.diplomado || "").trim().toLowerCase();
+      const yearKey = String(r.year || "").trim();
+
+      // Mismo nombre + diplomado + año = duplicado potencial exacto
+      if (normName && normName.length > 3) {
+        const fullKey = `${normName}|${dipKey}|${yearKey}`;
+        if (!mapByName.has(fullKey)) mapByName.set(fullKey, []);
+        mapByName.get(fullKey)!.push(r);
+      }
+
+      if (r.telefono) {
+        const cleanTel = r.telefono.replace(/[^0-9]/g, "");
+        if (cleanTel.length >= 8) {
+          const telKey = `${cleanTel}|${dipKey}|${yearKey}`;
+          if (!mapByPhone.has(telKey)) mapByPhone.set(telKey, []);
+          mapByPhone.get(telKey)!.push(r);
+        }
+      }
+    });
+
+    mapByName.forEach((items, key) => {
+      if (items.length > 1) {
+        groups.push({
+          key,
+          reason: "nombre",
+          matchValue: items[0].nombre,
+          items,
+        });
+      }
+    });
+
+    mapByPhone.forEach((items, key) => {
+      if (items.length > 1 && !groups.some((g) => g.items.some((it) => it.id === items[0].id))) {
+        groups.push({
+          key,
+          reason: "telefono",
+          matchValue: items[0].telefono || "",
+          items,
+        });
+      }
+    });
+
+    const duplicateIdSet = new Set<string>();
+    groups.forEach((g) => g.items.forEach((it) => duplicateIdSet.add(it.id)));
+
+    return {
+      groups,
+      duplicateIdSet,
+      totalDuplicates: duplicateIdSet.size,
+    };
+  }, [records]);
+
   // 6. Filtered records calculation
   const filteredRecords = useMemo(() => {
     return records.filter((r) => {
+      // Duplicate filter
+      if (showDuplicatesOnly && !duplicateAnalysis.duplicateIdSet.has(r.id)) return false;
+
       // Text search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
@@ -1062,7 +1202,7 @@ export default function ReconocimientosOS({
 
       return true;
     });
-  }, [records, searchQuery, selectedYear, filterPago, filterStatus]);
+  }, [records, searchQuery, selectedYear, filterPago, filterStatus, showDuplicatesOnly, duplicateAnalysis]);
 
   // 6.1 Lista en Vivo y en Orden Cronológico Estricto (Del Más Nuevo al Más Viejo) de Todos los Medios
   const liveRecordsList = useMemo(() => {
@@ -1404,16 +1544,7 @@ export default function ReconocimientosOS({
   };
 
   const handleCopyFullPaymentMessage = () => {
-    const msg =
-      `*DATOS PARA PAGO DE RECONOCIMIENTO (Liderazgo I)*\n\n` +
-      `👤 *Titular:* ${SPIN_PAYMENT_INFO.titular}\n\n` +
-      `💳 *CLABE SPIN:* ${SPIN_PAYMENT_INFO.clabe}\n` +
-      `💳 *TARJETA SPIN:* ${SPIN_PAYMENT_INFO.tarjeta}\n` +
-      `🏪 *CÓDIGO DE DEPÓSITO SPIN (OXXO):* ${SPIN_PAYMENT_INFO.codigoOxxo}\n\n` +
-      `💰 *Costo:* $100 (Primera Impresión) / $50 (Re-impresión)\n\n` +
-      `📲 Una vez realizado tu pago, por favor envía tu comprobante aquí:\n` +
-      `${SPIN_PAYMENT_INFO.whatsappUrl}\n\n` +
-      `¡Muchas gracias!`;
+    const msg = buildPaymentShareText(paymentConfig, undefined, "Reconocimiento");
     navigator.clipboard.writeText(msg);
     setCopiedBankField("full_message");
     playChime("tick");
@@ -1426,15 +1557,12 @@ export default function ReconocimientosOS({
       return;
     }
     const clean = cleanPhoneNumber(rec.telefono);
-    const msg =
-      `Hola ${rec.nombre}, te saluda tu madrina Laura (Universidad FGDLL).\n\n` +
-      `Aquí tienes los datos para realizar el pago de tu reconocimiento (${rec.tipoImpresion} • $${rec.costo}):\n\n` +
-      `👤 *Titular:* ${SPIN_PAYMENT_INFO.titular}\n` +
-      `💳 *CLABE SPIN:* ${SPIN_PAYMENT_INFO.clabe}\n` +
-      `💳 *TARJETA SPIN:* ${SPIN_PAYMENT_INFO.tarjeta}\n` +
-      `🏪 *CÓDIGO DE DEPÓSITO SPIN (OXXO):* ${SPIN_PAYMENT_INFO.codigoOxxo}\n` +
-      `💰 *Importe:* $${rec.costo} MXN\n\n` +
-      `En cuanto hagas tu transferencia o depósito en OXXO, envíame tu comprobante aquí: ${SPIN_PAYMENT_INFO.whatsappUrl} para avanzar con tu impresión. ¡Muchas gracias!`;
+    const msg = buildPaymentShareText(
+      paymentConfig,
+      rec.nombre,
+      `${rec.diplomado} (${rec.tipoImpresion})`,
+      rec.costo
+    );
     const url = buildWhatsAppUrl(clean, msg);
     window.open(url, "_blank");
   };
@@ -2239,6 +2367,32 @@ export default function ReconocimientosOS({
 
             <button
               type="button"
+              onClick={() => {
+                setShowExportListModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black transition flex items-center gap-2 shadow-md active:scale-95 cursor-pointer"
+              title="Descargar lista de alumnos filtrada por estado, etiqueta, impresos, pago, etc."
+            >
+              <Download size={15} />
+              <span>Descargar Lista</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setShowPaymentConfigModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-black transition flex items-center gap-2 shadow-md active:scale-95 cursor-pointer"
+              title="Editar datos bancarios y de pago manualmente"
+            >
+              <CreditCard size={15} />
+              <span>Datos de Pago</span>
+            </button>
+
+            <button
+              type="button"
               onClick={() => setShowAddModal(true)}
               className="px-4 py-2.5 rounded-2xl bg-white text-indigo-950 font-black text-xs transition shadow-md hover:bg-indigo-50 flex items-center gap-2 active:scale-95 cursor-pointer"
             >
@@ -2458,7 +2612,7 @@ export default function ReconocimientosOS({
           <ArrowRight size={13} />
         </button>
       </div>
-      {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA BANCARIA (LAURA CORTAZAR) */}
+      {/* SECCIÓN INFORMATIVA: DATOS DE TRANSFERENCIA BANCARIA (CONFIGURABLE) */}
       <div className="p-5 sm:p-6 rounded-3xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-emerald-500/5 border-2 border-amber-400/40 dark:border-amber-500/30 bg-white dark:bg-stone-900 shadow-md space-y-4">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-3 border-b border-amber-200/60 dark:border-stone-800">
           <div className="flex items-center gap-3">
@@ -2471,10 +2625,10 @@ export default function ReconocimientosOS({
                   Datos de Transferencia Bancaria
                 </h3>
                 <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-800 dark:text-amber-300">
-                  SPIN by OXXO
+                  {paymentConfig.banco}
                 </span>
                 <span className="hidden sm:inline-block text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
-                  A nombre de: LAURA CORTAZAR
+                  A nombre de: {paymentConfig.titular}
                 </span>
               </div>
               <p className="text-xs text-stone-600 dark:text-stone-400 mt-0.5">
@@ -2483,10 +2637,23 @@ export default function ReconocimientosOS({
             </div>
           </div>
 
-          {/* Botón de acción rápida: WhatsApp para enviar comprobantes */}
+          {/* Botones de acción rápida: Editar Datos de Pago y WhatsApp */}
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setShowPaymentConfigModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs transition shadow-md flex items-center gap-1.5 active:scale-95 cursor-pointer"
+              title="Modificar manualmente titular, banco, CLABE, tarjeta y OXXO"
+            >
+              <Settings size={15} />
+              <span>Editar Datos de Pago</span>
+            </button>
+
             <a
-              href="https://wa.me/19999011852"
+              href={paymentConfig.whatsappUrl || "https://wa.me/19999011852"}
               target="_blank"
               rel="noreferrer"
               className="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs transition shadow-md hover:shadow-emerald-600/20 flex items-center gap-2 active:scale-95 cursor-pointer"
@@ -2517,7 +2684,7 @@ export default function ReconocimientosOS({
           </div>
         </div>
 
-        {/* Grid de 4 tarjetas de datos bancarios: Titular, CLABE SPIN, Tarjeta SPIN, y Código OXXO */}
+        {/* Grid de 4 tarjetas de datos bancarios: Titular, CLABE, Tarjeta, y Código OXXO */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           
           {/* Card 1: Titular / Beneficiaria */}
@@ -2526,29 +2693,29 @@ export default function ReconocimientosOS({
               A Nombre de (Beneficiaria)
             </span>
             <div className="text-sm font-black text-stone-900 dark:text-stone-100 truncate">
-              LAURA CORTAZAR
+              {paymentConfig.titular}
             </div>
             <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold block">
               Titular Oficial de la Cuenta
             </span>
           </div>
 
-          {/* Card 2: CLABE SPIN */}
+          {/* Card 2: CLABE */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-800/80 border border-amber-200/80 dark:border-stone-700 shadow-2xs flex items-center justify-between gap-2">
             <div className="min-w-0">
               <span className="text-[10px] uppercase font-extrabold text-stone-400 block tracking-wider">
-                CLABE SPIN
+                CLABE ({paymentConfig.banco})
               </span>
               <div className="font-mono text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100 tracking-tight">
-                728969000008838228
+                {paymentConfig.clabe}
               </div>
-              <span className="text-[10px] text-stone-400 font-medium">18 dígitos STP/SPIN</span>
+              <span className="text-[10px] text-stone-400 font-medium">18 dígitos interbancaria</span>
             </div>
             <button
               type="button"
-              onClick={() => handleCopyPaymentField("clabe", "728969000008838228")}
+              onClick={() => handleCopyPaymentField("clabe", paymentConfig.clabe)}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
-              title="Copiar CLABE SPIN"
+              title="Copiar CLABE"
             >
               {copiedBankField === "clabe" ? (
                 <Check size={16} className="text-emerald-600" />
@@ -2558,22 +2725,22 @@ export default function ReconocimientosOS({
             </button>
           </div>
 
-          {/* Card 3: Tarjeta SPIN */}
+          {/* Card 3: Tarjeta */}
           <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-800/80 border border-amber-200/80 dark:border-stone-700 shadow-2xs flex items-center justify-between gap-2">
             <div className="min-w-0">
               <span className="text-[10px] uppercase font-extrabold text-stone-400 block tracking-wider">
-                Tarjeta SPIN
+                Tarjeta ({paymentConfig.banco})
               </span>
               <div className="font-mono text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100 tracking-tight">
-                4217 4701 0045 4061
+                {paymentConfig.tarjeta}
               </div>
               <span className="text-[10px] text-stone-400 font-medium">Transferencia directa</span>
             </div>
             <button
               type="button"
-              onClick={() => handleCopyPaymentField("tarjeta", "4217470100454061")}
+              onClick={() => handleCopyPaymentField("tarjeta", paymentConfig.tarjeta.replace(/\s+/g, ""))}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
-              title="Copiar Tarjeta SPIN"
+              title="Copiar Número de Tarjeta"
             >
               {copiedBankField === "tarjeta" ? (
                 <Check size={16} className="text-emerald-600" />
@@ -2587,16 +2754,16 @@ export default function ReconocimientosOS({
           <div className="p-3.5 rounded-2xl bg-white dark:bg-stone-800/80 border border-amber-200/80 dark:border-stone-700 shadow-2xs flex items-center justify-between gap-2">
             <div className="min-w-0">
               <span className="text-[10px] uppercase font-extrabold text-stone-400 block tracking-wider">
-                Código OXXO (Depósito SPIN)
+                Código OXXO ({paymentConfig.banco})
               </span>
               <div className="font-mono text-xs sm:text-sm font-black text-stone-900 dark:text-stone-100 tracking-tight">
-                2242-1787-4421-1658
+                {paymentConfig.codigoOxxo || "N/A"}
               </div>
               <span className="text-[10px] text-stone-400 font-medium">Presentar en caja de OXXO</span>
             </div>
             <button
               type="button"
-              onClick={() => handleCopyPaymentField("codigoOxxo", "2242178744211658")}
+              onClick={() => handleCopyPaymentField("codigoOxxo", (paymentConfig.codigoOxxo || "").replace(/[-\s]/g, ""))}
               className="p-2 rounded-xl bg-amber-100 hover:bg-amber-200 dark:bg-stone-700 dark:hover:bg-stone-600 text-amber-900 dark:text-amber-200 shrink-0 transition"
               title="Copiar Código OXXO"
             >
@@ -2904,6 +3071,61 @@ export default function ReconocimientosOS({
 
       </div>
 
+      {/* DETECTOR DE ALUMNOS DUPLICADOS BANNER */}
+      {duplicateAnalysis.groups.length > 0 && (
+        <div className="p-4 rounded-3xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-300 dark:border-amber-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="font-black text-amber-950 dark:text-amber-100 text-xs sm:text-sm">
+                  Detector de Alumnos Duplicados
+                </h4>
+                <span className="px-2 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 text-[10px] font-extrabold">
+                  {duplicateAnalysis.groups.length} {duplicateAnalysis.groups.length === 1 ? "caso detectado" : "casos detectados"}
+                </span>
+              </div>
+              <p className="text-[11px] text-amber-800 dark:text-amber-300">
+                Se encontraron alumnos con el mismo nombre y diplomado/generación. Puedes revisarlos y resolverlos aquí.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 self-start sm:self-center shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowDuplicatesOnly(!showDuplicatesOnly)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-2xs ${
+                showDuplicatesOnly
+                  ? "bg-amber-600 text-white"
+                  : "bg-white dark:bg-stone-800 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+              }`}
+            >
+              <span>{showDuplicatesOnly ? "Mostrar Todos" : `Ver Solo Duplicados (${duplicateAnalysis.totalDuplicates})`}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (duplicateAnalysis.groups.length > 0) {
+                  setDuplicateResolverTarget({
+                    groupReason: duplicateAnalysis.groups[0].reason,
+                    matchValue: duplicateAnalysis.groups[0].matchValue,
+                    items: duplicateAnalysis.groups[0].items,
+                  });
+                }
+              }}
+              className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-extrabold shadow-sm transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <Sparkles size={13} />
+              <span>Resolver Duplicados</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Control Bar: Search & Filters */}
       <div className="p-4 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-3">
         <div className="flex flex-col md:flex-row items-center justify-between gap-3">
@@ -3000,12 +3222,15 @@ export default function ReconocimientosOS({
             {/* Export CSV button */}
             <button
               type="button"
-              onClick={handleExportCSV}
-              className="px-3 py-1.5 rounded-2xl bg-stone-100 hover:bg-stone-200 dark:bg-stone-800 dark:hover:bg-stone-700 text-stone-700 dark:text-stone-200 text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-              title="Descargar lista de reconocimientos en formato CSV / Excel"
+              onClick={() => {
+                setShowExportListModal(true);
+                playChime("tick");
+              }}
+              className="px-3.5 py-1.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+              title="Descargar lista de reconocimientos con filtros por estado, etiqueta, impresos, etc."
             >
               <Download size={13} />
-              <span className="hidden sm:inline">Exportar CSV</span>
+              <span>Descargar Lista (Filtros/Impresos)</span>
             </button>
           </div>
 
@@ -3075,8 +3300,39 @@ export default function ReconocimientosOS({
                     >
                       {/* Alumno */}
                       <td className="py-3.5 px-4">
-                        <div className="font-extrabold text-stone-900 dark:text-stone-100 text-sm">
-                          {r.nombre}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-extrabold text-stone-900 dark:text-stone-100 text-sm">
+                            {r.nombre}
+                          </span>
+                          {r.impreso && (
+                            <span
+                              className="px-1.5 py-0.5 rounded-md bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300 text-[10px] font-black flex items-center gap-0.5 shadow-2xs"
+                              title="Reconocimiento físico impreso"
+                            >
+                              <Printer size={10} className="text-purple-700 dark:text-purple-300" />
+                              <span>Impreso</span>
+                            </span>
+                          )}
+                          {duplicateAnalysis.duplicateIdSet.has(r.id) && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const grp = duplicateAnalysis.groups.find((g) => g.items.some((it) => it.id === r.id));
+                                if (grp) {
+                                  setDuplicateResolverTarget({
+                                    groupReason: grp.reason,
+                                    matchValue: grp.matchValue,
+                                    items: grp.items,
+                                  });
+                                }
+                              }}
+                              className="px-1.5 py-0.5 rounded-md bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-black flex items-center gap-0.5 cursor-pointer shadow-2xs"
+                              title="Posible registro duplicado - Clic para resolver"
+                            >
+                              <AlertTriangle size={10} />
+                              <span>Duplicado</span>
+                            </button>
+                          )}
                         </div>
                         <div className="text-[11px] text-stone-500 flex items-center gap-1.5 mt-0.5">
                           <span className="px-1.5 py-0.2 rounded-md bg-stone-100 dark:bg-stone-800 text-stone-700 dark:text-stone-300 font-semibold">
@@ -3656,7 +3912,7 @@ export default function ReconocimientosOS({
                           .toUpperCase()}
                       </div>
                       <div className="space-y-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <h4
                             className={`text-base sm:text-lg font-black leading-tight tracking-tight ${
                               themeConfig.nameColorHex ? "" : (activeGraduadosTheme.nameTextColor || "text-stone-950")
@@ -3665,6 +3921,13 @@ export default function ReconocimientosOS({
                           >
                             {g.nombreFormateado}
                           </h4>
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg bg-purple-100 dark:bg-purple-950/80 text-purple-900 dark:text-purple-200 border border-purple-300 dark:border-purple-800 text-[11px] font-black shadow-2xs"
+                            title="Reconocimiento físico impreso verificado (Solo alumnos con diploma impreso están en Graduados)"
+                          >
+                            <Printer size={12} className="text-purple-700 dark:text-purple-300" />
+                            <span>Impreso</span>
+                          </span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
@@ -3726,6 +3989,41 @@ export default function ReconocimientosOS({
                           <MessageCircle size={14} />
                         </button>
                       )}
+
+                      {/* Botón para agregar otro reconocimiento para este graduado */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const firstDiploma = g.diplomas[0];
+                          const baseRecord = records.find((r) => r.id === firstDiploma?.id) || {
+                            id: firstDiploma?.id || `grad-${Date.now()}`,
+                            nombre: g.nombreOriginal || g.nombreFormateado,
+                            rol: g.rol,
+                            grupo: g.grupo,
+                            zona: g.zona,
+                            diplomado: firstDiploma?.diplomado || "Diplomado de Liderazgo",
+                            year: firstDiploma?.year || "2026",
+                            tipoImpresion: "Primera Impresión",
+                            costo: 100,
+                            telefono: g.telefono,
+                            email: g.email,
+                          };
+                          setPersonForExtra(baseRecord as any);
+                          setExtraDiplomado(firstDiploma?.diplomado || "Diplomado de Liderazgo");
+                          setExtraYear(firstDiploma?.year === "2026" ? "2025" : "2026");
+                          setExtraTipo("Re-impresión");
+                          setExtraImpreso(true); // Se marca impreso para que aparezca en Graduados
+                          setExtraPagado(true);
+                          setExtraCostoManual(50);
+                          setExtraNotas("");
+                          playChime("tick");
+                        }}
+                        className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 text-xs font-bold transition flex items-center gap-1 cursor-pointer shadow-2xs"
+                        title={`Agregar otro reconocimiento o diplomado para ${g.nombreFormateado}`}
+                      >
+                        <Plus size={12} />
+                        <span>+ Reconocimiento</span>
+                      </button>
 
                       {/* Botón Editar Graduado (Admin) */}
                       {g.diplomas && g.diplomas.length > 0 && (
@@ -4844,6 +5142,21 @@ export default function ReconocimientosOS({
 
             <form onSubmit={handleCreateExtraForPerson} className="space-y-4 text-xs font-medium">
               
+              {/* Diplomado */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1 font-bold">
+                  Diplomado / Reconocimiento *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={extraDiplomado}
+                  onChange={(e) => setExtraDiplomado(e.target.value)}
+                  placeholder="Ej. Liderazgo I, Diplomado de Liderazgo, etc."
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-indigo-500 text-xs"
+                />
+              </div>
+
               {/* Selector de Generación / Año */}
               <div>
                 <label className="block text-stone-700 dark:text-stone-300 mb-1.5 font-bold">
@@ -4870,13 +5183,16 @@ export default function ReconocimientosOS({
               {/* Formato a elegir: Primera Impresión ($100) vs Re-impresión ($50) */}
               <div>
                 <label className="block text-stone-700 dark:text-stone-300 mb-1.5 font-bold">
-                  Formato de Impresión a Elegir *
+                  Formato de Impresión *
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   
                   {/* Opción 1: Primera Impresión ($100) */}
                   <div
-                    onClick={() => setExtraTipo("Primera Impresión")}
+                    onClick={() => {
+                      setExtraTipo("Primera Impresión");
+                      setExtraCostoManual(100);
+                    }}
                     className={`cursor-pointer p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
                       extraTipo === "Primera Impresión"
                         ? "border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 ring-2 ring-indigo-500/20"
@@ -4892,7 +5208,10 @@ export default function ReconocimientosOS({
 
                   {/* Opción 2: Re-impresión ($50) */}
                   <div
-                    onClick={() => setExtraTipo("Re-impresión")}
+                    onClick={() => {
+                      setExtraTipo("Re-impresión");
+                      setExtraCostoManual(50);
+                    }}
                     className={`cursor-pointer p-3.5 rounded-2xl border-2 transition-all flex flex-col justify-between ${
                       extraTipo === "Re-impresión"
                         ? "border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 ring-2 ring-blue-500/20"
@@ -4907,6 +5226,73 @@ export default function ReconocimientosOS({
                   </div>
 
                 </div>
+              </div>
+
+              {/* Costo Manual */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1 font-bold">
+                  Monto / Costo a Cobrar ($ MXN)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  value={extraCostoManual}
+                  onChange={(e) => setExtraCostoManual(Number(e.target.value))}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:ring-2 focus:ring-indigo-500 text-xs font-mono font-bold"
+                />
+              </div>
+
+              {/* Opciones de Estatus Inmediato (Impreso / Pagado) */}
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <label className="flex items-center gap-2 p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50/50 dark:bg-stone-850 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={extraImpreso}
+                    onChange={(e) => setExtraImpreso(e.target.checked)}
+                    className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 cursor-pointer"
+                  />
+                  <div className="min-w-0">
+                    <span className="font-bold text-xs block text-stone-900 dark:text-stone-100 flex items-center gap-1">
+                      <Printer size={12} className="text-purple-600" />
+                      <span>Impreso (Graduado)</span>
+                    </span>
+                    <span className="text-[10px] text-stone-400 block truncate">
+                      Visible en Graduados
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-2 p-2.5 rounded-xl border border-stone-200 dark:border-stone-700 bg-stone-50/50 dark:bg-stone-850 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={extraPagado}
+                    onChange={(e) => setExtraPagado(e.target.checked)}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                  />
+                  <div className="min-w-0">
+                    <span className="font-bold text-xs block text-stone-900 dark:text-stone-100 flex items-center gap-1">
+                      <CreditCard size={12} className="text-emerald-600" />
+                      <span>Pagado</span>
+                    </span>
+                    <span className="text-[10px] text-stone-400 block truncate">
+                      Sin saldo pendiente
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              {/* Enlace Google Drive */}
+              <div>
+                <label className="block text-stone-700 dark:text-stone-300 mb-1 font-semibold">
+                  Enlace a Google Drive (Opcional)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://drive.google.com/file/d/..."
+                  value={extraDriveUrl}
+                  onChange={(e) => setExtraDriveUrl(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-300 dark:border-stone-700 text-stone-900 dark:text-stone-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 text-xs font-mono"
+                />
               </div>
 
               {/* Notas opcionales */}
@@ -5217,6 +5603,23 @@ export default function ReconocimientosOS({
           setEditingRecordData(null);
         }}
         initialData={editingRecordData}
+        initialDiplomas={
+          editingRecordData
+            ? records.filter((r) => {
+                const sameId = r.id === editingRecordData.id;
+                const sameName =
+                  Boolean((r.nombre || "").trim().toLowerCase() &&
+                  (r.nombre || "").trim().toLowerCase() ===
+                    (editingRecordData.nombre || "").trim().toLowerCase());
+                const samePhone = Boolean(
+                  editingRecordData.telefono &&
+                    r.telefono &&
+                    editingRecordData.telefono === r.telefono
+                );
+                return sameId || sameName || samePhone;
+              })
+            : undefined
+        }
         onUpdated={(updated) => {
           setRecords((prev) =>
             prev.map((r) => (r.id === updated.id ? { ...r, ...updated } : r))
@@ -5480,6 +5883,49 @@ export default function ReconocimientosOS({
         isOpen={showPublicDrivePreviewModal}
         onClose={() => setShowPublicDrivePreviewModal(false)}
       />
+
+      {/* MODAL CONFIGURACIÓN MANUAL DE DATOS DE PAGO */}
+      <PaymentConfigModal
+        isOpen={showPaymentConfigModal}
+        onClose={() => setShowPaymentConfigModal(false)}
+        currentConfig={paymentConfig}
+        onSaved={(newCfg) => setPaymentConfig(newCfg)}
+      />
+
+      {/* MODAL DESCARGA DE LISTAS POR ESTADO / ETIQUETA / IMPRESO */}
+      <ExportListModal
+        isOpen={showExportListModal}
+        onClose={() => setShowExportListModal(false)}
+        records={records}
+      />
+
+      {/* MODAL RESOLUTOR DE DUPLICADOS */}
+      {duplicateResolverTarget && (
+        <DuplicateResolverModal
+          isOpen={Boolean(duplicateResolverTarget)}
+          onClose={() => setDuplicateResolverTarget(null)}
+          title="Resolver Alumnos Duplicados"
+          groupReason={duplicateResolverTarget.groupReason}
+          matchValue={duplicateResolverTarget.matchValue}
+          items={duplicateResolverTarget.items.map((it) => ({
+            id: it.id,
+            nombre: it.nombre,
+            telefono: it.telefono,
+            email: it.email,
+            rol: it.rol,
+            grupo: it.grupo,
+            zona: it.zona,
+            diplomado: it.diplomado,
+            year: it.year,
+            tipoImpresion: it.tipoImpresion,
+            costo: it.costo,
+            pagado: it.pagado,
+            notas: it.notas,
+            createdAt: it.createdAt,
+          }))}
+          onKeepOneAndDeleteOther={handleResolveDuplicatePair}
+        />
+      )}
 
     </div>
   );

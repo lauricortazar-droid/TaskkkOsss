@@ -35,12 +35,22 @@ import {
   X,
   Smartphone,
   Database,
+  CreditCard,
+  AlertTriangle,
 } from "lucide-react";
 import { collection, onSnapshot, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { playChime } from "../utils/audio";
 import { SPIN_PAYMENT_INFO } from "./ReconocimientosOS";
 import WhatsAppComposerModal from "./WhatsAppComposerModal";
+import PaymentConfigModal from "./PaymentConfigModal";
+import DuplicateResolverModal from "./DuplicateResolverModal";
+import {
+  PaymentAccountConfig,
+  getSavedPaymentConfig,
+  subscribeToPaymentConfig,
+} from "../utils/paymentConfig";
+import { detectDuplicates, DuplicateGroup } from "../utils/duplicateDetector";
 
 export interface AlumnoPendiente {
   id: string;
@@ -174,6 +184,30 @@ export default function AlumnosPendientesSection({
   const [customWhatsappMessage, setCustomWhatsappMessage] = useState("");
   const [phonePrefix, setPhonePrefix] = useState<"52" | "none">("52");
 
+  // Configuración de Datos de Pago
+  const [paymentConfig, setPaymentConfig] = useState<PaymentAccountConfig>(getSavedPaymentConfig());
+  const [showPaymentConfigModal, setShowPaymentConfigModal] = useState(false);
+
+  useEffect(() => {
+    const unsub = subscribeToPaymentConfig((cfg) => {
+      setPaymentConfig(cfg);
+    });
+    return () => unsub();
+  }, []);
+
+  // Detector de alumnos duplicados en esta pestaña
+  const [showDuplicatesOnly, setShowDuplicatesOnly] = useState(false);
+  const [duplicateResolverGroup, setDuplicateResolverGroup] = useState<DuplicateGroup<AlumnoPendiente> | null>(null);
+
+  const duplicateAnalysis = useMemo(() => {
+    return detectDuplicates(alumnos, (a) => ({
+      id: a.id,
+      nombre: a.nombre,
+      telefono: a.telefono,
+      email: a.email,
+    }));
+  }, [alumnos]);
+
   // Modal para Agregar / Editar Alumno Pendiente
   const [showFormModal, setShowFormModal] = useState(false);
   const [editingAlumnoId, setEditingAlumnoId] = useState<string | null>(null);
@@ -277,11 +311,41 @@ export default function AlumnosPendientesSection({
       case "bienvenida":
         return `¡Hola ${alumno.nombre}! Te saludamos con mucho gusto de ${alumno.casa}. Te confirmamos que tu estatus es ADMITIDO para la ${alumno.generacion} como ${alumno.rol}. ¿Cómo estás? Me comunico contigo para darte una cálida bienvenida y coordinar los detalles pendientes de tu reconocimiento y trámite.`;
       case "pago":
-        return `Hola ${alumno.nombre}, te saludamos de ${alumno.casa} (${alumno.generacion}). Te compartimos los datos oficiales para el trámite de tu reconocimiento/diploma:\n\n💳 SPIN by OXXO: ${SPIN_PAYMENT_INFO.tarjeta}\n🏦 CLABE: ${SPIN_PAYMENT_INFO.clabe}\n👤 A nombre de: ${SPIN_PAYMENT_INFO.titular}\n🏪 Código OXXO: ${SPIN_PAYMENT_INFO.codigoOxxo}\n\nUna vez realizado, por favor envíanos tu comprobante por este medio. ¡Muchas gracias!`;
+        return `Hola ${alumno.nombre}, te saludamos de ${alumno.casa} (${alumno.generacion}). Te compartimos los datos oficiales para el trámite de tu reconocimiento/diploma:\n\n💳 ${paymentConfig.banco}: ${paymentConfig.tarjeta}\n🏦 CLABE: ${paymentConfig.clabe}\n👤 A nombre de: ${paymentConfig.titular}\n${paymentConfig.codigoOxxo ? `🏪 Código OXXO: ${paymentConfig.codigoOxxo}\n\n` : "\n"}${paymentConfig.instruccionesExtra ? `${paymentConfig.instruccionesExtra}\n\n` : ""}Una vez realizado, por favor envíanos tu comprobante por este medio. ¡Muchas gracias!`;
       case "cuadernillos":
         return `Hola ${alumno.nombre}, esperamos te encuentres muy bien. Te contactamos de ${alumno.casa} (${alumno.generacion}) para solicitarte el envío de tus cuadernillos y confirmación de audio para proceder con la elaboración de tu reconocimiento oficial. Quedamos atentos a tus comentarios.`;
       case "personalizado":
         return `Hola ${alumno.nombre}, te saludo de ${alumno.casa} (${alumno.generacion}). `;
+    }
+  };
+
+  // Resolver alumnos duplicados (conservar uno y eliminar el otro con fusión inteligente de datos)
+  const handleResolveDuplicate = async (
+    keepId: string,
+    deleteId: string,
+    mergedData?: Partial<AlumnoPendiente>
+  ) => {
+    // 1. Actualizar el registro a conservar
+    if (mergedData && Object.keys(mergedData).length > 0) {
+      setAlumnos((prev) =>
+        prev.map((a) => (a.id === keepId ? { ...a, ...mergedData, updatedAt: new Date().toISOString() } : a))
+      );
+      try {
+        await updateDoc(doc(db, "alumnos_pendientes", keepId), {
+          ...mergedData,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        console.warn("Could not update kept alumno in Firestore:", e);
+      }
+    }
+
+    // 2. Eliminar el registro duplicado
+    setAlumnos((prev) => prev.filter((a) => a.id !== deleteId));
+    try {
+      await deleteDoc(doc(db, "alumnos_pendientes", deleteId));
+    } catch (e) {
+      console.warn("Could not delete duplicate alumno in Firestore:", e);
     }
   };
 
@@ -564,6 +628,11 @@ export default function AlumnosPendientesSection({
   // Filtered List
   const filteredAlumnos = useMemo(() => {
     return alumnos.filter((alumno) => {
+      // Filtro de solo duplicados si está activo
+      if (showDuplicatesOnly && !duplicateAnalysis.duplicateIdSet.has(alumno.id)) {
+        return false;
+      }
+
       const q = search.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -581,7 +650,7 @@ export default function AlumnosPendientesSection({
 
       return matchSearch && matchEstatus && matchCasa && matchGen;
     });
-  }, [alumnos, search, selectedEstatus, selectedCasa, selectedGeneracion]);
+  }, [alumnos, search, selectedEstatus, selectedCasa, selectedGeneracion, showDuplicatesOnly, duplicateAnalysis]);
 
   // Unique lists for filter dropdowns
   const uniqueCasas = useMemo(() => {
@@ -657,13 +726,32 @@ export default function AlumnosPendientesSection({
         {/* Alumno y contacto */}
         <td className="py-4 px-4">
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="font-black text-sm text-stone-900 dark:text-stone-100">
                 {alumno.nombre}
               </span>
               {alumno.id === "pend-edgar-batun-2026" && (
                 <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                   Registro Solicitado
+                </span>
+              )}
+              {duplicateAnalysis.duplicateIdSet.has(alumno.id) && (
+                <span className="inline-flex items-center gap-1 text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+                  <AlertTriangle size={10} />
+                  <span>Posible Duplicado</span>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const grp = duplicateAnalysis.groups.find((g) => g.items.some((it) => it.id === alumno.id));
+                      if (grp) setDuplicateResolverGroup(grp);
+                      playChime("tick");
+                    }}
+                    className="ml-1 underline font-black hover:text-amber-950 dark:hover:text-amber-100 cursor-pointer"
+                    title="Resolver y fusionar duplicado"
+                  >
+                    Resolver
+                  </button>
                 </span>
               )}
             </div>
@@ -945,6 +1033,19 @@ export default function AlumnosPendientesSection({
 
             <button
               type="button"
+              onClick={() => {
+                setShowPaymentConfigModal(true);
+                playChime("tick");
+              }}
+              className="px-4 py-2.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-black text-xs transition border border-amber-300 flex items-center gap-2 active:scale-95 cursor-pointer shadow-md"
+              title="Editar los datos bancarios, CLABE, titular y WhatsApp donde los alumnos pagan"
+            >
+              <CreditCard size={15} />
+              <span>Datos de Pago</span>
+            </button>
+
+            <button
+              type="button"
               onClick={handleExportCSV}
               className="px-4 py-2.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs transition border border-white/20 flex items-center gap-2 active:scale-95 cursor-pointer backdrop-blur-sm"
               title="Descargar listado en formato CSV"
@@ -1002,15 +1103,75 @@ export default function AlumnosPendientesSection({
 
         <div className="p-4 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-2xs space-y-1">
           <span className="text-xs text-stone-500 dark:text-stone-400 font-bold flex items-center justify-between">
-            <span>Casa Destacada</span>
-            <Building2 size={16} className="text-indigo-600" />
+            <span>Alumnos Duplicados</span>
+            <AlertTriangle size={16} className={duplicateAnalysis.totalDuplicates > 0 ? "text-amber-500 animate-pulse" : "text-stone-400"} />
           </span>
-          <div className="text-sm font-black text-indigo-700 dark:text-indigo-300 truncate" title="Gladiadores Casa Martha Sangerman">
-            Gladiadores Sangerman
+          <div className="text-2xl sm:text-3xl font-black text-amber-600 dark:text-amber-400">
+            {duplicateAnalysis.totalDuplicates}
           </div>
-          <span className="text-[10px] text-stone-400 font-medium">Generación 2026</span>
+          <span className="text-[10px] text-stone-400 font-medium">
+            {duplicateAnalysis.totalDuplicates > 0
+              ? `${duplicateAnalysis.groups.length} grupos detectados`
+              : "Sin duplicados detectados"}
+          </span>
         </div>
       </div>
+
+      {/* DETECTOR DE ALUMNOS DUPLICADOS BANNER */}
+      {duplicateAnalysis.totalDuplicates > 0 && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-amber-500/15 border-2 border-amber-400/80 dark:border-amber-600/60 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-2xl bg-amber-500 text-stone-950 flex items-center justify-center font-black text-xl shrink-0 shadow-xs">
+              ⚠️
+            </div>
+            <div className="space-y-0.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <h4 className="text-sm font-black text-amber-950 dark:text-amber-200">
+                  Detector de Alumnos Duplicados
+                </h4>
+                <span className="text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full bg-amber-200 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 border border-amber-300 dark:border-amber-700">
+                  {duplicateAnalysis.totalDuplicates} registros ({duplicateAnalysis.groups.length} grupos)
+                </span>
+              </div>
+              <p className="text-xs text-amber-900/80 dark:text-amber-300/80">
+                Se encontraron alumnos que coinciden en <strong>nombre, teléfono o correo</strong> en esta pestaña. Puedes filtrarlos o fusionarlos con un clic.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 self-start md:self-auto shrink-0">
+            <button
+              type="button"
+              onClick={() => {
+                setShowDuplicatesOnly(!showDuplicatesOnly);
+                playChime("tick");
+              }}
+              className={`px-3.5 py-2 rounded-xl font-bold text-xs transition flex items-center gap-1.5 cursor-pointer ${
+                showDuplicatesOnly
+                  ? "bg-amber-600 text-white shadow-sm ring-2 ring-amber-400"
+                  : "bg-white dark:bg-stone-800 text-amber-950 dark:text-amber-200 border border-amber-300 dark:border-stone-700 hover:bg-amber-50"
+              }`}
+            >
+              <Filter size={13} />
+              <span>{showDuplicatesOnly ? "Mostrar Todos" : `Ver Solo Duplicados (${duplicateAnalysis.totalDuplicates})`}</span>
+            </button>
+
+            {duplicateAnalysis.groups.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicateResolverGroup(duplicateAnalysis.groups[0]);
+                  playChime("tick");
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-black text-xs transition shadow-sm flex items-center gap-1.5 cursor-pointer active:scale-95"
+              >
+                <Sparkles size={13} />
+                <span>Resolver Duplicados</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* BARRA DE FILTROS Y BÚSQUEDA */}
       <div className="p-4 rounded-3xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-800 shadow-xs space-y-3">
@@ -1635,6 +1796,27 @@ export default function AlumnosPendientesSection({
         onClose={() => setShowTemplatesModal(false)}
         initialManageMode={true}
       />
+
+      {/* MODAL PARA EDITAR MANUALMENTE LOS DATOS DE PAGO */}
+      <PaymentConfigModal
+        isOpen={showPaymentConfigModal}
+        onClose={() => setShowPaymentConfigModal(false)}
+        currentConfig={paymentConfig}
+        onSaved={(newCfg) => setPaymentConfig(newCfg)}
+      />
+
+      {/* MODAL RESOLUTOR DE ALUMNOS DUPLICADOS */}
+      {duplicateResolverGroup && (
+        <DuplicateResolverModal
+          isOpen={Boolean(duplicateResolverGroup)}
+          onClose={() => setDuplicateResolverGroup(null)}
+          title="Resolver Alumnos Duplicados"
+          groupReason={duplicateResolverGroup.reason}
+          matchValue={duplicateResolverGroup.matchValue}
+          items={duplicateResolverGroup.items}
+          onKeepOneAndDeleteOther={handleResolveDuplicate}
+        />
+      )}
     </div>
   );
 }

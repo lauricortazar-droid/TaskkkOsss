@@ -1,3 +1,5 @@
+import { getSavedPaymentConfig } from "./paymentConfig";
+
 export interface TicketDiplomaItem {
   diplomado: string;
   year: string;
@@ -254,8 +256,9 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
         currentY += 80;
       }
 
-      // SECCIÓN 4: DATOS DE PAGO Y DEPÓSITO SPIN
-      drawSectionHeader(ctx, "DATOS DE PAGO (SPIN BY OXXO)", 60, currentY);
+      // SECCIÓN 4: DATOS DE PAGO Y DEPÓSITO
+      const cfg = getSavedPaymentConfig();
+      drawSectionHeader(ctx, `DATOS DE PAGO (${(cfg.banco || "SPIN").toUpperCase()})`, 60, currentY);
 
       currentY += 24;
       ctx.fillStyle = "#fffbeb";
@@ -271,28 +274,28 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
       ctx.fillText("BENEFICIARIA / TITULAR:", 80, currentY + 30);
       ctx.fillStyle = "#0f172a";
       ctx.font = "900 14px system-ui, sans-serif";
-      ctx.fillText("LAURA CORTAZAR", 240, currentY + 30);
+      ctx.fillText(cfg.titular || "LAURA CORTAZAR", 240, currentY + 30);
 
       ctx.fillStyle = "#78350f";
       ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.fillText("CLABE SPIN:", 80, currentY + 64);
+      ctx.fillText("CLABE:", 80, currentY + 64);
       ctx.fillStyle = "#042f66";
       ctx.font = "900 15px monospace";
-      ctx.fillText("728969000008838228", 240, currentY + 64);
+      ctx.fillText(cfg.clabe || "728969000008838228", 240, currentY + 64);
 
       ctx.fillStyle = "#78350f";
       ctx.font = "bold 11px system-ui, sans-serif";
-      ctx.fillText("TARJETA SPIN:", 80, currentY + 98);
+      ctx.fillText("TARJETA / CUENTA:", 80, currentY + 98);
       ctx.fillStyle = "#042f66";
       ctx.font = "900 15px monospace";
-      ctx.fillText("4217 4701 0045 4061", 240, currentY + 98);
+      ctx.fillText(cfg.tarjeta || "4217 4701 0045 4061", 240, currentY + 98);
 
       ctx.fillStyle = "#78350f";
       ctx.font = "bold 11px system-ui, sans-serif";
       ctx.fillText("DEPÓSITO OXXO:", 80, currentY + 132);
       ctx.fillStyle = "#b45309";
       ctx.font = "900 15px monospace";
-      ctx.fillText("2242-1787-4421-1658", 240, currentY + 132);
+      ctx.fillText(cfg.codigoOxxo || "N/A", 240, currentY + 132);
 
       // WHATSAPP COMPROBANTE CALLOUT
       currentY += 180;
@@ -303,7 +306,8 @@ export function downloadTicketImage(data: TicketData): Promise<boolean> {
       ctx.textAlign = "center";
       ctx.fillStyle = "#ffffff";
       ctx.font = "bold 13px system-ui, sans-serif";
-      ctx.fillText("📲 ENVÍA TU COMPROBANTE AL WHATSAPP: wa.me/19999011852", width / 2, currentY + 31);
+      const cleanWa = (cfg.whatsappUrl || "wa.me/19999011852").replace("https://", "");
+      ctx.fillText(`📲 ENVÍA TU COMPROBANTE AL WHATSAPP: ${cleanWa}`, width / 2, currentY + 31);
 
       // FOOTER CON CÓDIGO DE BARRAS DECORATIVO
       currentY += 70;
